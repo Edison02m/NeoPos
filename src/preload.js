@@ -39,7 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     validActions.forEach(action => {
       const handler = () => {
-  
+        console.log(`[PRELOAD] Evento recibido: ${action}`);
         callback(action);
       };
       ipcRenderer.on(action, handler);

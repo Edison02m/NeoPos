@@ -307,7 +307,15 @@ class MainController {
       return { success: true };
     });
 
-
+    // Agregar listener para debugging de eventos de menú
+    ipcMain.handle('debug-menu-event', (event, menuEvent) => {
+      console.log('Debug: Simulando evento de menú:', menuEvent);
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send(menuEvent);
+        return { success: true };
+      }
+      return { success: false, error: 'Ventana no disponible' };
+    });
 
     ipcMain.handle('close-window', (event, windowName) => {
       this.windowManager.closeWindow(windowName);

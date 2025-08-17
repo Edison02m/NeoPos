@@ -61,9 +61,9 @@ class DatabaseController {
       if (existingUsers[0].count === 0) {
         // Insertar usuarios de ejemplo
         const users = [
-          { usuario: 'admin', contrasena: 'admin123', tipo: 1, codempresa: 1 },
-          { usuario: 'operador1', contrasena: 'op123', tipo: 2, codempresa: 1 },
-          { usuario: 'operador2', contrasena: 'op123', tipo: 2, codempresa: 1 }
+          { usuario: 'admin', contrasena: 'admin123', tipo: 1, alias: 'Administrador Principal', codempresa: 1 },
+          { usuario: 'user1', contrasena: 'user123', tipo: 2, alias: 'Usuario Regular', codempresa: 1 },
+          { usuario: 'user2', contrasena: 'user123', tipo: 2, alias: 'Usuario Secundario', codempresa: 1 }
         ];
 
         for (const user of users) {

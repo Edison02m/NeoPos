@@ -1,4 +1,4 @@
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, Menu } = require('electron');
 const path = require('path');
 
 class WindowManager {
@@ -24,9 +24,7 @@ class WindowManager {
       minimizable: true,
       maximizable: true,
       frame: true,
-      skipTaskbar: false,
-      autoHideMenuBar: true,
-      menuBarVisible: false
+      skipTaskbar: false
     });
 
     const isDev = true;
@@ -38,6 +36,10 @@ class WindowManager {
         hash: '/users'
       });
     }
+
+    // Establecer menú vacío para esta ventana específica
+    const emptyMenu = Menu.buildFromTemplate([]);
+    userWindow.setMenu(emptyMenu);
 
     userWindow.once('ready-to-show', () => {
       userWindow.show();
