@@ -1,0 +1,66 @@
+{
+  "name": "neopos-electron",
+  "version": "1.0.0",
+  "description": "Sistema de punto de venta con Electron, React y Tailwind CSS",
+  "main": "src/main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"npm run dev-react\" \"wait-on http://localhost:3000 && electron .\"",
+    "dev-react": "react-scripts start",
+    "build": "react-scripts build",
+    "electron-build": "electron-builder",
+    "build-all": "npm run build && npm run electron-build",
+    "rebuild": "electron-rebuild -f -w sqlite3"
+  },
+  "keywords": [
+    "electron",
+    "react",
+    "tailwind",
+    "pos",
+    "sqlite"
+  ],
+  "author": "NeoPOS Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.0",
+    "electron-rebuild": "^3.2.9",
+    "tailwindcss": "^3.4.0",
+    "wait-on": "^7.0.0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "^5.0.1",
+    "react-router-dom": "^6.17.0",
+    "sqlite3": "^5.1.6",
+    "date-fns": "^2.30.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "build": {
+    "appId": "com.neopos.app",
+    "productName": "NeoPOS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "build/**/*",
+      "src/main.js",
+      "src/database/**/*",
+      "node_modules/**/*"
+    ]
+  }
+}
