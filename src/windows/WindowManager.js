@@ -100,6 +100,108 @@ class WindowManager {
     return empresaWindow;
   }
 
+  createClienteWindow(parentWindow) {
+    const clienteWindow = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Gestión de Clientes',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    const isDev = true;
+    
+    if (isDev) {
+      clienteWindow.loadURL('http://localhost:3000/#/cliente');
+    } else {
+      clienteWindow.loadFile(path.join(__dirname, '../build/index.html'), {
+        hash: '/cliente'
+      });
+    }
+
+    // Menú específico para la ventana de clientes basado en las imágenes
+    const menuTemplate = [
+      {
+        label: 'Cliente',
+        submenu: [
+          {
+            label: 'Buscar Cliente',
+            accelerator: 'Ctrl+B',
+            click: () => {
+              clienteWindow.webContents.send('menu-cliente-buscar');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Editar',
+        submenu: [
+          {
+            label: 'Ver crédito otorgado al cliente',
+            click: () => {
+              clienteWindow.webContents.send('menu-editar-credito');
+            }
+          },
+          {
+            label: 'Ver reservaciones del cliente',
+            click: () => {
+              clienteWindow.webContents.send('menu-editar-reservaciones');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Ver',
+        submenu: [
+          {
+            label: 'Personas',
+            click: () => {
+              clienteWindow.webContents.send('menu-ver-personas');
+            }
+          },
+          {
+            label: 'Empresas',
+            click: () => {
+              clienteWindow.webContents.send('menu-ver-empresas');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Cerrar ventana clientes',
+        click: () => {
+          clienteWindow.close();
+        }
+      }
+    ];
+
+    const clienteMenu = Menu.buildFromTemplate(menuTemplate);
+    clienteWindow.setMenu(clienteMenu);
+
+    clienteWindow.once('ready-to-show', () => {
+      clienteWindow.show();
+    });
+
+    clienteWindow.on('closed', () => {
+      this.windows.delete('clientes');
+    });
+
+    this.windows.set('clientes', clienteWindow);
+    return clienteWindow;
+  }
+
   closeWindow(windowName) {
     const window = this.windows.get(windowName);
     if (window && !window.isDestroyed()) {

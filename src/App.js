@@ -47,6 +47,19 @@ function AppContent() {
             }
         };
 
+        // Handle menu client config event
+        const handleMenuClientConfig = async () => {
+            console.log('[APP] Abriendo ventana de configuración de clientes');
+            try {
+                const result = await window.electronAPI.openClienteWindow();
+                if (!result.success) {
+                    console.error('Error al abrir ventana de clientes:', result.error);
+                }
+            } catch (error) {
+                console.error('Error al abrir ventana de clientes:', error);
+            }
+        };
+
     
     
     
@@ -69,6 +82,9 @@ function AppContent() {
                 } else if (action === 'menu-config-company') {
             
                     handleMenuCompanyConfig();
+                } else if (action === 'menu-inventory-customers') {
+            
+                    handleMenuClientConfig();
                 } else {
               
                 }

@@ -2,20 +2,33 @@ import React, { useState, useEffect } from 'react';
 import EmpresaModel from '../models/Empresa';
 
 const Empresa = () => {
+  // Establecer el título de la ventana
+  useEffect(() => {
+    document.title = 'Configuración de Empresa';
+  }, []);
   const [formData, setFormData] = useState({
     nombre: '',
     ruc: '',
-    razonSocial: '',
     direccion: '',
     telefono: '',
     fax: '',
     email: '',
-    paginaWeb: '',
-    representante: ''
+    web: '',
+    representante: '',
+    rsocial: '',
+    logo: '',
+    ciudad: '',
+    codestab: '',
+    codemi: '',
+    direstablec: '',
+    resolucion: '',
+    contabilidad: '',
+    trial275: ''
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState('');
+  const [messageType, setMessageType] = useState('success');
+  const [validFields, setValidFields] = useState(new Set());
   const [errors, setErrors] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -28,18 +41,33 @@ const Empresa = () => {
       setLoading(true);
       const empresa = await EmpresaModel.getEmpresa();
       if (empresa) {
-        setFormData({
-          nombre: empresa.nombre || '',
+        const empresaData = {
+          nombre: empresa.empresa || '',
           ruc: empresa.ruc || '',
-          razonSocial: empresa.razonSocial || '',
           direccion: empresa.direccion || '',
           telefono: empresa.telefono || '',
           fax: empresa.fax || '',
           email: empresa.email || '',
-          paginaWeb: empresa.paginaWeb || '',
-          representante: empresa.representante || ''
-        });
+          web: empresa.web || '',
+          representante: empresa.representante || '',
+          rsocial: empresa.rsocial || '',
+          logo: empresa.logo || '',
+          ciudad: empresa.ciudad || '',
+          codestab: empresa.codestab || '',
+          codemi: empresa.codemi || '',
+          direstablec: empresa.direstablec || '',
+          resolucion: empresa.resolucion || '',
+          contabilidad: empresa.contabilidad || '',
+          trial275: empresa.trial275 || ''
+        };
+        
+        setFormData(empresaData);
         setIsEditing(true);
+        
+        // Validar todos los campos cargados
+        Object.entries(empresaData).forEach(([fieldName, value]) => {
+          validateField(fieldName, value);
+        });
       }
     } catch (error) {
       console.error('Error al cargar datos de empresa:', error);
@@ -56,6 +84,10 @@ const Empresa = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Validar campo individual y marcarlo como válido si cumple los criterios
+    validateField(name, value);
+    
     // Limpiar errores cuando el usuario empiece a escribir
     if (errors.length > 0) {
       setErrors([]);
@@ -65,7 +97,63 @@ const Empresa = () => {
     }
   };
 
-  const validateForm = () => {
+  const validateField = (fieldName, value) => {
+    let isValid = false;
+    
+    switch (fieldName) {
+      case 'nombre':
+      case 'rsocial':
+      case 'ruc':
+        isValid = value && value.trim().length > 0;
+        break;
+      case 'direccion':
+      case 'telefono':
+      case 'email':
+      case 'representante':
+        isValid = value && value.trim().length > 0;
+        break;
+      default:
+        isValid = true; // Campos opcionales siempre válidos
+        break;
+    }
+    
+    setValidFields(prev => {
+      const newSet = new Set(prev);
+      if (isValid) {
+        newSet.add(fieldName);
+      } else {
+        newSet.delete(fieldName);
+      }
+      return newSet;
+    });
+  };
+
+   // Función para obtener las clases CSS del campo con indicador visual
+   const getFieldClasses = (fieldName) => {
+     const baseClasses = "w-full px-3 py-2 border-2 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:ring-4";
+     const isValid = validFields.has(fieldName);
+     
+     if (isValid) {
+       return `${baseClasses} border-green-500 focus:border-green-600 focus:ring-green-100 pr-10`;
+     }
+     return `${baseClasses} border-gray-200 focus:border-blue-500 focus:ring-blue-100`;
+   };
+
+   // Función para renderizar el icono de check verde
+   const renderCheckIcon = (fieldName) => {
+     if (validFields.has(fieldName)) {
+       return (
+         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+           <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+           </svg>
+         </div>
+       );
+     }
+     return null;
+   };
+
+   const validateForm = () => {
     const newErrors = [];
 
     if (!formData.nombre.trim()) {
@@ -78,7 +166,7 @@ const Empresa = () => {
       newErrors.push('El RUC debe tener 13 dígitos y terminar en 001');
     }
 
-    if (!formData.razonSocial.trim()) {
+    if (!formData.rsocial.trim()) {
       newErrors.push('La razón social es requerida');
     }
 
@@ -90,7 +178,7 @@ const Empresa = () => {
       newErrors.push('El email no tiene un formato válido');
     }
 
-    if (formData.paginaWeb && !/^https?:\/\/.+/.test(formData.paginaWeb)) {
+    if (formData.web && !/^https?:\/\/.+/.test(formData.web)) {
       newErrors.push('La página web debe comenzar con http:// o https://');
     }
 
@@ -115,6 +203,9 @@ const Empresa = () => {
       setMessage(isEditing ? 'Empresa actualizada correctamente' : 'Empresa creada correctamente');
       setMessageType('success');
       setIsEditing(true);
+      
+      // Scroll al top para mostrar el mensaje
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       
       // Emitir evento para notificar que los datos de empresa se actualizaron
       window.dispatchEvent(new CustomEvent('empresa-updated', { detail: empresa }));
@@ -152,6 +243,28 @@ const Empresa = () => {
           <p className="text-sm text-red-600 mt-2 font-medium">Los campos marcados con <span className="text-red-600">*</span> son obligatorios</p>
         </div>
 
+        {/* Mensaje de éxito en la parte superior */}
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg text-center text-sm font-medium flex items-center justify-center gap-2 ${
+            messageType === 'success' 
+              ? 'bg-green-50 text-green-800 border-2 border-green-200' 
+              : 'bg-red-50 text-red-800 border-2 border-red-200'
+          }`}>
+            {messageType === 'success' ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+              </svg>
+            )}
+            {message}
+          </div>
+        )}
+
         {errors.length > 0 && (
           <div className="mb-6 p-4 bg-red-50 text-red-600 border-2 border-red-200 rounded-lg text-sm">
             <ul className="m-0 pl-5">
@@ -173,15 +286,18 @@ const Empresa = () => {
                 </svg>
                 Nombre de la empresa <span className="text-red-600">*</span>
               </label>
-              <input
-                type="text"
-                name="nombre"
-                value={formData.nombre}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="Ingresa el nombre de la empresa"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  name="nombre"
+                  value={formData.nombre}
+                  onChange={handleInputChange}
+                  className={getFieldClasses('nombre')}
+                  placeholder="Ingresa el nombre de la empresa"
+                  required
+                />
+                {renderCheckIcon('nombre')}
+              </div>
             </div>
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -192,16 +308,19 @@ const Empresa = () => {
                 </svg>
                 R.U.C. <span className="text-red-600">*</span>
               </label>
-              <input
-                type="text"
-                name="ruc"
-                value={formData.ruc}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="Ej: 1234567891001"
-                maxLength="13"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  name="ruc"
+                  value={formData.ruc}
+                  onChange={handleInputChange}
+                  className={getFieldClasses('ruc')}
+                  placeholder="Ej: 1234567891001"
+                  maxLength="13"
+                  required
+                />
+                {renderCheckIcon('ruc')}
+              </div>
             </div>
           </div>
 
@@ -217,15 +336,18 @@ const Empresa = () => {
                 </svg>
                 Razón social <span className="text-red-600">*</span>
               </label>
-              <input
-                type="text"
-                name="razonSocial"
-                value={formData.razonSocial}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="Razón social de la empresa"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  name="rsocial"
+                  value={formData.rsocial}
+                  onChange={handleInputChange}
+                  className={getFieldClasses('rsocial')}
+                  placeholder="Razón social de la empresa"
+                  required
+                />
+                {renderCheckIcon('rsocial')}
+              </div>
             </div>
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -235,15 +357,18 @@ const Empresa = () => {
                 </svg>
                 Dirección <span className="text-red-600">*</span>
               </label>
-              <input
-                type="text"
-                name="direccion"
-                value={formData.direccion}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="Dirección completa"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  name="direccion"
+                  value={formData.direccion}
+                  onChange={handleInputChange}
+                  className={getFieldClasses('direccion')}
+                  placeholder="Dirección completa"
+                  required
+                />
+                {renderCheckIcon('direccion')}
+              </div>
             </div>
           </div>
 
@@ -255,15 +380,18 @@ const Empresa = () => {
                 </svg>
                 Teléfono <span className="text-red-600">*</span>
               </label>
-              <input
-                type="tel"
-                name="telefono"
-                value={formData.telefono}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="Número de teléfono"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="tel"
+                  name="telefono"
+                  value={formData.telefono}
+                  onChange={handleInputChange}
+                  className={getFieldClasses('telefono')}
+                  placeholder="Número de teléfono"
+                  required
+                />
+                {renderCheckIcon('telefono')}
+              </div>
             </div>
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -293,14 +421,17 @@ const Empresa = () => {
                 </svg>
                 Correo electrónico
               </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="correo@empresa.com"
-              />
+              <div className="relative">
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className={getFieldClasses('email')}
+                  placeholder="correo@empresa.com"
+                />
+                {renderCheckIcon('email')}
+              </div>
             </div>
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -310,15 +441,18 @@ const Empresa = () => {
                 </svg>
                 Representante <span className="text-red-600">*</span>
               </label>
-              <input
-                type="text"
-                name="representante"
-                value={formData.representante}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                placeholder="Nombre del representante"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  name="representante"
+                  value={formData.representante}
+                  onChange={handleInputChange}
+                  className={getFieldClasses('representante')}
+                  placeholder="Nombre del representante"
+                  required
+                />
+                {renderCheckIcon('representante')}
+              </div>
             </div>
           </div>
 
@@ -333,12 +467,74 @@ const Empresa = () => {
             </label>
             <input
               type="url"
-              name="paginaWeb"
-              value={formData.paginaWeb}
+              name="web"
+              value={formData.web}
               onChange={handleInputChange}
               className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               placeholder="www.empresa.com"
             />
+          </div>
+
+          {/* Campos adicionales */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <svg className="inline mr-2 align-middle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                  <circle cx="12" cy="10" r="3"/>
+                </svg>
+                Ciudad
+              </label>
+              <input
+                type="text"
+                name="ciudad"
+                value={formData.ciudad}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                placeholder="Ciudad"
+                maxLength="100"
+              />
+            </div>
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <svg className="inline mr-2 align-middle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                </svg>
+                Código Establecimiento
+              </label>
+              <input
+                type="text"
+                name="codestab"
+                value={formData.codestab}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                placeholder="Código establecimiento"
+                maxLength="3"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <svg className="inline mr-2 align-middle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
+                  <path d="M9 12l2 2 4-4"/>
+                  <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
+                  <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
+                </svg>
+                Contabilidad
+              </label>
+              <select
+                name="contabilidad"
+                value={formData.contabilidad}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              >
+                <option value="">Seleccionar</option>
+                <option value="S">Sí</option>
+                <option value="N">No</option>
+              </select>
+            </div>
           </div>
 
           {/* Buttons */}
@@ -370,27 +566,6 @@ const Empresa = () => {
             </button>
           </div>
         </form>
-        
-        {message && (
-          <div className={`mt-6 p-4 rounded-lg text-center text-sm font-medium flex items-center justify-center gap-2 ${
-            messageType === 'success' 
-              ? 'bg-green-50 text-green-800 border-2 border-green-200' 
-              : 'bg-red-50 text-red-800 border-2 border-red-200'
-          }`}>
-            {messageType === 'success' ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20,6 9,17 4,12"/>
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="15" y1="9" x2="9" y2="15"/>
-                <line x1="9" y1="9" x2="15" y2="15"/>
-              </svg>
-            )}
-            {message}
-          </div>
-        )}
       </div>
     </div>
   );

@@ -5,6 +5,8 @@ import Login from './views/Login';
 import Dashboard from './views/Dashboard';
 import Users from './views/Users';
 import Empresa from './views/Empresa';
+import Cliente from './views/Cliente';
+
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
   return (
@@ -34,6 +36,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/empresa" 
         element={<Empresa />} 
+      />
+      <Route 
+        path="/cliente" 
+        element={<Cliente />} 
       />
     </Routes>
   );

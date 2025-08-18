@@ -1,15 +1,23 @@
 class Empresa {
   constructor(data = {}) {
-    this.id = data.id || null;
+    this.cod = data.cod || '';
     this.nombre = data.nombre || '';
     this.ruc = data.ruc || '';
-    this.razonSocial = data.razonSocial || '';
     this.direccion = data.direccion || '';
     this.telefono = data.telefono || '';
     this.fax = data.fax || '';
     this.email = data.email || '';
-    this.paginaWeb = data.paginaWeb || '';
+    this.web = data.web || '';
     this.representante = data.representante || '';
+    this.rsocial = data.rsocial || '';
+    this.logo = data.logo || '';
+    this.ciudad = data.ciudad || '';
+    this.codestab = data.codestab || '';
+    this.codemi = data.codemi || '';
+    this.direstablec = data.direstablec || '';
+    this.resolucion = data.resolucion || '';
+    this.contabilidad = data.contabilidad || '';
+    this.trial275 = data.trial275 || '';
     this.fechaCreacion = data.fechaCreacion || new Date().toISOString();
     this.fechaActualizacion = data.fechaActualizacion || new Date().toISOString();
   }
@@ -26,19 +34,25 @@ class Empresa {
 
     // Crear tabla si no existe
     const createTableQuery = `
-      CREATE TABLE IF NOT EXISTS empresas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
-        ruc TEXT NOT NULL UNIQUE,
-        razon_social TEXT NOT NULL,
-        direccion TEXT NOT NULL,
-        telefono TEXT,
-        fax TEXT,
-        email TEXT,
-        pagina_web TEXT,
-        representante TEXT,
-        fecha_creacion TEXT NOT NULL,
-        fecha_actualizacion TEXT NOT NULL
+      CREATE TABLE IF NOT EXISTS empresa (
+        cod INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa TEXT(255),
+        ruc TEXT(14),
+        direccion TEXT(255),
+        telefono TEXT(16),
+        fax TEXT(16),
+        email TEXT(41),
+        web TEXT(51),
+        representante TEXT(51),
+        rsocial TEXT(255),
+        logo TEXT(255),
+        ciudad TEXT(100),
+        codestab TEXT(3),
+        codemi TEXT(3),
+        direstablec TEXT(255),
+        resolucion TEXT(10),
+        contabilidad TEXT(1),
+        trial275 TEXT(1)
       )
     `;
     
@@ -58,11 +72,11 @@ class Empresa {
 
     if (!this.ruc || this.ruc.trim() === '') {
       errors.push('El RUC es requerido');
-    } else if (!/^\d{10}001$/.test(this.ruc)) {
-      errors.push('El RUC debe tener 13 dígitos terminados en 001');
+    } else if (this.ruc.length > 14) {
+      errors.push('El RUC no puede tener más de 14 caracteres');
     }
 
-    if (!this.razonSocial || this.razonSocial.trim() === '') {
+    if (!this.rsocial || this.rsocial.trim() === '') {
       errors.push('La razón social es requerida');
     }
 
@@ -74,8 +88,23 @@ class Empresa {
       errors.push('El email no tiene un formato válido');
     }
 
-    if (this.paginaWeb && !/^https?:\/\/.+/.test(this.paginaWeb)) {
+    if (this.web && !/^https?:\/\/.+/.test(this.web)) {
       errors.push('La página web debe comenzar con http:// o https://');
+    }
+
+
+
+    // Validar longitudes de campos
+    if (this.telefono && this.telefono.length > 16) {
+      errors.push('El teléfono no puede tener más de 16 caracteres');
+    }
+
+    if (this.codestab && this.codestab.length > 3) {
+      errors.push('El código de establecimiento no puede tener más de 3 caracteres');
+    }
+
+    if (this.codemi && this.codemi.length > 3) {
+      errors.push('El código de emisión no puede tener más de 3 caracteres');
     }
 
     return {
@@ -87,34 +116,47 @@ class Empresa {
   // Convertir a objeto plano para la base de datos
   toDatabase() {
     return {
-      id: this.id,
-      nombre: this.nombre,
+      empresa: this.nombre,
       ruc: this.ruc,
-      razon_social: this.razonSocial,
       direccion: this.direccion,
       telefono: this.telefono,
       fax: this.fax,
       email: this.email,
-      pagina_web: this.paginaWeb,
+      web: this.web,
       representante: this.representante,
-      fecha_creacion: this.fechaCreacion,
-      fecha_actualizacion: this.fechaActualizacion
+      rsocial: this.rsocial,
+      logo: this.logo,
+      ciudad: this.ciudad,
+      codestab: this.codestab,
+      codemi: this.codemi,
+      direstablec: this.direstablec,
+      resolucion: this.resolucion,
+      contabilidad: this.contabilidad,
+      trial275: this.trial275
     };
   }
 
   // Crear desde datos de la base de datos
   static fromDatabase(data) {
     return new Empresa({
-      id: data.id,
-      nombre: data.nombre,
+      cod: data.cod || '',
+      nombre: data.empresa,
       ruc: data.ruc,
-      razonSocial: data.razon_social,
       direccion: data.direccion,
       telefono: data.telefono,
       fax: data.fax,
       email: data.email,
-      paginaWeb: data.pagina_web,
+      web: data.web,
       representante: data.representante,
+      rsocial: data.rsocial,
+      logo: data.logo,
+      ciudad: data.ciudad,
+      codestab: data.codestab,
+      codemi: data.codemi,
+      direstablec: data.direstablec,
+      resolucion: data.resolucion,
+      contabilidad: data.contabilidad,
+      trial275: data.trial275,
       fechaCreacion: data.fecha_creacion,
       fechaActualizacion: data.fecha_actualizacion
     });
@@ -128,7 +170,7 @@ class Empresa {
   // Obtener empresa (solo puede haber una)
   static async getEmpresa() {
     await this.initializeDB();
-    const result = await window.electronAPI.dbGetSingle('SELECT * FROM empresas LIMIT 1');
+    const result = await window.electronAPI.dbGetSingle('SELECT * FROM empresa LIMIT 1');
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -151,37 +193,51 @@ class Empresa {
     
     if (existingEmpresa) {
       // Actualizar empresa existente
-      empresa.id = existingEmpresa.id;
+      empresa.cod = existingEmpresa.cod;
       empresa.updateTimestamp();
       
       const updateQuery = `
-        UPDATE empresas SET 
-          nombre = ?,
+        UPDATE empresa SET 
+          empresa = ?,
           ruc = ?,
-          razon_social = ?,
           direccion = ?,
           telefono = ?,
           fax = ?,
           email = ?,
-          pagina_web = ?,
+          web = ?,
           representante = ?,
-          fecha_actualizacion = ?
-        WHERE id = ?
+          rsocial = ?,
+          logo = ?,
+          ciudad = ?,
+          codestab = ?,
+          codemi = ?,
+          direstablec = ?,
+          resolucion = ?,
+          contabilidad = ?,
+          trial275 = ?
+        WHERE cod = ?
       `;
       
       const dbData = empresa.toDatabase();
       const params = [
-        dbData.nombre,
+        dbData.empresa,
         dbData.ruc,
-        dbData.razon_social,
         dbData.direccion,
         dbData.telefono,
         dbData.fax,
         dbData.email,
-        dbData.pagina_web,
+        dbData.web,
         dbData.representante,
-        dbData.fecha_actualizacion,
-        dbData.id
+        dbData.rsocial,
+        dbData.logo,
+        dbData.ciudad,
+        dbData.codestab,
+        dbData.codemi,
+        dbData.direstablec,
+        dbData.resolucion,
+        dbData.contabilidad,
+        dbData.trial275,
+        existingEmpresa.cod
       ];
       
       const result = await window.electronAPI.dbRun(updateQuery, params);
@@ -193,26 +249,33 @@ class Empresa {
     } else {
       // Crear nueva empresa
       const insertQuery = `
-        INSERT INTO empresas (
-          nombre, ruc, razon_social, direccion, telefono, 
-          fax, email, pagina_web, representante, 
-          fecha_creacion, fecha_actualizacion
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO empresa (
+          empresa, ruc, direccion, telefono, 
+          fax, email, web, representante, rsocial,
+          logo, ciudad, codestab, codemi, direstablec,
+          resolucion, contabilidad, trial275
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
       
       const dbData = empresa.toDatabase();
       const params = [
-        dbData.nombre,
+        dbData.empresa,
         dbData.ruc,
-        dbData.razon_social,
         dbData.direccion,
         dbData.telefono,
         dbData.fax,
         dbData.email,
-        dbData.pagina_web,
+        dbData.web,
         dbData.representante,
-        dbData.fecha_creacion,
-        dbData.fecha_actualizacion
+        dbData.rsocial,
+        dbData.logo,
+        dbData.ciudad,
+        dbData.codestab,
+        dbData.codemi,
+        dbData.direstablec,
+        dbData.resolucion,
+        dbData.contabilidad,
+        dbData.trial275
       ];
       
       const result = await window.electronAPI.dbRun(insertQuery, params);
@@ -220,7 +283,7 @@ class Empresa {
         throw new Error(result.error);
       }
       
-      empresa.id = result.data.lastID;
+      empresa.cod = result.data.lastID;
       return empresa;
     }
   }
@@ -228,7 +291,7 @@ class Empresa {
   // Verificar si existe una empresa
   static async exists() {
     await this.initializeDB();
-    const result = await window.electronAPI.dbGetSingle('SELECT COUNT(*) as count FROM empresas');
+    const result = await window.electronAPI.dbGetSingle('SELECT COUNT(*) as count FROM empresa');
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -238,7 +301,7 @@ class Empresa {
   // Eliminar empresa
   static async delete() {
     await this.initializeDB();
-    const result = await window.electronAPI.dbRun('DELETE FROM empresas');
+    const result = await window.electronAPI.dbRun('DELETE FROM empresa');
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -246,14 +309,14 @@ class Empresa {
   }
 
   // Validar RUC único
-  static async validateUniqueRUC(ruc, empresaId = null) {
+  static async validateUniqueRUC(ruc, empresaCod = null) {
     await this.initializeDB();
-    let query = 'SELECT id FROM empresas WHERE ruc = ?';
+    let query = 'SELECT cod FROM empresa WHERE ruc = ?';
     let params = [ruc];
     
-    if (empresaId) {
-      query += ' AND id != ?';
-      params.push(empresaId);
+    if (empresaCod) {
+      query += ' AND cod != ?';
+      params.push(empresaCod);
     }
     
     const result = await window.electronAPI.dbGetSingle(query, params);
