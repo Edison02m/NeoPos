@@ -307,6 +307,22 @@ class MainController {
       return { success: true };
     });
 
+    ipcMain.handle('open-empresa-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createEmpresaWindow(this.mainWindow);
+      return { success: true };
+    });
+
+    ipcMain.handle('open-cliente-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createClienteWindow(this.mainWindow);
+      return { success: true };
+    });
+
     // Agregar listener para debugging de eventos de menú
     ipcMain.handle('debug-menu-event', (event, menuEvent) => {
       console.log('Debug: Simulando evento de menú:', menuEvent);

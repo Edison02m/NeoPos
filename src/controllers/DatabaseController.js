@@ -42,7 +42,7 @@ class DatabaseController {
   }
 
   async createTables() {
-    const table = `CREATE TABLE IF NOT EXISTS usuario (
+    const usuarioTable = `CREATE TABLE IF NOT EXISTS usuario (
       cod INTEGER PRIMARY KEY AUTOINCREMENT,
       usuario TEXT NOT NULL,
       contrasena TEXT NOT NULL,
@@ -51,7 +51,26 @@ class DatabaseController {
       alias TEXT
     )`;
     
-    await this.runQuery(table);
+    const clienteTable = `CREATE TABLE IF NOT EXISTS cliente (
+      cod TEXT(14) NOT NULL,
+      apellidos TEXT(200),
+      nombres TEXT(200),
+      direccion TEXT(61),
+      telefono TEXT(16),
+      cedula TEXT(14),
+      tratamiento TEXT(20),
+      tipo REAL(11, 0),
+      limite REAL(10, 2),
+      referencias TEXT(100),
+      email TEXT(100),
+      tipoid TEXT(2),
+      relacionado TEXT(1),
+      trial272 TEXT(1),
+      PRIMARY KEY (cod)
+    )`;
+    
+    await this.runQuery(usuarioTable);
+    await this.runQuery(clienteTable);
   }
 
   async seedDatabase() {
@@ -74,8 +93,10 @@ class DatabaseController {
         }
         console.log('Usuarios de ejemplo agregados correctamente');
       }
+
+      // La tabla de clientes está lista para usar sin datos de ejemplo
     } catch (error) {
-      console.error('Error al agregar usuarios de ejemplo:', error);
+      console.error('Error al agregar datos de ejemplo:', error);
     }
   }
 

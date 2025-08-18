@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // Window management
     openUsersWindow: () => ipcRenderer.invoke('open-users-window'),
+    openEmpresaWindow: () => ipcRenderer.invoke('open-empresa-window'),
+    openClienteWindow: () => ipcRenderer.invoke('open-cliente-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
 
   // Información de la aplicación
@@ -34,7 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-categories',
       'menu-suppliers',
       'menu-logout',
-      'menu-config-user'
+      'menu-config-user',
+      'menu-config-company',
+      'menu-inventory-customers'
     ];
 
     validActions.forEach(action => {

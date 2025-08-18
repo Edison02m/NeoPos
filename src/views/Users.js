@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Usuario from '../models/Usuario';
+import Modal from '../components/Modal';
+import useModal from '../hooks/useModal';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -15,6 +17,12 @@ const Users = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [formActive, setFormActive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { modalState, showConfirm, showAlert, closeModal } = useModal();
+
+  // Establecer el título de la ventana
+  useEffect(() => {
+    document.title = 'Gestión de Usuarios';
+  }, []);
 
   useEffect(() => {
     loadUsers();
@@ -59,14 +67,17 @@ const Users = () => {
   };
 
   const handleDelete = async () => {
-    if (selectedUser && window.confirm('¿Está seguro de eliminar este usuario?')) {
-      try {
-        await Usuario.delete(selectedUser.cod);
-        setSelectedUser(null);
-        loadUsers();
-      } catch (error) {
-        console.error('Error al eliminar usuario:', error);
-        alert('Error al eliminar usuario');
+    if (selectedUser) {
+      const confirmed = await showConfirm('¿Está seguro de eliminar este usuario?');
+      if (confirmed) {
+        try {
+          await Usuario.delete(selectedUser.cod);
+          setSelectedUser(null);
+          loadUsers();
+        } catch (error) {
+          console.error('Error al eliminar usuario:', error);
+          await showAlert('Error al eliminar usuario');
+        }
       }
     }
   };
@@ -93,10 +104,13 @@ const Users = () => {
         contrasena: '',
         tipo: 1
       });
+      
+      // Emitir evento para notificar que los datos de usuario se actualizaron
+      window.dispatchEvent(new CustomEvent('user-updated', { detail: userData }));
     } catch (error) {
-      console.error('Error al guardar usuario:', error);
-      alert('Error al guardar usuario');
-    }
+        console.error('Error al guardar usuario:', error);
+        await showAlert('Error al guardar usuario');
+      }
   };
 
   const handleInputChange = (e) => {
@@ -276,6 +290,16 @@ const Users = () => {
           )}
         </form>
       </div>
+      
+      <Modal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        onConfirm={modalState.onConfirm}
+        onCancel={modalState.onCancel}
+        onClose={closeModal}
+      />
     </div>
   );
 };

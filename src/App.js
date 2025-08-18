@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, useNavigate } from 'react-router-dom';
 import './index.css';
 
-import Login from './views/Login';
-import Dashboard from './views/Dashboard';
-import Users from './views/Users';
+import AppRoutes from './routes';
 
 function AppContent() {
   const [user, setUser] = useState(null);
@@ -36,6 +34,32 @@ function AppContent() {
             }
         };
 
+        // Handle menu company config event
+        const handleMenuCompanyConfig = async () => {
+            console.log('[APP] Abriendo ventana de configuración de empresa');
+            try {
+                const result = await window.electronAPI.openEmpresaWindow();
+                if (!result.success) {
+                    console.error('Error al abrir ventana de empresa:', result.error);
+                }
+            } catch (error) {
+                console.error('Error al abrir ventana de empresa:', error);
+            }
+        };
+
+        // Handle menu client config event
+        const handleMenuClientConfig = async () => {
+            console.log('[APP] Abriendo ventana de configuración de clientes');
+            try {
+                const result = await window.electronAPI.openClienteWindow();
+                if (!result.success) {
+                    console.error('Error al abrir ventana de clientes:', result.error);
+                }
+            } catch (error) {
+                console.error('Error al abrir ventana de clientes:', error);
+            }
+        };
+
     
     
     
@@ -55,6 +79,12 @@ function AppContent() {
                 } else if (action === 'menu-config-user') {
             
                     handleMenuUserConfig();
+                } else if (action === 'menu-config-company') {
+            
+                    handleMenuCompanyConfig();
+                } else if (action === 'menu-inventory-customers') {
+            
+                    handleMenuClientConfig();
                 } else {
               
                 }
@@ -90,27 +120,11 @@ function AppContent() {
 
   return (
     <div className="App">
-      <Routes>
-        <Route 
-          path="/" 
-          element={
-            user ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />
-          } 
-        />
-        <Route 
-          path="/login" 
-          element={
-            user ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />
-          } 
-        />
-        <Route 
-          path="/dashboard" 
-          element={
-            user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
-          } 
-        />
-        <Route path="/users" element={<Users />} />
-      </Routes>
+      <AppRoutes 
+        user={user} 
+        onLogin={handleLogin} 
+        onLogout={handleLogout} 
+      />
     </div>
   );
 }
