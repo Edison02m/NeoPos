@@ -53,6 +53,53 @@ class WindowManager {
     return userWindow;
   }
 
+  createEmpresaWindow(parentWindow) {
+    const empresaWindow = new BrowserWindow({
+      width: 800,
+      height: 600,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Configuración de Empresa',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    const isDev = true;
+    
+    if (isDev) {
+      empresaWindow.loadURL('http://localhost:3000/#/empresa');
+    } else {
+      empresaWindow.loadFile(path.join(__dirname, '../build/index.html'), {
+        hash: '/empresa'
+      });
+    }
+
+    // Establecer menú vacío para esta ventana específica
+    const emptyMenu = Menu.buildFromTemplate([]);
+    empresaWindow.setMenu(emptyMenu);
+
+    empresaWindow.once('ready-to-show', () => {
+      empresaWindow.show();
+    });
+
+    empresaWindow.on('closed', () => {
+      this.windows.delete('empresa');
+    });
+
+    this.windows.set('empresa', empresaWindow);
+    return empresaWindow;
+  }
+
   closeWindow(windowName) {
     const window = this.windows.get(windowName);
     if (window && !window.isDestroyed()) {

@@ -93,6 +93,9 @@ const Users = () => {
         contrasena: '',
         tipo: 1
       });
+      
+      // Emitir evento para notificar que los datos de usuario se actualizaron
+      window.dispatchEvent(new CustomEvent('user-updated', { detail: userData }));
     } catch (error) {
       console.error('Error al guardar usuario:', error);
       alert('Error al guardar usuario');
