@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Cliente from '../models/Cliente';
 import ClienteController from '../controllers/ClienteController';
+const Empresas = require('../models/Empresas');
+const EmpresasController = require('../controllers/EmpresasController');
 import Modal from '../components/Modal';
+import TableModel from '../components/TableModel';
 import useModal from '../hooks/useModal';
 
 const Clientes = () => {
@@ -11,6 +14,9 @@ const Clientes = () => {
   }, []);
   const [clientes, setClientes] = useState([]);
   const [selectedCliente, setSelectedCliente] = useState(null);
+  const [empresas, setEmpresas] = useState([]);
+  const [selectedEmpresa, setSelectedEmpresa] = useState(null);
+  const [currentView, setCurrentView] = useState('clientes'); // 'clientes' o 'empresas'
   const [formData, setFormData] = useState({
     tratamiento: '',
     apellidos: '',
@@ -23,6 +29,17 @@ const Clientes = () => {
     relacionado: '',
     trial272: ''
   });
+  const [empresaFormData, setEmpresaFormData] = useState({
+    nombre: '',
+    ruc: '',
+    razon_social: '',
+    direccion: '',
+    telefono: '',
+    fax: '',
+    email: '',
+    pagina_web: '',
+    representante: ''
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [formActive, setFormActive] = useState(false);
@@ -31,6 +48,29 @@ const Clientes = () => {
 
   useEffect(() => {
     loadClientes();
+  }, []);
+
+  // Manejar eventos del menú
+  useEffect(() => {
+    const handleMenuEvent = (event, message) => {
+      if (message === 'menu-ver-empresas') {
+        setCurrentView('empresas');
+        loadEmpresas();
+      } else if (message === 'menu-ver-personas') {
+        setCurrentView('clientes');
+        loadClientes();
+      }
+    };
+
+    if (window.electronAPI) {
+      window.electronAPI.onMenuEvent(handleMenuEvent);
+    }
+
+    return () => {
+      if (window.electronAPI && window.electronAPI.removeMenuListener) {
+        window.electronAPI.removeMenuListener(handleMenuEvent);
+      }
+    };
   }, []);
 
 
@@ -43,6 +83,19 @@ const Clientes = () => {
     } catch (error) {
       console.error('Error al cargar clientes:', error);
       setClientes([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadEmpresas = async () => {
+    try {
+      setLoading(true);
+      const result = await Empresas.findAll();
+      setEmpresas(result || []);
+    } catch (error) {
+      console.error('Error al cargar empresas:', error);
+      setEmpresas([]);
     } finally {
       setLoading(false);
     }
@@ -188,6 +241,280 @@ const Clientes = () => {
     setFormActive(false);
   };
 
+  // Funciones para manejar empresas
+  const handleNewEmpresa = () => {
+    setIsCreating(true);
+    setIsEditing(false);
+    setSelectedEmpresa(null);
+    setFormActive(true);
+    setEmpresaFormData({
+      nombre: '',
+      ruc: '',
+      razon_social: '',
+      direccion: '',
+      telefono: '',
+      fax: '',
+      email: '',
+      pagina_web: '',
+      representante: ''
+    });
+  };
+
+  const handleEditEmpresa = () => {
+    if (selectedEmpresa) {
+      setIsEditing(true);
+      setIsCreating(false);
+      setFormActive(true);
+      setEmpresaFormData({
+        nombre: selectedEmpresa.nombre || '',
+        ruc: selectedEmpresa.ruc || '',
+        razon_social: selectedEmpresa.razon_social || '',
+        direccion: selectedEmpresa.direccion || '',
+        telefono: selectedEmpresa.telefono || '',
+        fax: selectedEmpresa.fax || '',
+        email: selectedEmpresa.email || '',
+        pagina_web: selectedEmpresa.pagina_web || '',
+        representante: selectedEmpresa.representante || ''
+      });
+    }
+  };
+
+  const handleDeleteEmpresa = async () => {
+    if (selectedEmpresa) {
+      const confirmed = await showConfirm('¿Está seguro de eliminar esta empresa?');
+      if (confirmed) {
+        try {
+          await Empresas.delete(selectedEmpresa.id);
+          setSelectedEmpresa(null);
+          loadEmpresas();
+        } catch (error) {
+          console.error('Error al eliminar empresa:', error);
+          await showAlert('Error al eliminar empresa');
+        }
+      }
+    }
+  };
+
+  const handleSaveEmpresa = async (e) => {
+    e.preventDefault();
+    try {
+      const empresaData = {
+        nombre: empresaFormData.nombre,
+        ruc: empresaFormData.ruc,
+        razon_social: empresaFormData.razon_social || '',
+        direccion: empresaFormData.direccion || '',
+        telefono: empresaFormData.telefono || '',
+        fax: empresaFormData.fax || '',
+        email: empresaFormData.email || '',
+        pagina_web: empresaFormData.pagina_web || '',
+        representante: empresaFormData.representante || ''
+      };
+      
+      const empresaController = new EmpresasController();
+      let result;
+      
+      if (isEditing && selectedEmpresa) {
+        result = await empresaController.updateEmpresa(selectedEmpresa.id, empresaData);
+      } else {
+        result = await empresaController.createEmpresa(empresaData);
+      }
+      
+      if (!result.success) {
+        await showAlert(result.message);
+        return;
+      }
+      
+      setSelectedEmpresa(null);
+      setIsEditing(false);
+      setIsCreating(false);
+      setFormActive(false);
+      loadEmpresas();
+      setEmpresaFormData({
+        nombre: '',
+        ruc: '',
+        razon_social: '',
+        direccion: '',
+        telefono: '',
+        fax: '',
+        email: '',
+        pagina_web: '',
+        representante: ''
+      });
+    } catch (error) {
+      console.error('Error al guardar empresa:', error);
+      await showAlert('Error al guardar empresa');
+    }
+  };
+
+  const handleEmpresaInputChange = (e) => {
+    const { name, value } = e.target;
+    setEmpresaFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleEmpresaRowClick = (empresa) => {
+    setSelectedEmpresa(empresa);
+    setIsEditing(false);
+    setIsCreating(false);
+    setFormActive(false);
+  };
+
+  // Configuración de columnas para la tabla
+  const columns = [
+    {
+      key: 'cod',
+      title: 'Núm.',
+      width: '16',
+      fontFamily: 'mono',
+      cellClassName: 'text-gray-600'
+    },
+    {
+      key: 'tratamiento',
+      title: 'Trat.',
+      width: '20'
+    },
+    {
+      key: 'apellidos',
+      title: 'Apellidos',
+      width: '32',
+      fontWeight: 'bold',
+      showTooltip: true
+    },
+    {
+      key: 'nombres',
+      title: 'Nombres',
+      width: '32',
+      showTooltip: true,
+      cellClassName: 'text-gray-900'
+    },
+    {
+      key: 'direccion',
+      title: 'Dirección',
+      width: '40',
+      showTooltip: true
+    },
+    {
+      key: 'telefono',
+      title: 'Teléfono',
+      width: '24'
+    },
+    {
+      key: 'cedula',
+      title: 'Cédula/RUC',
+      width: '28',
+      fontFamily: 'mono'
+    },
+    {
+      key: 'tipo',
+      title: 'Tipo',
+      width: '16',
+      align: 'center'
+    },
+    {
+      key: 'limite',
+      title: 'Límite',
+      width: '20',
+      type: 'currency',
+      align: 'right'
+    },
+    {
+      key: 'referencias',
+      title: 'Referencias',
+      width: '32',
+      showTooltip: true
+    },
+    {
+      key: 'email',
+      title: 'E-mail',
+      width: '40',
+      showTooltip: true
+    },
+    {
+      key: 'tipoid',
+      title: 'TID',
+      width: '16',
+      align: 'center'
+    },
+    {
+      key: 'relacionado',
+      title: 'Relac.',
+      width: '20',
+      align: 'center'
+    },
+    {
+      key: 'trial272',
+      title: 'T272',
+      width: '16',
+      align: 'center'
+    }
+  ];
+
+  // Configuración de columnas para la tabla de empresas
+  const empresasColumns = [
+    {
+      key: 'id',
+      title: 'ID',
+      width: '16',
+      fontFamily: 'mono',
+      cellClassName: 'text-gray-600'
+    },
+    {
+      key: 'nombre',
+      title: 'Nombre',
+      width: '40',
+      fontWeight: 'bold',
+      showTooltip: true
+    },
+    {
+      key: 'ruc',
+      title: 'RUC',
+      width: '28',
+      fontFamily: 'mono'
+    },
+    {
+      key: 'razon_social',
+      title: 'Razón Social',
+      width: '40',
+      showTooltip: true
+    },
+    {
+      key: 'direccion',
+      title: 'Dirección',
+      width: '40',
+      showTooltip: true
+    },
+    {
+      key: 'telefono',
+      title: 'Teléfono',
+      width: '24'
+    },
+    {
+      key: 'fax',
+      title: 'Fax',
+      width: '24'
+    },
+    {
+      key: 'email',
+      title: 'E-mail',
+      width: '40',
+      showTooltip: true
+    },
+    {
+      key: 'pagina_web',
+      title: 'Página Web',
+      width: '40',
+      showTooltip: true
+    },
+    {
+      key: 'representante',
+      title: 'Representante',
+      width: '32',
+      showTooltip: true
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
 
@@ -198,23 +525,23 @@ const Clientes = () => {
       <div className="w-12 bg-white border-r border-gray-200 py-2">
         <div className="space-y-1 px-1">
           <button
-            onClick={handleNew}
+            onClick={currentView === 'clientes' ? handleNew : handleNewEmpresa}
             title="Nuevo"
             className="w-8 h-8 flex items-center justify-center text-lg bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
           >
             +
           </button>
           <button
-            onClick={handleEdit}
-            disabled={!selectedCliente}
+            onClick={currentView === 'clientes' ? handleEdit : handleEditEmpresa}
+            disabled={currentView === 'clientes' ? !selectedCliente : !selectedEmpresa}
             title="Editar"
             className="w-8 h-8 flex items-center justify-center text-sm bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
           >
             ✎
           </button>
           <button
-            onClick={handleDelete}
-            disabled={!selectedCliente}
+            onClick={currentView === 'clientes' ? handleDelete : handleDeleteEmpresa}
+            disabled={currentView === 'clientes' ? !selectedCliente : !selectedEmpresa}
             title="Eliminar"
             className="w-8 h-8 flex items-center justify-center text-sm bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
           >
@@ -232,84 +559,27 @@ const Clientes = () => {
 
       {/* Área central - Tabla de clientes */}
       <div className="flex-1 p-2 min-h-0">
-        <div className="bg-white border border-gray-200 h-full flex flex-col">
-          <div className="border-b border-gray-200 px-3 py-2 flex-shrink-0">
-            <h2 className="text-sm font-medium text-gray-900">Lista de Clientes</h2>
-          </div>
-          
-          {loading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-2 text-gray-600">Cargando clientes...</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 relative">
-              <div className="absolute inset-0 overflow-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-16 border-r border-gray-200">Núm.</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-20 border-r border-gray-200">Trat.</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-32 border-r border-gray-200">Apellidos</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-32 border-r border-gray-200">Nombres</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-40 border-r border-gray-200">Dirección</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-24 border-r border-gray-200">Teléfono</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-28 border-r border-gray-200">Cédula/RUC</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-16 border-r border-gray-200">Tipo</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-20 border-r border-gray-200">Límite</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-32 border-r border-gray-200">Referencias</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-40 border-r border-gray-200">E-mail</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-16 border-r border-gray-200">TID</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-20 border-r border-gray-200">Relac.</th>
-                      <th className="px-2 py-2 text-left font-medium text-gray-600 w-16">T272</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {clientes.map((cliente) => (
-                      <tr
-                        key={cliente.cod}
-                        onClick={() => handleRowClick(cliente)}
-                        className={`cursor-pointer hover:bg-blue-50 transition-colors ${
-                          selectedCliente?.cod === cliente.cod ? 'bg-blue-100' : ''
-                        }`}
-                      >
-                        <td className="px-2 py-2 text-gray-600 font-mono border-r border-gray-100 truncate">{cliente.cod}</td>
-                        <td className="px-2 py-2 text-gray-500 border-r border-gray-100 truncate">{cliente.tratamiento || '-'}</td>
-                        <td className="px-2 py-2 font-medium border-r border-gray-100 truncate" title={cliente.apellidos}>{cliente.apellidos}</td>
-                        <td className="px-2 py-2 border-r border-gray-100 truncate" title={cliente.nombres}>{cliente.nombres}</td>
-                        <td className="px-2 py-2 text-gray-500 border-r border-gray-100 truncate" title={cliente.direccion || '-'}>{cliente.direccion || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 border-r border-gray-100 truncate">{cliente.telefono || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 font-mono border-r border-gray-100 truncate">{cliente.cedula || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 text-center border-r border-gray-100 truncate">{cliente.tipo || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 text-right border-r border-gray-100 truncate">{cliente.limite ? `$${parseFloat(cliente.limite).toFixed(2)}` : '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 border-r border-gray-100 truncate" title={cliente.referencias || '-'}>{cliente.referencias || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 border-r border-gray-100 truncate" title={cliente.email || '-'}>{cliente.email || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 text-center border-r border-gray-100 truncate">{cliente.tipoid || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 text-center border-r border-gray-100 truncate">{cliente.relacionado || '-'}</td>
-                        <td className="px-2 py-2 text-gray-500 text-center truncate">{cliente.trial272 || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {clientes.length === 0 && (
-                  <div className="flex items-center justify-center h-32">
-                    <p className="text-gray-500">No hay clientes registrados</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <TableModel
+          title={currentView === 'clientes' ? 'Lista de Clientes' : 'Lista de Empresas'}
+          columns={currentView === 'clientes' ? columns : empresasColumns}
+          data={currentView === 'clientes' ? clientes : empresas}
+          loading={loading}
+          selectedRow={currentView === 'clientes' ? selectedCliente : selectedEmpresa}
+          onRowClick={currentView === 'clientes' ? handleRowClick : handleEmpresaRowClick}
+          emptyMessage={currentView === 'clientes' ? 'No hay clientes registrados' : 'No hay empresas registradas'}
+        />
       </div>
 
       {/* Panel derecho - Formulario */}
       <div className="w-64 bg-white border-l border-gray-200 p-2">
         <div className="text-xs font-medium text-gray-900 mb-2">
-          {isEditing ? 'Editar Cliente' : isCreating ? 'Nuevo Cliente' : 'Datos del cliente'}
+          {currentView === 'clientes' 
+            ? (isEditing ? 'Editar Cliente' : isCreating ? 'Nuevo Cliente' : 'Datos del cliente')
+            : (isEditing ? 'Editar Empresa' : isCreating ? 'Nueva Empresa' : 'Datos de la empresa')
+          }
         </div>
-        <form onSubmit={handleSave} className="space-y-2">
+        {currentView === 'clientes' ? (
+          <form onSubmit={handleSave} className="space-y-2">
           <div>
             <label className="block text-xs text-gray-700">Tratamiento</label>
             <input
@@ -462,6 +732,144 @@ const Clientes = () => {
             </div>
           )}
         </form>
+        ) : (
+          <form onSubmit={handleSaveEmpresa} className="space-y-2">
+            <div>
+              <label className="block text-xs text-gray-700">Nombre *</label>
+              <input
+                type="text"
+                name="nombre"
+                value={empresaFormData.nombre}
+                onChange={handleEmpresaInputChange}
+                required
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">RUC *</label>
+              <input
+                type="text"
+                name="ruc"
+                value={empresaFormData.ruc}
+                onChange={handleEmpresaInputChange}
+                required
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">Razón Social</label>
+              <input
+                type="text"
+                name="razon_social"
+                value={empresaFormData.razon_social}
+                onChange={handleEmpresaInputChange}
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">Dirección</label>
+              <input
+                type="text"
+                name="direccion"
+                value={empresaFormData.direccion}
+                onChange={handleEmpresaInputChange}
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">Teléfono</label>
+              <input
+                type="text"
+                name="telefono"
+                value={empresaFormData.telefono}
+                onChange={handleEmpresaInputChange}
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">Fax</label>
+              <input
+                type="text"
+                name="fax"
+                value={empresaFormData.fax}
+                onChange={handleEmpresaInputChange}
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">E-mail</label>
+              <input
+                type="email"
+                name="email"
+                value={empresaFormData.email}
+                onChange={handleEmpresaInputChange}
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">Página Web</label>
+              <input
+                type="url"
+                name="pagina_web"
+                value={empresaFormData.pagina_web}
+                onChange={handleEmpresaInputChange}
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-700">Representante</label>
+              <input
+                type="text"
+                name="representante"
+                value={empresaFormData.representante}
+                onChange={handleEmpresaInputChange}
+                disabled={!formActive}
+                className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </div>
+            {formActive && (
+              <div className="flex space-x-1 pt-1">
+                <button
+                  type="submit"
+                  className="flex-1 text-xs bg-gray-900 text-white px-2 py-1 rounded hover:bg-gray-800 transition-colors"
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormActive(false);
+                    setIsEditing(false);
+                    setIsCreating(false);
+                    setSelectedEmpresa(null);
+                    setEmpresaFormData({
+                      nombre: '',
+                      ruc: '',
+                      razon_social: '',
+                      direccion: '',
+                      telefono: '',
+                      fax: '',
+                      email: '',
+                      pagina_web: '',
+                      representante: ''
+                    });
+                  }}
+                  className="flex-1 text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </form>
+        )}
       </div>
       </div>
       <Modal

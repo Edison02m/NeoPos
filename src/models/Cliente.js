@@ -58,7 +58,10 @@ class Cliente {
     
     // Generar código autoincremental
     const countResult = await window.electronAPI.dbGetSingle('SELECT COUNT(*) as count FROM cliente');
-    const nextId = (countResult.count || 0) + 1;
+    if (!countResult.success) {
+      throw new Error(countResult.error);
+    }
+    const nextId = (countResult.data.count || 0) + 1;
     const cod = nextId.toString();
     
     // Verificar si ya existe un cliente con la misma cédula (si se proporciona)

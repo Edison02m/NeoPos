@@ -42,7 +42,7 @@ const Empresa = () => {
       const empresa = await EmpresaModel.getEmpresa();
       if (empresa) {
         const empresaData = {
-          nombre: empresa.empresa || '',
+          nombre: empresa.nombre || '',
           ruc: empresa.ruc || '',
           direccion: empresa.direccion || '',
           telefono: empresa.telefono || '',
@@ -545,7 +545,7 @@ const Empresa = () => {
               className={`flex items-center gap-2 px-6 py-3 text-white border-none rounded-lg text-sm font-medium transition-all duration-200 transform hover:-translate-y-0.5 ${
                 loading 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-500 hover:bg-blue-600 cursor-pointer'
+                  : 'bg-gray-900 hover:bg-gray-800 cursor-pointer'
               }`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

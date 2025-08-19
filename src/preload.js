@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openEmpresaWindow: () => ipcRenderer.invoke('open-empresa-window'),
     openClienteWindow: () => ipcRenderer.invoke('open-cliente-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
+    closeCurrentWindow: () => ipcRenderer.invoke('quitApp'),
 
   // Información de la aplicación
   app: {
@@ -38,7 +39,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-logout',
       'menu-config-user',
       'menu-config-company',
-      'menu-inventory-customers'
+      'menu-inventory-customers',
+      'menu-ver-personas',
+      'menu-ver-empresas',
+      'menu-ver-credito',
+      'menu-ver-reservaciones'
     ];
 
     validActions.forEach(action => {
@@ -54,6 +59,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners(action);
       });
     };
+  },
+
+  // Función onMenuEvent para compatibilidad
+  onMenuEvent: (callback) => {
+    const validActions = [
+      'menu-new-sale',
+      'menu-search-product',
+      'menu-sales-history',
+      'menu-reports',
+      'menu-products',
+      'menu-categories',
+      'menu-suppliers',
+      'menu-logout',
+      'menu-config-user',
+      'menu-config-company',
+      'menu-inventory-customers',
+      'menu-ver-personas',
+      'menu-ver-empresas',
+      'menu-ver-credito',
+      'menu-ver-reservaciones'
+    ];
+
+    validActions.forEach(action => {
+      const handler = (event, message) => {
+        console.log(`[PRELOAD] Menu event recibido: ${action}`);
+        callback(event, message || action);
+      };
+      ipcRenderer.on(action, handler);
+    });
+
+    return () => {
+      validActions.forEach(action => {
+        ipcRenderer.removeAllListeners(action);
+      });
+    };
+  },
+
+  // Función para remover listener de menú
+  removeMenuListener: (callback) => {
+    // Esta función es para compatibilidad, pero no hace nada específico
+    // ya que los listeners se manejan internamente
   },
 
   // Remover listeners

@@ -134,35 +134,6 @@ class WindowManager {
     // Menú específico para la ventana de clientes basado en las imágenes
     const menuTemplate = [
       {
-        label: 'Cliente',
-        submenu: [
-          {
-            label: 'Buscar Cliente',
-            accelerator: 'Ctrl+B',
-            click: () => {
-              clienteWindow.webContents.send('menu-cliente-buscar');
-            }
-          }
-        ]
-      },
-      {
-        label: 'Editar',
-        submenu: [
-          {
-            label: 'Ver crédito otorgado al cliente',
-            click: () => {
-              clienteWindow.webContents.send('menu-editar-credito');
-            }
-          },
-          {
-            label: 'Ver reservaciones del cliente',
-            click: () => {
-              clienteWindow.webContents.send('menu-editar-reservaciones');
-            }
-          }
-        ]
-      },
-      {
         label: 'Ver',
         submenu: [
           {
@@ -175,6 +146,19 @@ class WindowManager {
             label: 'Empresas',
             click: () => {
               clienteWindow.webContents.send('menu-ver-empresas');
+            }
+          },
+
+          {
+            label: 'Ver crédito otorgado al cliente',
+            click: () => {
+              clienteWindow.webContents.send('menu-ver-credito');
+            }
+          },
+          {
+            label: 'Ver reservaciones del cliente',
+            click: () => {
+              clienteWindow.webContents.send('menu-ver-reservaciones');
             }
           }
         ]

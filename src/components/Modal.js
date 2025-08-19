@@ -19,11 +19,23 @@ const Modal = ({ isOpen, onClose, onConfirm, title, message, type = 'confirm' })
   };
 
   React.useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+    const handleKeyDownEvent = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+      if (e.key === 'Enter' && type === 'alert') {
+        onClose();
+      }
     };
-  }, []);
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDownEvent);
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDownEvent);
+    };
+  }, [isOpen, onClose, type]);
 
   return (
     <div 

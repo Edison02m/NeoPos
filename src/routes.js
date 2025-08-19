@@ -5,7 +5,7 @@ import Login from './views/Login';
 import Dashboard from './views/Dashboard';
 import Users from './views/Users';
 import Empresa from './views/Empresa';
-import Cliente from './views/Cliente';
+import Cliente from './views/Client';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
