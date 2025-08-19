@@ -148,7 +148,9 @@ class WindowManager {
               clienteWindow.webContents.send('menu-ver-empresas');
             }
           },
-
+          {
+            type: 'separator'
+          },
           {
             label: 'Ver crédito otorgado al cliente',
             click: () => {
