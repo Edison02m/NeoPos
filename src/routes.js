@@ -6,6 +6,7 @@ import Dashboard from './views/Dashboard';
 import Users from './views/Users';
 import Empresa from './views/Empresa';
 import Cliente from './views/Client';
+import Proveedor from './views/Proveedor';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -40,6 +41,14 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/cliente" 
         element={<Cliente />} 
+      />
+      <Route 
+        path="/proveedor" 
+        element={<Proveedor />} 
+      />
+      <Route 
+        path="/proveedor/index" 
+        element={<Proveedor />} 
       />
     </Routes>
   );

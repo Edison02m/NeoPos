@@ -60,6 +60,19 @@ function AppContent() {
             }
         };
 
+        // Handle menu supplier config event
+        const handleMenuSupplierConfig = async () => {
+            console.log('[APP] Abriendo ventana de configuración de proveedores');
+            try {
+                const result = await window.electronAPI.openProveedorWindow();
+                if (!result.success) {
+                    console.error('Error al abrir ventana de proveedores:', result.error);
+                }
+            } catch (error) {
+                console.error('Error al abrir ventana de proveedores:', error);
+            }
+        };
+
     
     
     
@@ -85,6 +98,9 @@ function AppContent() {
                 } else if (action === 'menu-inventory-customers') {
             
                     handleMenuClientConfig();
+                } else if (action === 'menu-inventory-suppliers') {
+            
+                    handleMenuSupplierConfig();
                 } else {
               
                 }

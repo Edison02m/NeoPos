@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openUsersWindow: () => ipcRenderer.invoke('open-users-window'),
     openEmpresaWindow: () => ipcRenderer.invoke('open-empresa-window'),
     openClienteWindow: () => ipcRenderer.invoke('open-cliente-window'),
+    openProveedorWindow: () => ipcRenderer.invoke('open-proveedor-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
     closeCurrentWindow: () => ipcRenderer.invoke('quitApp'),
 
@@ -40,6 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-config-user',
       'menu-config-company',
       'menu-inventory-customers',
+      'menu-inventory-suppliers',
       'menu-ver-personas',
       'menu-ver-empresas',
       'menu-ver-credito',
@@ -75,6 +77,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-config-user',
       'menu-config-company',
       'menu-inventory-customers',
+      'menu-inventory-suppliers',
       'menu-ver-personas',
       'menu-ver-empresas',
       'menu-ver-credito',

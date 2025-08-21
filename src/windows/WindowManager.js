@@ -188,6 +188,62 @@ class WindowManager {
     return clienteWindow;
   }
 
+  createProveedorWindow(parentWindow) {
+    const proveedorWindow = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Gestión de Proveedores',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    const isDev = true;
+    
+    if (isDev) {
+      proveedorWindow.loadURL('http://localhost:3000/#/proveedor');
+    } else {
+      proveedorWindow.loadFile(path.join(__dirname, '../build/index.html'), {
+        hash: '/proveedor'
+      });
+    }
+
+    // Menú específico para la ventana de proveedores
+    const menuTemplate = [
+      {
+        label: 'Cerrar ventana proveedores',
+        click: () => {
+          proveedorWindow.close();
+        }
+      }
+    ];
+
+    const proveedorMenu = Menu.buildFromTemplate(menuTemplate);
+    proveedorWindow.setMenu(proveedorMenu);
+
+    proveedorWindow.once('ready-to-show', () => {
+      proveedorWindow.show();
+    });
+
+    proveedorWindow.on('closed', () => {
+      this.windows.delete('proveedores');
+    });
+
+    this.windows.set('proveedores', proveedorWindow);
+    return proveedorWindow;
+  }
+
   closeWindow(windowName) {
     const window = this.windows.get(windowName);
     if (window && !window.isDestroyed()) {
