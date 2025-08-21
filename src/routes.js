@@ -6,7 +6,7 @@ import Dashboard from './views/Dashboard';
 import Users from './views/Users';
 import Empresa from './views/Empresa';
 import Cliente from './views/Client';
-import Proveedor from './views/Proveedor';
+import ProveedoresView from './views/Proveedor/index';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -44,11 +44,11 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       />
       <Route 
         path="/proveedor" 
-        element={<Proveedor />} 
+        element={<ProveedoresView />} 
       />
       <Route 
         path="/proveedor/index" 
-        element={<Proveedor />} 
+        element={<ProveedoresView />} 
       />
     </Routes>
   );
