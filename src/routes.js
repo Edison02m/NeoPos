@@ -3,9 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 
 import Login from './views/Login';
 import Dashboard from './views/Dashboard';
-import Users from './views/Users';
+import UsuariosView from './views/Usuario';
 import Empresa from './views/Empresa';
-import Cliente from './views/Client';
+import ClientesView from './views/Client/index';
 import ProveedoresView from './views/Proveedor/index';
 import ProductosView from './views/Producto/index';
 
@@ -33,7 +33,7 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       />
       <Route 
         path="/users" 
-        element={<Users />} 
+        element={<UsuariosView />} 
       />
       <Route 
         path="/empresa" 
@@ -41,7 +41,12 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       />
       <Route 
         path="/cliente" 
-        element={<Cliente />} 
+        element={<ClientesView />} 
+      />
+      {/* Alias para compatibilidad con rutas antiguas */}
+      <Route 
+        path="/client" 
+        element={<Navigate to="/cliente" replace />} 
       />
       <Route 
         path="/proveedor" 

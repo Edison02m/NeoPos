@@ -143,8 +143,9 @@ class WindowManager {
       skipTaskbar: false
     });
 
-    // Cargar contenido según el modo de desarrollo/producción
-    this.loadContent(clienteWindow, '/client');
+  // Cargar contenido según el modo de desarrollo/producción
+  // Ruta correcta en React Router es '/cliente'
+  this.loadContent(clienteWindow, '/cliente');
 
     // Menú específico para la ventana de clientes basado en las imágenes
     const menuTemplate = [
@@ -341,27 +342,9 @@ class WindowManager {
             }
           },
           {
-            label: 'Ir al siguiente registro',
-            click: () => {
-              productoWindow.webContents.send('menu-siguiente-registro');
-            }
-          },
-          {
-            label: 'Ir a anterior registro',
-            click: () => {
-              productoWindow.webContents.send('menu-anterior-registro');
-            }
-          },
-          {
             label: 'Ir al último registro',
             click: () => {
               productoWindow.webContents.send('menu-ultimo-registro');
-            }
-          },
-          {
-            label: 'Ir al registro nro ...',
-            click: () => {
-              productoWindow.webContents.send('menu-ir-registro');
             }
           }
         ]
@@ -370,12 +353,6 @@ class WindowManager {
       {
         label: 'Reportes del producto',
         submenu: [
-          {
-            label: 'Reporte de inventario',
-            click: () => {
-              productoWindow.webContents.send('menu-reporte-inventario');
-            }
-          },
           {
             label: 'Reporte de productos',
             click: () => {

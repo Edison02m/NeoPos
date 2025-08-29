@@ -307,6 +307,28 @@ class Producto {
     }
     return result;
   }
+
+  // Obtener el primer registro por código
+  static async getFirstRecord() {
+    const result = await window.electronAPI.dbGetSingle(
+      'SELECT * FROM producto ORDER BY CAST(codigo AS INTEGER) ASC LIMIT 1'
+    );
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    return result.data;
+  }
+
+  // Obtener el último registro por código
+  static async getLastRecord() {
+    const result = await window.electronAPI.dbGetSingle(
+      'SELECT * FROM producto ORDER BY CAST(codigo AS INTEGER) DESC LIMIT 1'
+    );
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    return result.data;
+  }
 }
 
 export default Producto;

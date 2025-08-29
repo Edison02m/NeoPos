@@ -10,7 +10,7 @@ class Usuario {
   }
 
   static async findAll() {
-    const result = await window.electronAPI.dbQuery('SELECT cod, usuario, tipo, estado FROM usuario ORDER BY usuario');
+    const result = await window.electronAPI.dbQuery('SELECT cod, usuario, tipo, codempresa, alias FROM usuario ORDER BY usuario');
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -72,10 +72,7 @@ class Usuario {
   }
 
   static async authenticate(usuario, contrasena) {
-    const result = await window.electronAPI.dbGetSingle(
-      'SELECT * FROM usuario WHERE usuario = ? AND contrasena = ?', 
-      [usuario, contrasena]
-    );
+    const result = await window.electronAPI.authenticateUser(usuario, contrasena);
     if (!result.success) {
       throw new Error(result.error);
     }

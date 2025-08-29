@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbGetSingle: (query, params) => ipcRenderer.invoke('db-get-single', query, params),
   dbRun: (query, params) => ipcRenderer.invoke('db-run', query, params),
 
+  // Authentication with bcrypt
+  authenticateUser: (usuario, contrasena) => ipcRenderer.invoke('authenticate-user', usuario, contrasena),
+
   // Menu state handlers
     updateMenuAuthenticated: () => ipcRenderer.invoke('update-menu-authenticated'),
     updateMenuUnauthenticated: () => ipcRenderer.invoke('update-menu-unauthenticated'),
@@ -49,6 +52,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Leer imagen como base64 para mostrar en la interfaz
   readImageAsBase64: (filePath) => ipcRenderer.invoke('read-image-as-base64', filePath),
 
+  // Generación de reportes
+  generateExcelReport: (data, filename, sheetName) => ipcRenderer.invoke('generate-excel-report', data, filename, sheetName),
+  generatePDFReport: (reportData, filename) => ipcRenderer.invoke('generate-pdf-report', reportData, filename),
+  
+  // Diálogos de archivo
+  showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
+
   // Eventos del menú
   onMenuAction: (callback) => {
     const validActions = [
@@ -79,9 +89,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-siguiente-registro',
       'menu-anterior-registro',
       'menu-ultimo-registro',
-      'menu-ir-registro',
-      'menu-reporte-inventario',
-      'menu-reporte-productos'
+  'menu-ir-registro',
+  'menu-reporte-productos'
     ];
 
     validActions.forEach(action => {
@@ -131,9 +140,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-siguiente-registro',
       'menu-anterior-registro',
       'menu-ultimo-registro',
-      'menu-ir-registro',
-      'menu-reporte-inventario',
-      'menu-reporte-productos'
+  'menu-ir-registro',
+  'menu-reporte-productos'
     ];
 
     console.log('[PRELOAD] Eventos válidos registrados:', validActions);

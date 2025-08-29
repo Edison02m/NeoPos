@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import TableModel from '../../components/TableModel';
 
 const ProductosList = ({ 
@@ -8,12 +8,40 @@ const ProductosList = ({
   loading, 
   markedProducts 
 }) => {
+  // Paginación: 20 por página
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+
+  // Resetear a la primera página cuando cambia el listado
+  useEffect(() => {
+    setPage(1);
+  }, [productos]);
+
+  const total = productos?.length || 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(startIndex + PAGE_SIZE, total);
+
+  const pageData = useMemo(() => {
+    return productos.slice(startIndex, endIndex);
+  }, [productos, startIndex, endIndex]);
+
   const isProductMarked = (codigo) => {
     return markedProducts.some(p => p.codigo === codigo);
   };
 
   // Configuración de columnas para la tabla de productos
-  const columns = [
+  const columns = useMemo(() => ([
+    // Numeración global considerando paginación
+    {
+      key: '__num',
+      title: '#',
+      width: '50px',
+      align: 'center',
+      render: (value, row, index) => startIndex + index + 1,
+      cellClassName: 'text-gray-500 font-mono'
+    },
     {
       key: 'codbarra',
       title: 'Cód. Barras',
@@ -150,21 +178,73 @@ const ProductosList = ({
       render: (value) => value || '-',
       showTooltip: true
     }
-  ];
+  ]), [startIndex, markedProducts]);
 
   return (
-    <TableModel
-      title="Lista de Productos"
-      columns={columns}
-      data={productos}
-      loading={loading}
-      selectedRow={selectedProducto}
-      onRowClick={onSelectProducto}
-      emptyMessage="No hay productos registrados"
-      className="h-full bg-white border border-gray-200 rounded"
-      tableClassName="text-xs"
-      showRowNumbers={true}
-    />
+    <div className="h-full flex flex-col">
+      <TableModel
+        title="Lista de Productos"
+        columns={columns}
+        data={pageData}
+        loading={loading}
+        selectedRow={selectedProducto}
+        onRowClick={onSelectProducto}
+        emptyMessage="No hay productos registrados"
+        className="flex-1 bg-white border border-gray-200 rounded"
+        tableClassName="text-xs"
+        showRowNumbers={false}
+      />
+
+      {/* Paginación */}
+      <div className="mt-2 flex items-center justify-between text-xs text-gray-700">
+        <div>
+          {total > 0 ? (
+            <span>
+              Mostrando {startIndex + 1}-{endIndex} de {total}
+            </span>
+          ) : (
+            <span>Sin resultados</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+            onClick={() => setPage(1)}
+            disabled={currentPage <= 1}
+            title="Primera página"
+          >
+            «
+          </button>
+          <button
+            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={currentPage <= 1}
+            title="Anterior"
+          >
+            ‹
+          </button>
+          <span className="px-2">
+            Página {currentPage} de {totalPages}
+          </span>
+          <button
+            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage >= totalPages}
+            title="Siguiente"
+          >
+            ›
+          </button>
+          <button
+            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+            onClick={() => setPage(totalPages)}
+            disabled={currentPage >= totalPages}
+            title="Última página"
+          >
+            »
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

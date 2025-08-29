@@ -3,7 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import Producto from '../../models/Producto';
 import ProductoController from '../../controllers/ProductoController';
 import Modal from '../../components/Modal';
+import ExportModal from '../../components/ExportModal';
 import useModal from '../../hooks/useModal';
+import * as ReportGenerator from '../../utils/reportGenerator';
+
+// Utilidad: resolver el export real del módulo de reportes (named o default)
+function getReportGenerator() {
+  try {
+    const mod = ReportGenerator;
+    const hasNamed = mod && typeof mod.generateProductsExcel === 'function';
+    const hasDefault = mod && mod.default && typeof mod.default.generateProductsExcel === 'function';
+    return hasNamed ? mod : (hasDefault ? mod.default : mod);
+  } catch (e) {
+    console.error('[REPORT] Error resolviendo módulo ReportGenerator:', e);
+    return ReportGenerator;
+  }
+}
 
 // Componentes de la vista de productos
 import ProductosList from './ProductosList';
@@ -14,6 +29,77 @@ import SearchFilter from '../../components/SearchFilter';
 
 const ProductosView = () => {  
   const navigate = useNavigate();
+
+  // Fallbacks locales por si el módulo de reportes no expone las funciones correctamente
+  const fallbackGenerateProductsExcel = async (productos, filename) => {
+    try {
+      
+      const data = productos.map(producto => ({
+        'Código': producto.codigo,
+        'Producto': producto.producto,
+        'Código de Barras': producto.codbarra || '',
+        'Precio Compra': producto.pcompra || 0,
+        'Precio Venta': producto.pvp || 0,
+        'Precio Mayorista': producto.pmayorista || 0,
+        'Stock Almacén': producto.almacen || 0,
+        'Stock Bodega 1': producto.bodega1 || 0,
+        'Stock Bodega 2': producto.bodega2 || 0,
+        'Mínimo': producto.minimo || 0,
+        'Máximo': producto.maximo || 0,
+        'Peso': producto.peso || 0,
+        'IVA %': producto.iva_percentage || 0,
+        'Graba IVA': producto.grabaiva === '1' ? 'Sí' : 'No',
+        'Es Servicio': producto.isservicio === '1' ? 'Sí' : 'No'
+      }));
+      if (!window?.electronAPI?.generateExcelReport) {
+        return { success: false, error: 'electronAPI.generateExcelReport no disponible' };
+      }
+      return await window.electronAPI.generateExcelReport(data, filename, 'Productos');
+    } catch (e) {
+      console.error('[FALLBACK] Error generateProductsExcel:', e);
+      return { success: false, error: e?.message || String(e) };
+    }
+  };
+
+  const fallbackGenerateProductsPDF = async (productos, filename) => {
+    try {
+      // Formato productos: Código | Producto | Cod. Barras | P. Venta | IVA | Existencia
+      let sumaExistencia = 0;
+      const headers = ['Código', 'Producto', 'Cod. Barras', 'P. Venta', 'IVA', 'Existencia'];
+      const rows = productos.map(p => {
+        const existencia = (p.almacen || 0) + (p.bodega1 || 0) + (p.bodega2 || 0);
+        sumaExistencia += existencia;
+        return [
+          p.codigo,
+          (p.producto || '').substring(0, 60),
+          p.codbarra || '',
+          Number(p.pvp || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          p.grabaiva === '1' ? 'Sí' : 'No',
+          existencia
+        ];
+      });
+
+      const reportData = {
+        title: 'REPORTE DE PRODUCTOS',
+        headers,
+        data: rows,
+        stats: [
+          `Total de productos: ${productos.length}`,
+          `Existencia total: ${sumaExistencia}`,
+          `Fecha: ${new Date().toLocaleDateString('es-EC')}`
+        ]
+      };
+      if (!window?.electronAPI?.generatePDFReport) {
+        return { success: false, error: 'electronAPI.generatePDFReport no disponible' };
+      }
+      return await window.electronAPI.generatePDFReport(reportData, filename);
+    } catch (e) {
+      console.error('[FALLBACK] Error generateProductsPDF:', e);
+      return { success: false, error: e?.message || String(e) };
+    }
+  };
+
+  // (Eliminado) Reportes de inventario: esta vista ahora solo maneja reportes de productos.
 
   // Establecer el título de la ventana
   useEffect(() => {
@@ -41,6 +127,10 @@ const ProductosView = () => {
   const [markedProducts, setMarkedProducts] = useState([]);
   const [showMarkedOnly, setShowMarkedOnly] = useState(false);
   
+  // Estados para el modal de exportación
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  
   // Hook para modales
   const { modalState, showConfirm, showAlert, closeModal } = useModal();
   
@@ -54,7 +144,8 @@ const ProductosView = () => {
 
   // Manejar eventos del menú
   useEffect(() => {
-    const handleMenuEvent = (event, message) => {
+    const handleMenuEvent = async (event, message) => {
+      
       switch (message) {
         // Búsquedas
         case 'menu-buscar-descripcion':
@@ -94,57 +185,61 @@ const ProductosView = () => {
           
         // Navegación
         case 'menu-primer-registro':
-          if (productos.length > 0) {
-            setSelectedProducto(productos[0]);
-          }
-          break;
-        case 'menu-siguiente-registro':
-          if (selectedProducto && productos.length > 0) {
-            const currentIndex = productos.findIndex(p => p.codigo === selectedProducto.codigo);
-            if (currentIndex < productos.length - 1) {
-              setSelectedProducto(productos[currentIndex + 1]);
+          
+          try {
+            const primerProducto = await Producto.getFirstRecord();
+            if (primerProducto) {
+              setSelectedProducto(primerProducto);
+              
             }
-          }
-          break;
-        case 'menu-anterior-registro':
-          if (selectedProducto && productos.length > 0) {
-            const currentIndex = productos.findIndex(p => p.codigo === selectedProducto.codigo);
-            if (currentIndex > 0) {
-              setSelectedProducto(productos[currentIndex - 1]);
-            }
+          } catch (error) {
+            console.error('[PRODUCTOS] Error al obtener primer registro:', error);
           }
           break;
         case 'menu-ultimo-registro':
-          if (productos.length > 0) {
-            setSelectedProducto(productos[productos.length - 1]);
+          
+          try {
+            const ultimoProducto = await Producto.getLastRecord();
+            if (ultimoProducto) {
+              setSelectedProducto(ultimoProducto);
+              
+            }
+          } catch (error) {
+            console.error('[PRODUCTOS] Error al obtener último registro:', error);
           }
           break;
-        case 'menu-ir-registro':
-          // Implementar prompt para número de registro
-          break;
           
-        // Reportes
-        case 'menu-reporte-inventario':
-          // Implementar reporte
-          break;
-        case 'menu-reporte-productos':
-          // Implementar reporte
+  // Reportes (solo productos)
+  case 'menu-reporte-productos':
+          
+          try {
+            const todosLosProductos = await productoController.getAllProductos();
+            if (todosLosProductos.success && todosLosProductos.data?.length > 0) {
+              setExportModalOpen(true);
+            } else {
+              showAlert('Información', 'No hay productos para generar el reporte');
+            }
+          } catch (error) {
+            console.error('[PRODUCTOS] Error al verificar productos para reporte:', error);
+            showAlert('Error', 'No se pudo obtener los datos para el reporte');
+          }
           break;
           
         default:
-          // Evento de menú no manejado
+          
           break;
       }
     };
 
     // Registrar el listener para eventos del menú
     if (window.electronAPI?.onMenuEvent) {
+      
       const removeListener = window.electronAPI.onMenuEvent(handleMenuEvent);
       return () => {
         if (removeListener) removeListener();
       };
     }
-  }, []); // Sin dependencias para que solo se registre una vez
+  }, [productos, selectedProducto, markedProducts, productoController, showConfirm, showAlert]); // Incluir dependencias necesarias
 
   // Cargar productos
   const loadProductos = async () => {
@@ -375,7 +470,17 @@ const ProductosView = () => {
   };
 
   const handleExit = () => {
-    navigate('/dashboard');
+    try {
+      if (window?.electronAPI?.closeWindow) {
+        // Cerrar únicamente la ventana de Productos
+        window.electronAPI.closeWindow('productos');
+      } else {
+        // Fallback: cerrar la ventana actual del navegador (solo esta)
+        window.close();
+      }
+    } catch (e) {
+      console.error('Error al cerrar la ventana de productos:', e);
+    }
   };
 
   // Guardar producto
@@ -473,7 +578,84 @@ const ProductosView = () => {
     }
   };
 
-  // Funciones de reportes
+  // Funciones de reportes mejoradas
+  const handleExportExcel = async () => {
+    setExportLoading(true);
+    try {
+      const todosLosProductos = await productoController.getAllProductos();
+      if (!todosLosProductos.success || !todosLosProductos.data?.length) {
+        showAlert('Error', 'No se pudieron obtener los datos para el reporte');
+        return;
+      }
+
+      const timestamp = new Date().toISOString().slice(0,10);
+      let result;
+
+      const RG = getReportGenerator();
+      const hasProdExcel = RG && typeof RG.generateProductsExcel === 'function';
+      result = hasProdExcel
+        ? await RG.generateProductsExcel(
+        todosLosProductos.data, 
+        `productos_${timestamp}`
+      )
+        : await fallbackGenerateProductsExcel(todosLosProductos.data, `productos_${timestamp}`);
+
+      if (result.success) {
+        // En éxito, cerramos el modal sin mostrar alerta
+        setExportModalOpen(false);
+      } else {
+        showAlert('Error', result.error || 'No se pudo generar el reporte Excel');
+      }
+    } catch (error) {
+      console.error('Error generando Excel:', error);
+      showAlert('Error', `Error inesperado al generar el reporte Excel: ${error?.message || error}`);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setExportLoading(true);
+    try {
+      const todosLosProductos = await productoController.getAllProductos();
+      if (!todosLosProductos.success || !todosLosProductos.data?.length) {
+        showAlert('Error', 'No se pudieron obtener los datos para el reporte');
+        return;
+      }
+
+      const timestamp = new Date().toISOString().slice(0,10);
+      let result;
+
+      const RG = getReportGenerator();
+      const hasProdPDF = RG && typeof RG.generateProductsPDF === 'function';
+      result = hasProdPDF
+        ? await RG.generateProductsPDF(
+        todosLosProductos.data, 
+        `productos_${timestamp}`
+      )
+        : await fallbackGenerateProductsPDF(todosLosProductos.data, `productos_${timestamp}`);
+
+      if (result.success) {
+        // En éxito, cerramos el modal sin mostrar alerta
+        setExportModalOpen(false);
+      } else {
+        showAlert('Error', result.error || 'No se pudo generar el reporte PDF');
+      }
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      showAlert('Error', `Error inesperado al generar el reporte PDF: ${error?.message || error}`);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleCloseExportModal = () => {
+    if (!exportLoading) {
+      setExportModalOpen(false);
+    }
+  };
+
+  // Funciones de reportes (mantener por compatibilidad)
   const handleReporteInventario = () => {
     showAlert('Información', 'Función de reporte de inventario en desarrollo');
     // Aquí se implementaría la generación del reporte de inventario
@@ -555,7 +737,7 @@ const ProductosView = () => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal de confirmación estándar */}
       <Modal
         isOpen={modalState.isOpen}
         type={modalState.type}
@@ -564,6 +746,16 @@ const ProductosView = () => {
         onConfirm={modalState.onConfirm}
         onCancel={modalState.onCancel}
         onClose={closeModal}
+      />
+
+      {/* Modal de exportación */}
+      <ExportModal
+        isOpen={exportModalOpen}
+        onClose={handleCloseExportModal}
+        onExportExcel={handleExportExcel}
+        onExportPDF={handleExportPDF}
+        title="Exportar Reporte de Productos"
+        loading={exportLoading}
       />
     </div>
   );

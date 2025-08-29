@@ -12,8 +12,23 @@ module.exports = {
         "crypto": require.resolve("crypto-browserify"),
         "stream": require.resolve("stream-browserify"),
         "buffer": require.resolve("buffer"),
-        "process": require.resolve("process/browser")
+        "process": require.resolve("process/browser"),
+        "os": false,
+        "net": false,
+        "tls": false,
+        "child_process": false
       };
+
+      // Configurar alias para resolver problemas de extensión
+      webpackConfig.resolve.alias = {
+        ...webpackConfig.resolve.alias,
+        "process/browser": require.resolve("process/browser")
+      };
+
+      // Configurar extensiones
+      webpackConfig.resolve.extensions = [
+        '.js', '.jsx', '.ts', '.tsx', '.json', '.mjs'
+      ];
 
       // Agregar plugins necesarios
       const webpack = require('webpack');
@@ -23,6 +38,19 @@ module.exports = {
           process: 'process/browser',
         })
       );
+
+      // Configurar reglas para módulos específicos
+      webpackConfig.module.rules.push({
+        test: /\.mjs$/,
+        include: /node_modules/,
+        type: 'javascript/auto'
+      });
+
+      // Ignorar advertencias específicas de estos módulos
+      webpackConfig.ignoreWarnings = [
+        /Failed to parse source map/,
+        /Module not found: Error: Can't resolve 'encoding'/,
+      ];
 
       return webpackConfig;
     },
