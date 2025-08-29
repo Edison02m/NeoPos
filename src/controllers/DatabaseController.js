@@ -5,15 +5,25 @@ const fs = require('fs');
 class DatabaseController {
   constructor() {
     this.db = null;
-    // En desarrollo usar la ruta relativa, en producción usar userData
-    const isDev = process.env.NODE_ENV === 'development';
+    
+    // Detección de modo de desarrollo
+    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV || __dirname.includes('src');
+    
+    console.log('🔍 NODE_ENV actual:', process.env.NODE_ENV);
+    console.log('🔍 __dirname:', __dirname);
+    console.log('🔧 Modo detectado:', isDev ? 'DESARROLLO' : 'PRODUCCIÓN');
+    
     if (isDev) {
+      // En desarrollo: usar la carpeta database del proyecto
       this.dbPath = path.join(__dirname, '../../database/neopos.db');
     } else {
+      // En producción: usar userData
       const { app } = require('electron');
       const userDataPath = app ? app.getPath('userData') : path.join(__dirname, '../database');
       this.dbPath = path.join(userDataPath, 'neopos.db');
     }
+    
+    console.log('📂 Ruta de base de datos configurada:', this.dbPath);
     this.isClosed = false;
   }
 
