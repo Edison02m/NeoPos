@@ -7,6 +7,7 @@ import Users from './views/Users';
 import Empresa from './views/Empresa';
 import Cliente from './views/Client';
 import ProveedoresView from './views/Proveedor/index';
+import ProductosView from './views/Producto/index';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -49,6 +50,14 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/proveedor/index" 
         element={<ProveedoresView />} 
+      />
+      <Route 
+        path="/productos" 
+        element={<ProductosView />} 
+      />
+      <Route 
+        path="/producto" 
+        element={<ProductosView />} 
       />
     </Routes>
   );

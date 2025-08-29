@@ -10,13 +10,6 @@ const EmpresasList = ({
   // Configuración de columnas para la tabla de empresas (igual que en el archivo original)
   const empresasColumns = [
     {
-      key: 'id',
-      title: 'Número',
-      width: '16',
-      fontFamily: 'mono',
-      cellClassName: 'text-gray-600'
-    },
-    {
       key: 'nombre',
       title: 'Nombre',
       width: '40',
@@ -80,6 +73,7 @@ const EmpresasList = ({
       selectedRow={selectedEmpresa}
       onRowClick={onRowClick}
       emptyMessage="No hay empresas registradas"
+      showRowNumbers={true}
     />
   );
 };

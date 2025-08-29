@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openEmpresaWindow: () => ipcRenderer.invoke('open-empresa-window'),
     openClienteWindow: () => ipcRenderer.invoke('open-cliente-window'),
     openProveedorWindow: () => ipcRenderer.invoke('open-proveedor-window'),
+    openProductoWindow: () => ipcRenderer.invoke('open-producto-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
     closeCurrentWindow: () => ipcRenderer.invoke('quitApp'),
 
@@ -26,6 +27,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   app: {
     getVersion: () => ipcRenderer.invoke('get-app-version'),
   },
+
+  // Manejo de archivos
+  getFilePath: async (file) => {
+    // Para aplicaciones Electron, obtener la ruta completa del archivo
+    try {
+      if (file && file.path) {
+        return file.path;
+      }
+      // Fallback para navegadores web
+      return file.name;
+    } catch (error) {
+      console.error('Error obteniendo ruta del archivo:', error);
+      return file.name;
+    }
+  },
+
+  // Validar si un archivo existe
+  fileExists: (filePath) => ipcRenderer.invoke('file-exists', filePath),
+
+  // Leer imagen como base64 para mostrar en la interfaz
+  readImageAsBase64: (filePath) => ipcRenderer.invoke('read-image-as-base64', filePath),
 
   // Eventos del menú
   onMenuAction: (callback) => {
@@ -45,7 +67,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-ver-personas',
       'menu-ver-empresas',
       'menu-ver-credito',
-      'menu-ver-reservaciones'
+      'menu-ver-reservaciones',
+      // Eventos específicos del menú de productos
+      'menu-buscar-descripcion',
+      'menu-buscar-codigo-barras',
+      'menu-buscar-codigo-auxiliar',
+      'menu-filtrar-productos',
+      'menu-marcar-producto',
+      'menu-productos-marcados',
+      'menu-primer-registro',
+      'menu-siguiente-registro',
+      'menu-anterior-registro',
+      'menu-ultimo-registro',
+      'menu-ir-registro',
+      'menu-reporte-inventario',
+      'menu-reporte-productos'
     ];
 
     validActions.forEach(action => {
@@ -65,6 +101,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Función onMenuEvent para compatibilidad
   onMenuEvent: (callback) => {
+    console.log('[PRELOAD] Registrando listeners de menú...');
+    
     const validActions = [
       'menu-new-sale',
       'menu-search-product',
@@ -81,15 +119,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-ver-personas',
       'menu-ver-empresas',
       'menu-ver-credito',
-      'menu-ver-reservaciones'
+      'menu-ver-reservaciones',
+      // Eventos específicos del menú de productos
+      'menu-buscar-descripcion',
+      'menu-buscar-codigo-barras',
+      'menu-buscar-codigo-auxiliar',
+      'menu-filtrar-productos',
+      'menu-marcar-producto',
+      'menu-productos-marcados',
+      'menu-primer-registro',
+      'menu-siguiente-registro',
+      'menu-anterior-registro',
+      'menu-ultimo-registro',
+      'menu-ir-registro',
+      'menu-reporte-inventario',
+      'menu-reporte-productos'
     ];
+
+    console.log('[PRELOAD] Eventos válidos registrados:', validActions);
 
     validActions.forEach(action => {
       const handler = (event, message) => {
-        console.log(`[PRELOAD] Menu event recibido: ${action}`);
+        console.log(`[PRELOAD] *** EVENTO RECIBIDO: ${action} ***`);
+        console.log(`[PRELOAD] Event:`, event);
+        console.log(`[PRELOAD] Message:`, message || action);
         callback(event, message || action);
       };
       ipcRenderer.on(action, handler);
+      console.log(`[PRELOAD] Listener registrado para: ${action}`);
     });
 
     return () => {

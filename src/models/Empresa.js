@@ -169,7 +169,6 @@ class Empresa {
 
   // Obtener empresa (solo puede haber una)
   static async getEmpresa() {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT * FROM empresa LIMIT 1');
     if (!result.success) {
       throw new Error(result.error);
@@ -179,8 +178,6 @@ class Empresa {
 
   // Crear o actualizar empresa
   static async save(empresaData) {
-    await this.initializeDB();
-    
     const empresa = new Empresa(empresaData);
     const validation = empresa.validate();
     
@@ -290,7 +287,6 @@ class Empresa {
 
   // Verificar si existe una empresa
   static async exists() {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT COUNT(*) as count FROM empresa');
     if (!result.success) {
       throw new Error(result.error);
@@ -300,7 +296,6 @@ class Empresa {
 
   // Eliminar empresa
   static async delete() {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun('DELETE FROM empresa');
     if (!result.success) {
       throw new Error(result.error);
@@ -310,7 +305,6 @@ class Empresa {
 
   // Validar RUC único
   static async validateUniqueRUC(ruc, empresaCod = null) {
-    await this.initializeDB();
     let query = 'SELECT cod FROM empresa WHERE ruc = ?';
     let params = [ruc];
     

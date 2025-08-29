@@ -10,8 +10,7 @@ class Usuario {
   }
 
   static async findAll() {
-    await this.initializeDB();
-    const result = await window.electronAPI.dbQuery('SELECT * FROM usuario');
+    const result = await window.electronAPI.dbQuery('SELECT cod, usuario, tipo, estado FROM usuario ORDER BY usuario');
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -19,7 +18,6 @@ class Usuario {
   }
 
   static async findById(cod) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT * FROM usuario WHERE cod = ?', [cod]);
     if (!result.success) {
       throw new Error(result.error);
@@ -27,8 +25,15 @@ class Usuario {
     return result.data;
   }
 
+  static async findByUsuario(usuario) {
+    const result = await window.electronAPI.dbGetSingle('SELECT * FROM usuario WHERE usuario = ?', [usuario]);
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    return result.data;
+  }
+
   static async findByUsername(usuario) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT * FROM usuario WHERE usuario = ?', [usuario]);
     if (!result.success) {
       throw new Error(result.error);
@@ -37,7 +42,6 @@ class Usuario {
   }
 
   static async create(usuarioData) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun(
       'INSERT INTO usuario (usuario, contrasena, tipo, codempresa, alias) VALUES (?, ?, ?, ?, ?)',
       [usuarioData.usuario, usuarioData.contrasena, usuarioData.tipo, usuarioData.codempresa || 1, usuarioData.alias]
@@ -49,7 +53,6 @@ class Usuario {
   }
 
   static async update(cod, usuarioData) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun(
       'UPDATE usuario SET usuario = ?, contrasena = ?, tipo = ?, codempresa = ?, alias = ? WHERE cod = ?',
       [usuarioData.usuario, usuarioData.contrasena, usuarioData.tipo, usuarioData.codempresa, usuarioData.alias, cod]
@@ -61,7 +64,6 @@ class Usuario {
   }
 
   static async delete(cod) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun('DELETE FROM usuario WHERE cod = ?', [cod]);
     if (!result.success) {
       throw new Error(result.error);
@@ -70,7 +72,6 @@ class Usuario {
   }
 
   static async authenticate(usuario, contrasena) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle(
       'SELECT * FROM usuario WHERE usuario = ? AND contrasena = ?', 
       [usuario, contrasena]

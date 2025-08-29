@@ -5,15 +5,39 @@ const fs = require('fs');
 class DatabaseController {
   constructor() {
     this.db = null;
-    this.dbPath = path.join(__dirname, '../../database/neopos.db');
+    // En desarrollo usar la ruta relativa, en producción usar userData
+    const isDev = process.env.NODE_ENV === 'development';
+    if (isDev) {
+      this.dbPath = path.join(__dirname, '../../database/neopos.db');
+    } else {
+      const { app } = require('electron');
+      const userDataPath = app ? app.getPath('userData') : path.join(__dirname, '../database');
+      this.dbPath = path.join(userDataPath, 'neopos.db');
+    }
+    this.isClosed = false;
   }
 
   async initializeDatabase() {
     try {
+      // Si ya está inicializada y no está cerrada, no hacer nada
+      if (this.db && !this.isClosed) {
+        return true;
+      }
+
       // Asegurar que el directorio de base de datos existe
       const dbDir = path.dirname(this.dbPath);
       if (!fs.existsSync(dbDir)) {
         fs.mkdirSync(dbDir, { recursive: true });
+      }
+
+      // Si estamos en producción y la base de datos no existe, copiarla desde los recursos
+      const isDev = process.env.NODE_ENV === 'development';
+      if (!isDev && !fs.existsSync(this.dbPath)) {
+        const resourceDbPath = path.join(__dirname, '../database/neopos.db');
+        if (fs.existsSync(resourceDbPath)) {
+          fs.copyFileSync(resourceDbPath, this.dbPath);
+          console.log('Base de datos copiada desde recursos');
+        }
       }
 
       // Conectar a la base de datos
@@ -22,14 +46,20 @@ class DatabaseController {
           console.error('Error al conectar a la base de datos:', err);
           throw err;
         }
-        console.log('Conectado a la base de datos SQLite');
+        console.log('Conectado a la base de datos SQLite en:', this.dbPath);
       });
+
+      // Resetear el flag de cerrado
+      this.isClosed = false;
 
       // Habilitar foreign keys
       await this.runQuery('PRAGMA foreign_keys = ON');
 
       // Crear tablas si no existen
       await this.createTables();
+      
+      // Verificar y actualizar estructura de tablas existentes
+      await this.updateTableStructures();
       
       // Insertar datos de ejemplo si la base de datos está vacía
       await this.seedDatabase();
@@ -73,6 +103,30 @@ class DatabaseController {
     await this.runQuery(clienteTable);
   }
 
+  async updateTableStructures() {
+    try {
+      // Verificar si la columna trial279 existe en la tabla producto
+      const tableInfo = await this.executeQuery("PRAGMA table_info(producto)");
+      const hasTrialColumn = tableInfo.some(column => column.name === 'trial279');
+      const hasIvaPercentageColumn = tableInfo.some(column => column.name === 'iva_percentage');
+      
+      if (!hasTrialColumn) {
+        console.log('Agregando columna trial279 a la tabla producto...');
+        await this.runQuery('ALTER TABLE producto ADD COLUMN trial279 INTEGER DEFAULT 0');
+        console.log('Columna trial279 agregada exitosamente');
+      }
+      
+      if (!hasIvaPercentageColumn) {
+        console.log('Agregando columna iva_percentage a la tabla producto...');
+        await this.runQuery('ALTER TABLE producto ADD COLUMN iva_percentage REAL DEFAULT 12.0');
+        console.log('Columna iva_percentage agregada exitosamente');
+      }
+    } catch (error) {
+      console.error('Error al actualizar estructura de tablas:', error);
+      // No lanzar error para no interrumpir la inicialización
+    }
+  }
+
   async seedDatabase() {
     try {
       // Verificar si ya hay usuarios
@@ -101,6 +155,11 @@ class DatabaseController {
   }
 
   async executeQuery(query, params = []) {
+    // Asegurar que la conexión esté activa
+    if (!this.db || this.isClosed) {
+      await this.initializeDatabase();
+    }
+    
     return new Promise((resolve, reject) => {
       this.db.all(query, params, (err, rows) => {
         if (err) {
@@ -113,6 +172,11 @@ class DatabaseController {
   }
 
   async getSingleRecord(query, params = []) {
+    // Asegurar que la conexión esté activa
+    if (!this.db || this.isClosed) {
+      await this.initializeDatabase();
+    }
+    
     return new Promise((resolve, reject) => {
       this.db.get(query, params, (err, row) => {
         if (err) {
@@ -125,6 +189,11 @@ class DatabaseController {
   }
 
   async runQuery(query, params = []) {
+    // Asegurar que la conexión esté activa
+    if (!this.db || this.isClosed) {
+      await this.initializeDatabase();
+    }
+    
     return new Promise((resolve, reject) => {
       this.db.run(query, params, function(err) {
         if (err) {
@@ -137,14 +206,35 @@ class DatabaseController {
   }
 
   close() {
+    return new Promise((resolve) => {
+      if (this.db && !this.isClosed) {
+        this.isClosed = true;
+        this.db.close((err) => {
+          if (err) {
+            console.error('Error al cerrar la base de datos:', err);
+          } else {
+            console.log('Conexión a la base de datos cerrada correctamente');
+          }
+          this.db = null;
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
+  }
+
+  // Método para verificar el estado de la conexión
+  isConnected() {
+    return this.db && !this.isClosed;
+  }
+
+  // Método para forzar el cierre inmediato
+  forceClose() {
     if (this.db) {
-      this.db.close((err) => {
-        if (err) {
-          console.error('Error al cerrar la base de datos:', err);
-        } else {
-          console.log('Conexión a la base de datos cerrada');
-        }
-      });
+      this.isClosed = true;
+      this.db = null;
+      console.log('Conexión a la base de datos cerrada forzadamente');
     }
   }
 }

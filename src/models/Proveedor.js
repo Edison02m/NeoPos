@@ -10,7 +10,6 @@ class Proveedor {
   }
 
   static async findAll() {
-    await this.initializeDB();
     const result = await window.electronAPI.dbQuery('SELECT * FROM proveedor ORDER BY empresa');
     if (!result.success) {
       throw new Error(result.error);
@@ -19,7 +18,6 @@ class Proveedor {
   }
 
   static async findById(cod) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT * FROM proveedor WHERE cod = ?', [cod]);
     if (!result.success) {
       throw new Error(result.error);
@@ -28,7 +26,6 @@ class Proveedor {
   }
 
   static async findByName(empresa) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbQuery(
       'SELECT * FROM proveedor WHERE empresa LIKE ?', 
       [`%${empresa}%`]
@@ -40,7 +37,6 @@ class Proveedor {
   }
 
   static async findByRuc(ruc) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT * FROM proveedor WHERE ruc = ?', [ruc]);
     if (!result.success) {
       throw new Error(result.error);
@@ -49,8 +45,6 @@ class Proveedor {
   }
 
   static async create(proveedorData) {
-    await this.initializeDB();
-    
     // Validar campos requeridos
     if (!proveedorData.empresa) {
       throw new Error('El campo empresa es requerido');
@@ -99,7 +93,6 @@ class Proveedor {
   }
 
   static async update(cod, proveedorData) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun(
       'UPDATE proveedor SET empresa = ?, direccion = ?, telefono = ?, fax = ?, ciudad = ?, representante = ?, mail = ?, ruc = ?, tipoid = ?, relacionado = ?, trial279 = ? WHERE cod = ?',
       [
@@ -124,7 +117,6 @@ class Proveedor {
   }
 
   static async delete(cod) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun('DELETE FROM proveedor WHERE cod = ?', [cod]);
     if (!result.success) {
       throw new Error(result.error);
@@ -133,7 +125,6 @@ class Proveedor {
   }
 
   static async search(searchTerm) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbQuery(
       'SELECT * FROM proveedor WHERE empresa LIKE ? OR ruc LIKE ? OR mail LIKE ? OR representante LIKE ? ORDER BY empresa',
       [`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`]

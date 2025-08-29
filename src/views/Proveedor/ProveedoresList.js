@@ -5,13 +5,6 @@ const ProveedoresList = ({ proveedores, loading, selectedProveedor, onRowClick }
   // Configuración de columnas para la tabla de proveedores
   const columns = [
     {
-      key: 'cod',
-      title: 'Código',
-      width: '16',
-      fontFamily: 'mono',
-      cellClassName: 'text-gray-600'
-    },
-    {
       key: 'empresa',
       title: 'Empresa',
       width: '40',
@@ -81,6 +74,7 @@ const ProveedoresList = ({ proveedores, loading, selectedProveedor, onRowClick }
       selectedRow={selectedProveedor}
       onRowClick={onRowClick}
       emptyMessage="No hay proveedores registrados"
+      showRowNumbers={true}
     />
   );
 };

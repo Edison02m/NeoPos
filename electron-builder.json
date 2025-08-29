@@ -1,0 +1,31 @@
+{
+  "extends": null,
+  "appId": "com.neopos.app",
+  "productName": "NeoPOS",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "src/**/*",
+    "build/**/*", 
+    "database/**/*",
+    "node_modules/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "database/",
+      "to": "database/"
+    }
+  ],
+  "win": {
+    "target": "nsis"
+  },
+  "nsis": {
+    "allowToChangeInstallationDirectory": true,
+    "oneClick": false,
+    "allowElevation": true
+  },
+  "nodeGypRebuild": false,
+  "buildDependenciesFromSource": false
+}

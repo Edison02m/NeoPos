@@ -5,13 +5,6 @@ const ClientesList = ({ clientes, loading, selectedCliente, onRowClick }) => {
   // Configuración de columnas para la tabla de clientes (igual que en el archivo original)
   const columns = [
     {
-      key: 'cod',
-      title: 'Número',
-      width: '16',
-      fontFamily: 'mono',
-      cellClassName: 'text-gray-600'
-    },
-    {
       key: 'tratamiento',
       title: 'Trat.',
       width: '16'
@@ -81,6 +74,7 @@ const ClientesList = ({ clientes, loading, selectedCliente, onRowClick }) => {
       selectedRow={selectedCliente}
       onRowClick={onRowClick}
       emptyMessage="No hay clientes registrados"
+      showRowNumbers={true}
     />
   );
 };

@@ -10,7 +10,6 @@ class Cliente {
   }
 
   static async findAll() {
-    await this.initializeDB();
     const result = await window.electronAPI.dbQuery('SELECT * FROM cliente ORDER BY apellidos, nombres');
     if (!result.success) {
       throw new Error(result.error);
@@ -19,7 +18,6 @@ class Cliente {
   }
 
   static async findById(cod) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT * FROM cliente WHERE cod = ?', [cod]);
     if (!result.success) {
       throw new Error(result.error);
@@ -28,7 +26,6 @@ class Cliente {
   }
 
   static async findByName(apellidos, nombres) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbQuery(
       'SELECT * FROM cliente WHERE apellidos LIKE ? AND nombres LIKE ?', 
       [`%${apellidos}%`, `%${nombres}%`]
@@ -40,7 +37,6 @@ class Cliente {
   }
 
   static async findByCedulaRuc(cedula) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbGetSingle('SELECT * FROM cliente WHERE cedula = ?', [cedula]);
     if (!result.success) {
       throw new Error(result.error);
@@ -49,8 +45,6 @@ class Cliente {
   }
 
   static async create(clienteData) {
-    await this.initializeDB();
-    
     // Validar campos requeridos
     if (!clienteData.apellidos || !clienteData.nombres) {
       throw new Error('Los campos apellidos y nombres son requeridos');
@@ -101,7 +95,6 @@ class Cliente {
   }
 
   static async update(cod, clienteData) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun(
       'UPDATE cliente SET tratamiento = ?, apellidos = ?, nombres = ?, direccion = ?, telefono = ?, cedula = ?, referencias = ?, email = ?, relacionado = ?, trial272 = ? WHERE cod = ?',
       [
@@ -125,7 +118,6 @@ class Cliente {
   }
 
   static async delete(cod) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbRun('DELETE FROM cliente WHERE cod = ?', [cod]);
     if (!result.success) {
       throw new Error(result.error);
@@ -134,7 +126,6 @@ class Cliente {
   }
 
   static async search(searchTerm) {
-    await this.initializeDB();
     const result = await window.electronAPI.dbQuery(
       'SELECT * FROM cliente WHERE apellidos LIKE ? OR nombres LIKE ? OR cedula LIKE ? OR email LIKE ? ORDER BY apellidos, nombres',
       [`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`]

@@ -14,7 +14,7 @@ const ActionPanel = ({
   const hasSelection = selectedItem !== null;
 
   return (
-    <div className="w-12 bg-white border-r border-gray-200 py-2">
+    <div className="w-12 h-full bg-white border-r border-gray-200 py-2">
       <div className="space-y-1 px-1">
         <button
           onClick={onNewClick}

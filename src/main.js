@@ -38,13 +38,15 @@ class MainController {
       titleBarStyle: 'default'
     });
 
-    const isDev = true; // Forzar modo desarrollo
+    // Detectar automáticamente si estamos en desarrollo o producción
+    const isDev = !app.isPackaged;
     
     if (isDev) {
       this.mainWindow.loadURL('http://localhost:3000');
-      // Desactivar DevTools en desarrollo para evitar que se abra la consola
-      // this.mainWindow.webContents.openDevTools();
+      // Habilitar DevTools en desarrollo
+      this.mainWindow.webContents.openDevTools();
     } else {
+      // En producción, cargar el archivo HTML compilado por React
       this.mainWindow.loadFile(path.join(__dirname, '../build/index.html'));
     }
 
@@ -53,7 +55,10 @@ class MainController {
     });
 
     this.mainWindow.on('closed', () => {
+      // Cerrar todas las ventanas secundarias antes de cerrar la principal
+      this.windowManager.closeAllWindows();
       this.mainWindow = null;
+      // No cerrar la base de datos aquí, se hace en window-all-closed
     });
   }
 
@@ -70,7 +75,7 @@ class MainController {
               label: 'Productos',
               accelerator: 'CmdOrCtrl+P',
               click: () => {
-                this.mainWindow.webContents.send('menu-inventory-products');
+                this.windowManager.createProductoWindow(this.mainWindow);
               }
             },
             {
@@ -243,7 +248,9 @@ class MainController {
   setupIpcHandlers() {
     ipcMain.handle('db-initialize', async () => {
       try {
-        await this.databaseController.initializeDatabase();
+        if (!this.databaseController.isConnected()) {
+          await this.databaseController.initializeDatabase();
+        }
         return { success: true };
       } catch (error) {
         console.error('Error initializing database:', error);
@@ -283,6 +290,59 @@ class MainController {
 
     ipcMain.handle('get-app-version', () => {
       return app.getVersion();
+    });
+
+    // Manejo de archivos
+    ipcMain.handle('file-exists', async (event, filePath) => {
+      try {
+        const fs = require('fs').promises;
+        await fs.access(filePath);
+        return { success: true, exists: true };
+      } catch (error) {
+        return { success: true, exists: false };
+      }
+    });
+
+    // Leer imagen como base64 para mostrar en la interfaz
+    ipcMain.handle('read-image-as-base64', async (event, filePath) => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Verificar que el archivo existe
+        if (!fs.existsSync(filePath)) {
+          return { success: false, error: 'Archivo no encontrado' };
+        }
+
+        // Verificar que es una imagen válida
+        const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+        const ext = path.extname(filePath).toLowerCase();
+        if (!validExtensions.includes(ext)) {
+          return { success: false, error: 'Formato de imagen no válido' };
+        }
+
+        // Leer el archivo y convertir a base64
+        const imageBuffer = fs.readFileSync(filePath);
+        const base64Image = imageBuffer.toString('base64');
+        
+        // Determinar el tipo MIME
+        let mimeType = 'image/jpeg';
+        switch (ext) {
+          case '.png': mimeType = 'image/png'; break;
+          case '.gif': mimeType = 'image/gif'; break;
+          case '.bmp': mimeType = 'image/bmp'; break;
+          case '.webp': mimeType = 'image/webp'; break;
+        }
+
+        return { 
+          success: true, 
+          data: `data:${mimeType};base64,${base64Image}`,
+          mimeType: mimeType 
+        };
+      } catch (error) {
+        console.error('Error reading image:', error);
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle('quitApp', () => {
@@ -331,6 +391,14 @@ class MainController {
       return { success: true };
     });
 
+    ipcMain.handle('open-producto-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createProductoWindow(this.mainWindow);
+      return { success: true };
+    });
+
     // Agregar listener para debugging de eventos de menú
     ipcMain.handle('debug-menu-event', (event, menuEvent) => {
       console.log('Debug: Simulando evento de menú:', menuEvent);
@@ -353,11 +421,30 @@ app.whenReady().then(() => {
   mainController.initializeApp();
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    if (mainController.databaseController) {
-      mainController.databaseController.close();
+app.on('window-all-closed', async () => {
+  console.log('Todas las ventanas cerradas, iniciando proceso de limpieza...');
+  
+  try {
+    // Cerrar todas las ventanas secundarias si aún están abiertas
+    if (mainController.windowManager) {
+      mainController.windowManager.closeAllWindows();
     }
+    
+    // Cerrar la base de datos antes de salir
+    if (mainController.databaseController) {
+      console.log('Cerrando conexión a la base de datos...');
+      await mainController.databaseController.close();
+    }
+    
+    console.log('Proceso de limpieza completado');
+  } catch (error) {
+    console.error('Error durante el proceso de limpieza:', error);
+    // Forzar el cierre si hay un error
+    if (mainController.databaseController) {
+      mainController.databaseController.forceClose();
+    }
+  } finally {
+    // En todas las plataformas, cerrar la aplicación cuando se cierren todas las ventanas
     app.quit();
   }
 });
@@ -365,5 +452,23 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     mainController.createWindow();
+  }
+});
+
+// Manejo adicional para asegurar que la base de datos se cierre antes de salir
+app.on('before-quit', async (event) => {
+  if (mainController.databaseController && mainController.databaseController.isConnected()) {
+    event.preventDefault(); // Prevenir el cierre inmediato
+    
+    try {
+      console.log('Cerrando conexiones de base de datos antes de salir...');
+      await mainController.databaseController.close();
+      console.log('Base de datos cerrada correctamente');
+      app.quit(); // Salir después del cierre limpio
+    } catch (error) {
+      console.error('Error al cerrar la base de datos:', error);
+      mainController.databaseController.forceClose();
+      app.quit(); // Salir incluso si hay error
+    }
   }
 });

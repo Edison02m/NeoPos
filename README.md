@@ -82,7 +82,11 @@ npm start
 
 ```bash
 # Construir la aplicación para producción
-npm run build-all
+
+npm run build - Compilar React
+npm run copy-electron-files - Copiar todos los archivos de Electron
+npm run electron-build - Generar el instalador
+
 
 # Esto generará:
 # - Carpeta /build con la aplicación React optimizada

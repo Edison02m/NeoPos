@@ -1,9 +1,44 @@
-const { BrowserWindow, Menu } = require('electron');
+const { BrowserWindow, Menu, app } = require('electron');
 const path = require('path');
 
 class WindowManager {
   constructor() {
     this.windows = new Map();
+  }
+
+  // Helper para detectar si estamos en desarrollo o producción
+  isDevelopment() {
+    return !app.isPackaged;
+  }
+
+  // Helper para cargar URL o archivo según el modo
+  loadContent(window, route) {
+    if (this.isDevelopment()) {
+      window.loadURL(`http://localhost:3000/#${route}`);
+    } else {
+      // En producción, usar la misma ruta que la ventana principal
+      // Buscar el index.html en varios lugares posibles
+      const possiblePaths = [
+        path.join(__dirname, '../build/index.html'),
+        path.join(process.resourcesPath, 'app/build/index.html'),
+        path.join(process.resourcesPath, 'build/index.html'),
+        path.join(__dirname, '../../build/index.html')
+      ];
+      
+      const fs = require('fs');
+      let htmlPath = possiblePaths[0]; // default
+      
+      for (const testPath of possiblePaths) {
+        if (fs.existsSync(testPath)) {
+          htmlPath = testPath;
+          break;
+        }
+      }
+      
+      window.loadFile(htmlPath, {
+        hash: route
+      });
+    }
   }
 
   createUserWindow(parentWindow) {
@@ -13,6 +48,7 @@ class WindowManager {
       parent: parentWindow,
       modal: true,
       show: false,
+      closable: true,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -27,15 +63,8 @@ class WindowManager {
       skipTaskbar: false
     });
 
-    const isDev = true;
-    
-    if (isDev) {
-      userWindow.loadURL('http://localhost:3000/#/users');
-    } else {
-      userWindow.loadFile(path.join(__dirname, '../build/index.html'), {
-        hash: '/users'
-      });
-    }
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(userWindow, '/users');
 
     // Establecer menú vacío para esta ventana específica
     const emptyMenu = Menu.buildFromTemplate([]);
@@ -74,15 +103,8 @@ class WindowManager {
       skipTaskbar: false
     });
 
-    const isDev = true;
-    
-    if (isDev) {
-      empresaWindow.loadURL('http://localhost:3000/#/empresa');
-    } else {
-      empresaWindow.loadFile(path.join(__dirname, '../build/index.html'), {
-        hash: '/empresa'
-      });
-    }
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(empresaWindow, '/empresa');
 
     // Establecer menú vacío para esta ventana específica
     const emptyMenu = Menu.buildFromTemplate([]);
@@ -121,15 +143,8 @@ class WindowManager {
       skipTaskbar: false
     });
 
-    const isDev = true;
-    
-    if (isDev) {
-      clienteWindow.loadURL('http://localhost:3000/#/cliente');
-    } else {
-      clienteWindow.loadFile(path.join(__dirname, '../build/index.html'), {
-        hash: '/cliente'
-      });
-    }
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(clienteWindow, '/client');
 
     // Menú específico para la ventana de clientes basado en las imágenes
     const menuTemplate = [
@@ -209,15 +224,8 @@ class WindowManager {
       skipTaskbar: false
     });
 
-    const isDev = true;
-    
-    if (isDev) {
-      proveedorWindow.loadURL('http://localhost:3000/#/proveedor');
-    } else {
-      proveedorWindow.loadFile(path.join(__dirname, '../build/index.html'), {
-        hash: '/proveedor'
-      });
-    }
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(proveedorWindow, '/proveedor');
 
     // Menú específico para la ventana de proveedores
     const menuTemplate = [
@@ -244,11 +252,177 @@ class WindowManager {
     return proveedorWindow;
   }
 
+  createProductoWindow(parentWindow) {
+    const productoWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Gestión de Productos',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(productoWindow, '/producto');
+
+    // Menú específico para la ventana de productos
+    const menuTemplate = [
+      {
+        label: 'Producto',
+        submenu: [
+          {
+            label: 'Buscar productos',
+            submenu: [
+              {
+                label: 'Buscar por descripción del producto',
+                accelerator: 'Ctrl+H',
+                click: () => {
+                  productoWindow.webContents.send('menu-buscar-descripcion');
+                }
+              },
+              {
+                label: 'Buscar por código de barras',
+                click: () => {
+                  productoWindow.webContents.send('menu-buscar-codigo-barras');
+                }
+              },
+              {
+                label: 'Buscar por código auxiliar',
+                click: () => {
+                  productoWindow.webContents.send('menu-buscar-codigo-auxiliar');
+                }
+              }
+            ]
+          },
+          {
+            type: 'separator'
+          },
+          {
+            label: 'Filtrar productos',
+            click: () => {
+              console.log('[WINDOWMANAGER] Enviando evento menu-filtrar-productos');
+              productoWindow.webContents.send('menu-filtrar-productos');
+              console.log('[WINDOWMANAGER] Evento enviado');
+            }
+          },
+          {
+            type: 'separator'
+          },
+          {
+            label: 'Marcar producto',
+            click: () => {
+              productoWindow.webContents.send('menu-marcar-producto');
+            }
+          },
+          {
+            label: 'Productos marcados',
+            click: () => {
+              productoWindow.webContents.send('menu-productos-marcados');
+            }
+          },
+          {
+            type: 'separator'
+          },
+          {
+            label: 'Ir al primer registro',
+            click: () => {
+              productoWindow.webContents.send('menu-primer-registro');
+            }
+          },
+          {
+            label: 'Ir al siguiente registro',
+            click: () => {
+              productoWindow.webContents.send('menu-siguiente-registro');
+            }
+          },
+          {
+            label: 'Ir a anterior registro',
+            click: () => {
+              productoWindow.webContents.send('menu-anterior-registro');
+            }
+          },
+          {
+            label: 'Ir al último registro',
+            click: () => {
+              productoWindow.webContents.send('menu-ultimo-registro');
+            }
+          },
+          {
+            label: 'Ir al registro nro ...',
+            click: () => {
+              productoWindow.webContents.send('menu-ir-registro');
+            }
+          }
+        ]
+      },
+
+      {
+        label: 'Reportes del producto',
+        submenu: [
+          {
+            label: 'Reporte de inventario',
+            click: () => {
+              productoWindow.webContents.send('menu-reporte-inventario');
+            }
+          },
+          {
+            label: 'Reporte de productos',
+            click: () => {
+              productoWindow.webContents.send('menu-reporte-productos');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Cerrar ventana producto',
+        click: () => {
+          productoWindow.close();
+        }
+      }
+    ];
+
+    const productoMenu = Menu.buildFromTemplate(menuTemplate);
+    productoWindow.setMenu(productoMenu);
+
+    productoWindow.once('ready-to-show', () => {
+      productoWindow.show();
+    });
+
+    productoWindow.on('closed', () => {
+      this.windows.delete('productos');
+    });
+
+    this.windows.set('productos', productoWindow);
+    return productoWindow;
+  }
+
   closeWindow(windowName) {
     const window = this.windows.get(windowName);
     if (window && !window.isDestroyed()) {
       window.close();
     }
+  }
+
+  closeAllWindows() {
+    // Cerrar todas las ventanas secundarias
+    for (const [windowName, window] of this.windows) {
+      if (window && !window.isDestroyed()) {
+        window.close();
+      }
+    }
+    // Limpiar el Map
+    this.windows.clear();
   }
 
   getWindow(windowName) {
