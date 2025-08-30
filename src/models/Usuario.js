@@ -10,7 +10,18 @@ class Usuario {
   }
 
   static async findAll() {
-    const result = await window.electronAPI.dbQuery('SELECT cod, usuario, tipo, codempresa, alias FROM usuario ORDER BY usuario');
+    const sql = `
+      SELECT 
+        u.cod, 
+        u.usuario, 
+        u.tipo, 
+        u.codempresa, 
+        u.alias,
+        e.empresa AS empresa_nombre
+      FROM usuario u
+      LEFT JOIN empresa e ON e.cod = u.codempresa
+      ORDER BY u.usuario`;
+    const result = await window.electronAPI.dbQuery(sql);
     if (!result.success) {
       throw new Error(result.error);
     }

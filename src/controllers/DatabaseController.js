@@ -1,68 +1,116 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const { app } = require('electron');
 
 class DatabaseController {
   constructor() {
     this.db = null;
-    
-    // Detección de modo de desarrollo
-    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV || __dirname.includes('src');
-    
-    console.log('🔍 NODE_ENV actual:', process.env.NODE_ENV);
-    console.log('🔍 __dirname:', __dirname);
-    console.log('🔧 Modo detectado:', isDev ? 'DESARROLLO' : 'PRODUCCIÓN');
-    
-    if (isDev) {
+    // Detección robusta de modo (usar app.isPackaged)
+    // Nota: app.isPackaged es fiable incluso antes de app.whenReady()
+    this.isDev = !app || !app.isPackaged;
+
+    // Ruta donde se abrirá/creará la BD (siempre escribible)
+    if (this.isDev) {
       // En desarrollo: usar la carpeta database del proyecto
       this.dbPath = path.join(__dirname, '../../database/neopos.db');
     } else {
-      // En producción: usar userData
-      const { app } = require('electron');
-      const userDataPath = app ? app.getPath('userData') : path.join(__dirname, '../database');
-      this.dbPath = path.join(userDataPath, 'neopos.db');
+      // En producción: usar la carpeta de datos del usuario
+      this.dbPath = path.join(app.getPath('userData'), 'neopos.db');
     }
-    
-    console.log('📂 Ruta de base de datos configurada:', this.dbPath);
+
+    // Rutas candidatas del recurso de semilla (solo lectura)
+    const installRoot = path.dirname(process.execPath); // e.g., C:\\Program Files\\NeoPOS
+    this.seedCandidates = [
+      // Instalación (extraFiles coloca database/ aquí)
+      path.join(installRoot, 'database', 'neopos.db'),
+      // Recursos (si se usara extraResources)
+      path.join(process.resourcesPath || installRoot, 'database', 'neopos.db'),
+      // Dev fallback
+      path.join(__dirname, '../../database/neopos.db')
+    ];
+
+    console.log('🔧 Modo detectado:', this.isDev ? 'DESARROLLO' : 'PRODUCCIÓN');
+    console.log('📂 Ruta de BD destino:', this.dbPath);
+    console.log('📦 Ruta de BD recurso:', this.resourceDbPath);
     this.isClosed = false;
   }
 
   async initializeDatabase() {
     try {
+      console.log('🔌 Iniciando inicialización de base de datos...');
+      
       // Si ya está inicializada y no está cerrada, no hacer nada
       if (this.db && !this.isClosed) {
+        console.log('✅ Base de datos ya inicializada');
         return true;
       }
 
       // Asegurar que el directorio de base de datos existe
       const dbDir = path.dirname(this.dbPath);
       if (!fs.existsSync(dbDir)) {
+        console.log('📁 Creando directorio de base de datos:', dbDir);
         fs.mkdirSync(dbDir, { recursive: true });
       }
 
-      // Si estamos en producción y la base de datos no existe, copiarla desde los recursos
-      const isDev = process.env.NODE_ENV === 'development';
-      if (!isDev && !fs.existsSync(this.dbPath)) {
-        const resourceDbPath = path.join(__dirname, '../database/neopos.db');
-        if (fs.existsSync(resourceDbPath)) {
-          fs.copyFileSync(resourceDbPath, this.dbPath);
-          console.log('Base de datos copiada desde recursos');
+      // Si la base de datos no existe en el destino, copiar desde un candidato de semilla (si disponible)
+      if (!fs.existsSync(this.dbPath)) {
+        console.log('🔄 Base de datos no existe, buscando archivo de semilla para copiar...');
+        try {
+          let copied = false;
+          for (const candidate of this.seedCandidates) {
+            if (candidate && fs.existsSync(candidate)) {
+              console.log('📦 Semilla encontrada en:', candidate);
+              fs.copyFileSync(candidate, this.dbPath);
+              copied = true;
+              console.log('✅ Base de datos copiada desde semilla');
+              break;
+            }
+          }
+          if (!copied) {
+            // Crear un archivo vacío si no hay recurso (permitirá crear tablas luego)
+            fs.closeSync(fs.openSync(this.dbPath, 'w'));
+            console.warn('⚠️ No se encontró archivo de semilla, se creó una BD vacía');
+          }
+        } catch (copyErr) {
+          console.error('❌ Error copiando/creando la base de datos:', copyErr);
+          throw new Error(`No se pudo crear la base de datos: ${copyErr.message}`);
         }
+      } else {
+        console.log('✅ Base de datos ya existe en:', this.dbPath);
       }
 
-      // Conectar a la base de datos
-      this.db = new sqlite3.Database(this.dbPath, (err) => {
-        if (err) {
-          console.error('Error al conectar a la base de datos:', err);
-          throw err;
-        }
-        console.log('Conectado a la base de datos SQLite en:', this.dbPath);
+      // Conectar a la base de datos con promesa
+      console.log('🔗 Conectando a la base de datos...');
+      const normalizedPath = this.dbPath.replace(/\\/g, '/');
+      const connectOnce = () => new Promise((resolve, reject) => {
+        this.db = new sqlite3.Database(normalizedPath, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            console.log('✅ Conectado a la base de datos SQLite en:', this.dbPath);
+            resolve();
+          }
+        });
       });
+      try {
+        await connectOnce();
+      } catch (err) {
+        console.error('❌ Error al conectar (primer intento):', err);
+        if (String(err && err.message).includes('SQLITE_CANTOPEN')) {
+          console.log('↻ Reintentando conexión a la BD en 500ms...');
+          await new Promise(r => setTimeout(r, 500));
+          await connectOnce();
+        } else {
+          throw new Error(`Error de conexión SQLite: ${err.message}`);
+        }
+      }
 
       // Resetear el flag de cerrado
       this.isClosed = false;
 
       // Habilitar foreign keys
+      console.log('🔧 Configurando base de datos...');
       await this.runQuery('PRAGMA foreign_keys = ON');
 
       // Crear tablas si no existen
@@ -74,10 +122,23 @@ class DatabaseController {
       // Insertar datos de ejemplo si la base de datos está vacía
       await this.seedDatabase();
 
+      console.log('✅ Base de datos inicializada completamente');
       return true;
     } catch (error) {
-      console.error('Error al inicializar la base de datos:', error);
-      throw error;
+      console.error('❌ Error crítico al inicializar la base de datos:', error);
+      
+      // Limpiar en caso de error
+      if (this.db) {
+        try {
+          this.db.close();
+        } catch (e) {
+          console.error('Error cerrando BD después de fallo:', e);
+        }
+        this.db = null;
+      }
+      this.isClosed = true;
+      
+      throw new Error(`Fallo en inicialización de BD: ${error.message}`);
     }
   }
 
@@ -89,6 +150,28 @@ class DatabaseController {
       tipo INTEGER NOT NULL CHECK(tipo IN (1, 2)),
       codempresa INTEGER DEFAULT 1,
       alias TEXT
+    )`;
+    
+    // Tabla de empresas (singular) utilizada por el módulo de usuarios para el JOIN
+    const empresaTable = `CREATE TABLE IF NOT EXISTS empresa (
+      cod INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa TEXT(255),
+      ruc TEXT(14),
+      direccion TEXT(255),
+      telefono TEXT(16),
+      fax TEXT(16),
+      email TEXT(41),
+      web TEXT(51),
+      representante TEXT(51),
+      rsocial TEXT(255),
+      logo TEXT(255),
+      ciudad TEXT(100),
+      codestab TEXT(3),
+      codemi TEXT(3),
+      direstablec TEXT(255),
+      resolucion TEXT(10),
+      contabilidad TEXT(1),
+      trial275 TEXT(1)
     )`;
     
     const clienteTable = `CREATE TABLE IF NOT EXISTS cliente (
@@ -110,6 +193,7 @@ class DatabaseController {
     )`;
     
     await this.runQuery(usuarioTable);
+    await this.runQuery(empresaTable);
     await this.runQuery(clienteTable);
   }
 
@@ -139,6 +223,14 @@ class DatabaseController {
 
   async seedDatabase() {
     try {
+      // Verificar empresa por defecto
+      const existingEmp = await this.executeQuery('SELECT COUNT(*) as count FROM empresa');
+      if (existingEmp[0] && Number(existingEmp[0].count) === 0) {
+        console.log('Insertando empresa por defecto...');
+        await this.runQuery('INSERT INTO empresa (empresa) VALUES (?)', ['Empresa 1']);
+        console.log('Empresa por defecto creada con éxito');
+      }
+
       // Verificar si ya hay usuarios
       const existingUsers = await this.executeQuery('SELECT COUNT(*) as count FROM usuario');
       if (existingUsers[0].count === 0) {

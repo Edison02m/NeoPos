@@ -8,16 +8,41 @@ class MainController {
     this.mainWindow = null;
     this.databaseController = new DatabaseController();
     this.windowManager = new WindowManager();
+    this.isInitialized = false;
   }
 
   async initializeApp() {
     try {
+      console.log('🚀 Iniciando aplicación...');
+      
+      // Inicializar base de datos primero
+      console.log('📦 Inicializando base de datos...');
       await this.databaseController.initializeDatabase();
-      this.createWindow();
-      this.setupMenu(false); // Start with login menu
+      console.log('✅ Base de datos inicializada correctamente');
+      
+      // Configurar IPC handlers antes de crear ventana
       this.setupIpcHandlers();
+      
+      // Crear ventana principal
+      console.log('🖥️ Creando ventana principal...');
+      this.createWindow();
+      
+      // Configurar menú inicial
+      this.setupMenu(false); // Start with login menu
+      
+      this.isInitialized = true;
+      console.log('✅ Aplicación inicializada correctamente');
+      
     } catch (error) {
-      console.error('Error al inicializar la aplicación:', error);
+      console.error('❌ Error crítico al inicializar la aplicación:', error);
+      
+      // Mostrar diálogo de error al usuario
+      const { dialog } = require('electron');
+      dialog.showErrorBox('Error de Inicialización', 
+        `No se pudo inicializar la aplicación:\n\n${error.message}\n\nLa aplicación se cerrará.`);
+      
+      // Forzar cierre de la aplicación
+      app.quit();
     }
   }
 
@@ -248,6 +273,10 @@ class MainController {
   setupIpcHandlers() {
     ipcMain.handle('db-initialize', async () => {
       try {
+        if (!this.isInitialized) {
+          return { success: false, error: 'Aplicación no inicializada completamente' };
+        }
+        
         if (!this.databaseController.isConnected()) {
           await this.databaseController.initializeDatabase();
         }
@@ -260,6 +289,10 @@ class MainController {
 
     ipcMain.handle('db-query', async (event, query, params = []) => {
       try {
+        if (!this.isInitialized || !this.databaseController.isConnected()) {
+          throw new Error('Base de datos no disponible');
+        }
+        
         const result = await this.databaseController.executeQuery(query, params);
         return { success: true, data: result };
       } catch (error) {
@@ -270,6 +303,10 @@ class MainController {
 
     ipcMain.handle('db-get-single', async (event, query, params = []) => {
       try {
+        if (!this.isInitialized || !this.databaseController.isConnected()) {
+          throw new Error('Base de datos no disponible');
+        }
+        
         const result = await this.databaseController.getSingleRecord(query, params);
         return { success: true, data: result };
       } catch (error) {
@@ -280,6 +317,10 @@ class MainController {
 
     ipcMain.handle('db-run', async (event, query, params = []) => {
       try {
+        if (!this.isInitialized || !this.databaseController.isConnected()) {
+          throw new Error('Base de datos no disponible');
+        }
+        
         const result = await this.databaseController.runQuery(query, params);
         return { success: true, data: result };
       } catch (error) {
@@ -815,6 +856,67 @@ class MainController {
 
 const mainController = new MainController();
 
+// Manejo global de errores no capturados
+process.on('uncaughtException', (error) => {
+  console.error('❌ Error no capturado:', error);
+  
+  // Intentar cerrar la base de datos de forma limpia
+  if (mainController.databaseController) {
+    try {
+      mainController.databaseController.forceClose();
+    } catch (e) {
+      console.error('Error cerrando BD después de excepción:', e);
+    }
+  }
+  
+  // En producción, mostrar diálogo de error al usuario si la app está lista
+  if (app.isReady() && !app.isPackaged) {
+    try {
+      const { dialog } = require('electron');
+      dialog.showErrorBox('Error Inesperado', 
+        `Se produjo un error inesperado:\n\n${error.message}\n\nLa aplicación se cerrará.`);
+    } catch (dialogErr) {
+      console.error('Error mostrando diálogo:', dialogErr);
+    }
+  }
+  
+  // Cerrar la aplicación después de un breve retraso
+  setTimeout(() => {
+    try {
+      app.quit();
+    } catch (quitErr) {
+      process.exit(1);
+    }
+  }, 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Promesa rechazada no manejada:', reason);
+  // En lugar de cerrar, registrar el error para debugging
+  // Solo cerrar si es un error crítico de base de datos
+  if (reason && reason.message && reason.message.includes('SQLITE')) {
+    console.error('Error crítico de SQLite, cerrando aplicación...');
+    setTimeout(() => {
+      try {
+        app.quit();
+      } catch (quitErr) {
+        process.exit(1);
+      }
+    }, 2000);
+  }
+});
+
+// Manejo de señales del sistema
+process.on('SIGTERM', () => {
+  console.log('Recibida señal SIGTERM, cerrando aplicación...');
+  app.quit();
+});
+
+process.on('SIGINT', () => {
+  console.log('Recibida señal SIGINT, cerrando aplicación...');
+  app.quit();
+});
+
 app.whenReady().then(() => {
   mainController.initializeApp();
 });
@@ -843,6 +945,7 @@ app.on('window-all-closed', async () => {
     }
   } finally {
     // En todas las plataformas, cerrar la aplicación cuando se cierren todas las ventanas
+    console.log('Finalizando aplicación...');
     app.quit();
   }
 });
@@ -855,18 +958,30 @@ app.on('activate', () => {
 
 // Manejo adicional para asegurar que la base de datos se cierre antes de salir
 app.on('before-quit', async (event) => {
+  console.log('Evento before-quit recibido...');
+  
   if (mainController.databaseController && mainController.databaseController.isConnected()) {
-    event.preventDefault(); // Prevenir el cierre inmediato
+    console.log('Cerrando base de datos antes de salir...');
     
     try {
-      console.log('Cerrando conexiones de base de datos antes de salir...');
+      // Dar tiempo para cerrar la BD
       await mainController.databaseController.close();
-      console.log('Base de datos cerrada correctamente');
-      app.quit(); // Salir después del cierre limpio
+      console.log('Base de datos cerrada exitosamente');
     } catch (error) {
-      console.error('Error al cerrar la base de datos:', error);
+      console.error('Error cerrando base de datos:', error);
+      // Forzar el cierre si hay un error
       mainController.databaseController.forceClose();
-      app.quit(); // Salir incluso si hay error
     }
+  }
+});
+
+// Evento para forzar el cierre cuando el sistema lo requiera
+app.on('will-quit', (event) => {
+  console.log('Evento will-quit recibido...');
+  
+  // Forzar cierre de BD si aún está conectada
+  if (mainController.databaseController && mainController.databaseController.isConnected()) {
+    console.log('Forzando cierre de base de datos...');
+    mainController.databaseController.forceClose();
   }
 });

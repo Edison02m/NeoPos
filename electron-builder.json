@@ -12,19 +12,28 @@
     "node_modules/**/*",
     "package.json"
   ],
-  "extraResources": [
+  "extraFiles": [
     {
       "from": "database/",
       "to": "database/"
     }
   ],
+  "asarUnpack": [
+    "node_modules/sqlite3/**/*"
+  ],
   "win": {
-    "target": "nsis"
+    "target": "nsis",
+    "icon": "src/assets/images/icon.ico"
   },
   "nsis": {
     "allowToChangeInstallationDirectory": true,
     "oneClick": false,
-    "allowElevation": true
+    "allowElevation": true,
+    "createStartMenuShortcut": true,
+    "createDesktopShortcut": true,
+    "runAfterFinish": false,
+    "deleteAppDataOnUninstall": false,
+    "include": "installer/installer.nsh"
   },
   "nodeGypRebuild": false,
   "buildDependenciesFromSource": false
