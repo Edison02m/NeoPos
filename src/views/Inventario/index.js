@@ -36,7 +36,8 @@ const Inventario = () => {
       
       const result = await window.electronAPI.dbQuery(`
         SELECT 
-          codigo,
+          codbarra as codigo_barras,
+          codaux as codigo_auxiliar,
           producto as producto,
           almacen as existencia,
           pvp as precio_unitario,
@@ -96,8 +97,10 @@ const Inventario = () => {
             fieldValue = item.producto || '';
             break;
           case 'codbarra':
+            fieldValue = item.codigo_barras || '';
+            break;
           case 'codaux':
-            fieldValue = item.codigo || '';
+            fieldValue = item.codigo_auxiliar || '';
             break;
           default:
             fieldValue = item.producto || '';
@@ -153,19 +156,20 @@ const Inventario = () => {
       const reportData = {
         title: 'Inventario de Existencias',
         data: filteredInventario.map(item => [
-          item.codigo || '',
+          item.codigo_barras || '',
+          item.codigo_auxiliar || '',
           item.producto || '',
           item.existencia?.toString() || '0',
           `$${parseFloat(item.precio_unitario || 0).toFixed(2)}`,
           `$${parseFloat(item.precio_total || 0).toFixed(2)}`
         ]),
-        headers: ['Código', 'Producto', 'Stock', 'P. Unitario', 'P. Total'],
+        headers: ['Cód. Barras', 'Cód. Auxiliar', 'Producto', 'Stock', 'P. Unitario', 'P. Total'],
         footerTotals: {
           label: 'TOTALES',
-          labelIndex: 1, // Columna "Producto"
+          labelIndex: 2, // Columna "Producto"
           totals: {
-            2: totales.total_existencias, // Columna "Stock"
-            4: `$${totales.total_invertido.toFixed(2)}` // Columna "P. Total"
+            3: totales.total_existencias, // Columna "Stock"
+            5: `$${totales.total_invertido.toFixed(2)}` // Columna "P. Total"
           }
         },
         stats: [
@@ -197,7 +201,8 @@ const Inventario = () => {
   const handleExportExcel = async () => {
     try {
       const excelData = filteredInventario.map(item => ({
-        'Código': item.codigo,
+        'Código de Barras': item.codigo_barras,
+        'Código Auxiliar': item.codigo_auxiliar,
         'Producto': item.producto,
         'Existencia': item.existencia,
         'P. Unitario': item.precio_unitario,
@@ -374,9 +379,15 @@ const Inventario = () => {
               loading={loading}
               columns={[
                 {
-                  key: 'codigo',
-                  title: 'Código',
-                  width: '100px',
+                  key: 'codigo_barras',
+                  title: 'Cód. Barras',
+                  width: '120px',
+                  fontFamily: 'mono'
+                },
+                {
+                  key: 'codigo_auxiliar',
+                  title: 'Cód. Auxiliar',
+                  width: '120px',
                   fontFamily: 'mono'
                 },
                 {
