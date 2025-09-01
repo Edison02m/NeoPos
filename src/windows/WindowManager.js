@@ -384,10 +384,68 @@ class WindowManager {
     return productoWindow;
   }
 
+  createInventarioWindow(parentWindow) {
+    const inventarioWindow = new BrowserWindow({
+      width: 1400,
+      height: 800,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Inventario de Existencias',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(inventarioWindow, '/inventario');
+
+    // Menú específico para la ventana de inventario - simplificado
+    const menuTemplate = [
+      {
+        label: 'Cerrar ventana inventario',
+        click: () => {
+          inventarioWindow.close();
+        }
+      }
+    ];
+    
+    const inventarioMenu = Menu.buildFromTemplate(menuTemplate);
+    inventarioWindow.setMenu(inventarioMenu);
+
+    inventarioWindow.once('ready-to-show', () => {
+      inventarioWindow.show();
+    });
+
+    inventarioWindow.on('closed', () => {
+      this.windows.delete('inventario');
+    });
+
+    this.windows.set('inventario', inventarioWindow);
+    return inventarioWindow;
+  }
+
   closeWindow(windowName) {
+    console.log(`Intentando cerrar ventana: ${windowName}`);
+    console.log('Ventanas disponibles:', Array.from(this.windows.keys()));
+    
     const window = this.windows.get(windowName);
     if (window && !window.isDestroyed()) {
+      console.log(`Cerrando ventana ${windowName}...`);
       window.close();
+      // Remover del Map después de cerrar
+      this.windows.delete(windowName);
+      console.log(`Ventana ${windowName} cerrada exitosamente`);
+    } else {
+      console.warn(`Ventana ${windowName} no encontrada o ya destruida`);
     }
   }
 

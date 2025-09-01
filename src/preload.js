@@ -23,8 +23,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openClienteWindow: () => ipcRenderer.invoke('open-cliente-window'),
     openProveedorWindow: () => ipcRenderer.invoke('open-proveedor-window'),
     openProductoWindow: () => ipcRenderer.invoke('open-producto-window'),
+    openInventarioWindow: () => ipcRenderer.invoke('open-inventario-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
-    closeCurrentWindow: () => ipcRenderer.invoke('quitApp'),
+    closeCurrentWindow: () => ipcRenderer.invoke('close-current-window'),
 
   // Información de la aplicación
   app: {
@@ -90,7 +91,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-anterior-registro',
       'menu-ultimo-registro',
   'menu-ir-registro',
-  'menu-reporte-productos'
+  'menu-reporte-productos',
+      // Eventos específicos del menú de inventario
+      'menu-actualizar-inventario',
+      'menu-filtrar-stock-bajo',
+      'menu-filtrar-alto-valor',
+      'menu-filtrar-bajo-valor',
+      'menu-mostrar-todos',
+      'menu-generar-pdf',
+      'menu-exportar-excel',
+      'menu-reporte-stock-bajo',
+      'menu-buscar-producto'
     ];
 
     validActions.forEach(action => {
@@ -173,6 +184,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Remover listeners
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);
+  },
+
+  // Inventario APIs
+  inventario: {
+    getAll: () => ipcRenderer.invoke('inventario-get-all'),
+    search: (searchTerm) => ipcRenderer.invoke('inventario-search', searchTerm),
+    getStockBajo: (minimo) => ipcRenderer.invoke('inventario-stock-bajo', minimo),
+    getPorRangoPrecio: (precioMin, precioMax) => ipcRenderer.invoke('inventario-por-rango-precio', precioMin, precioMax),
+    generarReporte: () => ipcRenderer.invoke('inventario-generar-reporte')
   }
 });
 

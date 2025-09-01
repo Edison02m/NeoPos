@@ -107,7 +107,7 @@ class MainController {
               label: 'Inventario',
               accelerator: 'CmdOrCtrl+I',
               click: () => {
-                this.mainWindow.webContents.send('menu-inventory-stock');
+                this.windowManager.createInventarioWindow(this.mainWindow);
               }
             },
             {
@@ -440,6 +440,14 @@ class MainController {
       return { success: true };
     });
 
+    ipcMain.handle('open-inventario-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createInventarioWindow(this.mainWindow);
+      return { success: true };
+    });
+
     // Agregar listener para debugging de eventos de menú
     ipcMain.handle('debug-menu-event', (event, menuEvent) => {
       console.log('Debug: Simulando evento de menú:', menuEvent);
@@ -451,7 +459,112 @@ class MainController {
     });
 
     ipcMain.handle('close-window', (event, windowName) => {
-      this.windowManager.closeWindow(windowName);
+      try {
+        console.log('Cerrando ventana:', windowName);
+        this.windowManager.closeWindow(windowName);
+        return { success: true, message: `Ventana ${windowName} cerrada` };
+      } catch (error) {
+        console.error('Error al cerrar ventana:', error);
+        return { success: false, message: error.message };
+      }
+    });
+
+    ipcMain.handle('close-current-window', (event) => {
+      try {
+        const window = BrowserWindow.fromWebContents(event.sender);
+        
+        // Verificar que la ventana existe y no es la ventana principal
+        if (window && window !== this.mainWindow) {
+          console.log('Cerrando ventana secundaria:', window.getTitle());
+          window.close();
+          return { success: true, message: 'Ventana cerrada correctamente' };
+        } else if (window === this.mainWindow) {
+          console.log('Intento de cerrar ventana principal bloqueado');
+          return { success: false, message: 'No se puede cerrar la ventana principal desde aquí' };
+        } else {
+          console.log('No se encontró la ventana a cerrar');
+          return { success: false, message: 'Ventana no encontrada' };
+        }
+      } catch (error) {
+        console.error('Error al cerrar ventana:', error);
+        return { success: false, message: error.message };
+      }
+    });
+
+    // Inventario handlers
+    ipcMain.handle('inventario-get-all', async () => {
+      try {
+        const InventarioController = require('./controllers/InventarioController');
+        const controller = new InventarioController();
+        return await controller.getInventarioCompleto();
+      } catch (error) {
+        console.error('Error al obtener inventario:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al obtener inventario: ' + error.message
+        };
+      }
+    });
+
+    ipcMain.handle('inventario-search', async (event, searchTerm) => {
+      try {
+        const InventarioController = require('./controllers/InventarioController');
+        const controller = new InventarioController();
+        return await controller.buscarEnInventario(searchTerm);
+      } catch (error) {
+        console.error('Error al buscar en inventario:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al buscar en inventario: ' + error.message
+        };
+      }
+    });
+
+    ipcMain.handle('inventario-stock-bajo', async (event, minimo) => {
+      try {
+        const InventarioController = require('./controllers/InventarioController');
+        const controller = new InventarioController();
+        return await controller.getStockBajo(minimo);
+      } catch (error) {
+        console.error('Error al obtener stock bajo:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al obtener stock bajo: ' + error.message
+        };
+      }
+    });
+
+    ipcMain.handle('inventario-por-rango-precio', async (event, precioMin, precioMax) => {
+      try {
+        const InventarioController = require('./controllers/InventarioController');
+        const controller = new InventarioController();
+        return await controller.getInventarioPorRangoPrecio(precioMin, precioMax);
+      } catch (error) {
+        console.error('Error al obtener inventario por rango de precio:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al obtener inventario por rango de precio: ' + error.message
+        };
+      }
+    });
+
+    ipcMain.handle('inventario-generar-reporte', async () => {
+      try {
+        const InventarioController = require('./controllers/InventarioController');
+        const controller = new InventarioController();
+        return await controller.generarReporteInventario();
+      } catch (error) {
+        console.error('Error al generar reporte de inventario:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al generar reporte de inventario: ' + error.message
+        };
+      }
     });
 
     // Handler de autenticación
