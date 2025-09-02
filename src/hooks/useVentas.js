@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import ProductoController from '../controllers/ProductoController';
 import ClienteController from '../controllers/ClienteController';
-import BarcodeDetector from '../utils/barcodeDetector';
+import * as BD from '../utils/barcodeDetector';
+const BarcodeDetectorCtor = (typeof BD.BarcodeDetector === 'function')
+  ? BD.BarcodeDetector
+  : (typeof BD.default === 'function' ? BD.default : null);
 
 // Exportar como función nombrada (no arrow) para evitar cualquier rareza de interop
 export function useVentas() {
@@ -203,29 +206,69 @@ export function useVentas() {
   const toggleDeteccionAutomatica = useCallback(() => {
     setDeteccionAutomaticaActiva(prev => {
       const newValue = !prev;
-      console.log(`Detección automática ${newValue ? 'ACTIVADA' : 'DESACTIVADA'}`);
+      console.log(`[VENTAS] Detección automática ${newValue ? 'ACTIVADA' : 'DESACTIVADA'}`);
+      
+      // Si se está desactivando, limpiar inmediatamente el detector
+      if (!newValue && window.barcodeDetectorInstance) {
+        console.log('[VENTAS] Limpiando detector en toggle OFF');
+        window.barcodeDetectorInstance.stopListening();
+        delete window.barcodeDetectorInstance;
+      }
+      
       return newValue;
     });
   }, []);
 
   // Listener para códigos de barras escaneados - DESPUÉS de definir buscarPorCodigoBarras
   useEffect(() => {
+    console.log(`[VENTAS] useEffect detector - deteccionAutomaticaActiva: ${deteccionAutomaticaActiva}`);
+    
     // Solo activar si la detección automática está habilitada
     if (!deteccionAutomaticaActiva) {
       // Limpiar cualquier detector anterior
       if (window.barcodeDetectorInstance) {
+        console.log('[VENTAS] Deteniendo detector anterior');
         window.barcodeDetectorInstance.stopListening();
         delete window.barcodeDetectorInstance;
       }
       return;
     }
 
-    // Crear instancia del detector de códigos de barras para escáneres físicos
-    const barcodeDetector = new BarcodeDetector((barcode) => {
-      console.log('Código de barras escaneado con escáner físico:', barcode);
-      setCodigoBarras(barcode); // Poner el código en el input
-      buscarPorCodigoBarras(barcode); // Y buscarlo automáticamente
+    console.log('[VENTAS] Creando nuevo detector de códigos de barras');
+    
+    // Crear instancia del detector específico para ventas
+    if (!BarcodeDetectorCtor) {
+      console.error('[VENTAS] BarcodeDetector constructor not found', {
+        keys: Object.keys(BD || {}),
+        types: { def: typeof BD.default, named: typeof BD.BarcodeDetector }
+      });
+      return () => {};
+    }
+    const barcodeDetector = new BarcodeDetectorCtor((barcode) => {
+      console.log('[VENTAS] Código de barras escaneado con escáner físico:', barcode);
+      
+      // Actualizar el campo de código de barras
+      setCodigoBarras(barcode);
+      
+      // Buscar automáticamente el producto después de un pequeño delay
+      setTimeout(() => {
+        console.log('[VENTAS] Buscando producto automáticamente:', barcode);
+        buscarPorCodigoBarras(barcode);
+      }, 150);
+      
+      // Enfocar el input de código de barras para mejor UX
+      const barcodeInput = document.querySelector('input[name="codigoBarras"], input[id="codigoBarras"], input[placeholder*="buscar producto"]');
+      if (barcodeInput) {
+        barcodeInput.focus();
+        barcodeInput.value = barcode;
+        
+        // Disparar eventos
+        const inputEvent = new Event('input', { bubbles: true });
+        barcodeInput.dispatchEvent(inputEvent);
+      }
     }, {
+      moduleContext: 'ventas',
+      targetInputId: 'codigoBarras',
       minBarcodeLength: 4,
       maxBarcodeLength: 30,
       sounds: { enabled: true },
@@ -233,13 +276,23 @@ export function useVentas() {
     });
     
     // Guardar referencia global para usar en otras funciones
-    window.barcodeDetectorInstance = barcodeDetector;
+  window.barcodeDetectorInstance = barcodeDetector;
     
     // Iniciar escucha
+    // Asegurar foco al input específico antes de escuchar
+    const ventasField = document.querySelector('input[name="codigoBarras"], input[id="codigoBarras"], input[placeholder*="buscar producto"]');
+    if (ventasField) {
+      ventasField.focus();
+      // Colocar caret al final sin modificar valor
+      const val = ventasField.value || '';
+      ventasField.setSelectionRange(val.length, val.length);
+    }
     barcodeDetector.startListening();
+    console.log('[VENTAS] Detector iniciado');
     
     // Cleanup
     return () => {
+      console.log('[VENTAS] Limpiando detector en cleanup');
       barcodeDetector.stopListening();
       if (window.barcodeDetectorInstance === barcodeDetector) {
         delete window.barcodeDetectorInstance;

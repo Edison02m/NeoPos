@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import Producto from '../../models/Producto';
+import * as BD from '../../utils/barcodeDetector';
+const BarcodeDetectorCtor = (typeof BD.BarcodeDetector === 'function')
+  ? BD.BarcodeDetector
+  : (typeof BD.default === 'function' ? BD.default : null);
 
 const ProductoForm = ({ 
   producto, 
@@ -184,6 +188,82 @@ const ProductoForm = ({
     }
   }, [producto]);
 
+  // Detector de códigos de barras específico para productos
+  useEffect(() => {
+    if (!formActive) return;
+
+    console.log('[PRODUCTOS] Iniciando detector específico para productos');
+
+    // Crear detector específico para productos
+    if (!BarcodeDetectorCtor) {
+      console.error('[PRODUCTOS] BarcodeDetector constructor not found', {
+        keys: Object.keys(BD || {}),
+        types: { def: typeof BD.default, named: typeof BD.BarcodeDetector }
+      });
+      return () => {};
+    }
+    const barcodeDetector = new BarcodeDetectorCtor((barcode) => {
+      console.log('[PRODUCTOS] Código de barras detectado en productos:', barcode);
+      
+      // Solo actualizar el campo de código de barras
+      setFormData(prev => ({
+        ...prev,
+        codbarra: barcode
+      }));
+      
+      // También actualizar el campo directamente
+      const barcodeField = document.querySelector('input[name="codbarra"], input[id="codbarra"]');
+      if (barcodeField) {
+        barcodeField.value = barcode;
+        barcodeField.focus();
+        
+        // Disparar eventos para asegurar la sincronización
+        const inputEvent = new Event('input', { bubbles: true });
+        barcodeField.dispatchEvent(inputEvent);
+        
+        const changeEvent = new Event('change', { bubbles: true });
+        barcodeField.dispatchEvent(changeEvent);
+      }
+    }, {
+      moduleContext: 'productos',
+      targetInputId: 'codbarra',
+      minBarcodeLength: 4,
+      maxBarcodeLength: 30,
+      sounds: { enabled: true },
+      vibration: { enabled: false }
+    });
+    
+    // Guardar referencia específica para productos
+    window.productBarcodeDetectorInstance = barcodeDetector;
+    
+    // Iniciar escucha solo cuando el formulario esté activo
+    barcodeDetector.startListening();
+    console.log('[PRODUCTOS] Detector iniciado para productos');
+    
+    // Cleanup al desmontar
+    return () => {
+      console.log('[PRODUCTOS] Limpiando detector de productos');
+      barcodeDetector.stopListening();
+      if (window.productBarcodeDetectorInstance === barcodeDetector) {
+        delete window.productBarcodeDetectorInstance;
+      }
+    };
+  }, [formActive]);
+
+  // Asegurar foco inicial en el campo de código de barras cuando el formulario está activo
+  useEffect(() => {
+    if (!formActive) return;
+    const barcodeField = document.querySelector('input[name="codbarra"], input[id="codbarra"]');
+    if (barcodeField) {
+      barcodeField.focus();
+      // Colocar el cursor al final
+      const val = barcodeField.value || '';
+      try {
+        barcodeField.setSelectionRange(val.length, val.length);
+      } catch (_) { /* ignore */ }
+    }
+  }, [formActive]);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -346,6 +426,9 @@ const ProductoForm = ({
             <label className="block text-xs text-gray-700">Código de barras</label>
             <input
               type="text"
+              name="codbarra"
+              id="codbarra"
+              placeholder="Código de barras"
               value={formData.codbarra}
               onChange={(e) => handleInputChange('codbarra', e.target.value)}
               disabled={!formActive}

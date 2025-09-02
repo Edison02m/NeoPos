@@ -3,12 +3,15 @@ import { HashRouter as Router, useNavigate } from 'react-router-dom';
 import './index.css';
 
 import AppRoutes from './routes';
+import startScanGuard from './utils/scanGuard';
 
 function AppContent() {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Start the global scan guard to block scanner keystrokes outside ventas/productos routes
+    const stopScanGuard = startScanGuard();
     
         
         // Handle menu logout event
@@ -122,6 +125,7 @@ function AppContent() {
             return () => {
                 if (removeListener) removeListener();
                 window.removeEventListener('message', handleMenuNavigation);
+                if (stopScanGuard) stopScanGuard();
             };
         } else {
         

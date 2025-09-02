@@ -264,6 +264,8 @@ const VentasView = () => {
                 <div className="flex-1 relative">
                   <input
                     type="text"
+                    name="codigoBarras"
+                    id="codigoBarras"
                     value={codigoBarras}
                     onChange={(e) => handleCodigoBarrasChange(e.target.value)}
                     onKeyDown={(e) => {
