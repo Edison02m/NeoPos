@@ -522,17 +522,17 @@ class WindowManager {
         label: 'Cliente',
         submenu: [
           {
-            label: 'Buscar Cliente',
-            accelerator: 'Ctrl+F',
-            click: () => {
-              ventasWindow.webContents.send('menu-buscar-cliente');
-            }
-          },
-          {
             label: 'Nuevo Cliente',
             accelerator: 'Ctrl+Alt+N',
             click: () => {
-              ventasWindow.webContents.send('menu-nuevo-cliente');
+              // Abrir la ventana de clientes para registrar uno nuevo
+              if (this.windowManager && this.windowManager.createClienteWindow) {
+                this.windowManager.createClienteWindow(ventasWindow);
+              } else if (this.createClienteWindow) {
+                this.createClienteWindow(ventasWindow);
+              } else {
+                ventasWindow.webContents.send('menu-nuevo-cliente');
+              }
             }
           }
         ]
@@ -541,10 +541,10 @@ class WindowManager {
         label: 'Ver',
         submenu: [
           {
-            label: 'Actualizar',
-            accelerator: 'F5',
+            label: 'Historial de Ventas',
+            accelerator: 'Ctrl+H',
             click: () => {
-              ventasWindow.webContents.reload();
+              ventasWindow.webContents.send('menu-historial-ventas');
             }
           },
           {
@@ -560,7 +560,7 @@ class WindowManager {
         label: 'Ventana',
         submenu: [
           {
-            label: 'Cerrar',
+            label: 'Cerrar ventana',
             accelerator: 'Ctrl+W',
             click: () => {
               ventasWindow.close();

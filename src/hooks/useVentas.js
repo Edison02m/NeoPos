@@ -659,10 +659,17 @@ export function useVentas() {
       const fechaIso = new Date().toISOString();
 
       // Iniciar transacción
-      await window.electronAPI.dbRun('BEGIN TRANSACTION');
+      {
+        const tx = await window.electronAPI.dbRun('BEGIN TRANSACTION');
+        if (!tx || tx.success === false) {
+          alert('No se pudo iniciar la transacción de la venta.');
+          setLoading(false);
+          return;
+        }
+      }
 
       // Insertar venta
-      const ventaInsert = await window.electronAPI.dbRun(
+  const ventaInsert = await window.electronAPI.dbRun(
         `INSERT INTO ventas (
           numero_comprobante, tipo_comprobante, fecha,
           cliente_nombres, cliente_apellidos, cliente_ruc_ci,
@@ -685,12 +692,26 @@ export function useVentas() {
           'completada'
         ]
       );
+      if (!ventaInsert || ventaInsert.success === false) {
+        try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+        alert('No se pudo registrar la venta.');
+        setLoading(false);
+        return;
+      }
 
-      const ventaId = ventaInsert?.id;
+      // Obtener el ID de la venta insertada desde result.data.id
+      const ventaId = ventaInsert && ventaInsert.data ? ventaInsert.data.id : undefined;
+      if (!ventaId) {
+        // Si no obtuvimos un ID válido, revertimos y mostramos error
+        try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+        alert('No se pudo registrar la venta: ID de venta no generado.');
+        setLoading(false);
+        return;
+      }
 
       // Insertar items y actualizar stock
       for (const item of productos) {
-        await window.electronAPI.dbRun(
+        const itemInsert = await window.electronAPI.dbRun(
           `INSERT INTO venta_items (
             venta_id, producto_id, codigo_barras, descripcion,
             cantidad, precio_unitario, subtotal
@@ -705,16 +726,33 @@ export function useVentas() {
             Number(item.subtotal) || 0
           ]
         );
+        if (!itemInsert || itemInsert.success === false) {
+          try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+          alert('No se pudo registrar un ítem de la venta. La operación fue revertida.');
+          setLoading(false);
+          return;
+        }
 
         // Actualizar stock por código
-        await window.electronAPI.dbRun(
+        const stockUpdate = await window.electronAPI.dbRun(
           'UPDATE producto SET almacen = almacen - ? WHERE codigo = ?',
           [Number(item.cantidad) || 0, item.codigo]
         );
+        if (!stockUpdate || stockUpdate.success === false) {
+          try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+          alert('No se pudo actualizar el stock. La operación fue revertida.');
+          setLoading(false);
+          return;
+        }
       }
 
       // Confirmar transacción
-      await window.electronAPI.dbRun('COMMIT');
+      const commit = await window.electronAPI.dbRun('COMMIT');
+      if (!commit || commit.success === false) {
+        alert('No se pudo confirmar la venta (commit falló).');
+        setLoading(false);
+        return;
+      }
 
       alert('Venta guardada exitosamente');
       limpiarVenta();

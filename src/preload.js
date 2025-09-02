@@ -64,6 +64,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Eventos del menú
   onMenuAction: (callback) => {
     const validActions = [
+  // Ventas window specific
+  'menu-nueva-venta',
+  'menu-buscar-producto',
+  'menu-guardar-venta',
+  'menu-buscar-cliente',
+  'menu-nuevo-cliente',
+  'menu-imprimir-comprobante',
+  'menu-historial-ventas',
       'menu-new-sale',
       'menu-search-product',
       'menu-sales-history',
@@ -125,6 +133,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     console.log('[PRELOAD] Registrando listeners de menú...');
     
     const validActions = [
+  // Ventas window specific
+  'menu-nueva-venta',
+  'menu-buscar-producto',
+  'menu-guardar-venta',
+  'menu-buscar-cliente',
+  'menu-nuevo-cliente',
+  'menu-imprimir-comprobante',
+  'menu-historial-ventas',
       'menu-new-sale',
       'menu-search-product',
       'menu-sales-history',

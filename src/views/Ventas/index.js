@@ -3,6 +3,7 @@ import useVentas from '../../hooks/useVentas';
 import ActionPanel from './ActionPanel';
 import TotalesPanel from './TotalesPanel';
 import BuscarProductoModal from './BuscarProductoModal';
+import { useEffect, useState } from 'react';
 
 const VentasView = () => {
   const {
@@ -47,6 +48,45 @@ const VentasView = () => {
     toggleDeteccionAutomatica
   } = useVentas();
 
+  // Historial de ventas (simple)
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [ventasHistorial, setVentasHistorial] = useState([]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.onMenuAction) return;
+    const remove = window.electronAPI.onMenuAction(async (action) => {
+      switch (action) {
+        case 'menu-nueva-venta':
+          // Equivalente a botón Nuevo: limpiar y activar
+          nuevaVenta();
+          break;
+        case 'menu-buscar-producto':
+          setSearchModalOpen(true);
+          break;
+        case 'menu-guardar-venta':
+          guardarVenta();
+          break;
+        case 'menu-nuevo-cliente':
+          if (window.electronAPI?.openClienteWindow) {
+            await window.electronAPI.openClienteWindow();
+          }
+          break;
+        case 'menu-historial-ventas':
+          try {
+            const res = await window.electronAPI.dbQuery(
+              `SELECT id, numero_comprobante, tipo_comprobante, fecha, total FROM ventas ORDER BY fecha DESC, id DESC LIMIT 200`
+            );
+            if (res.success) setVentasHistorial(res.data || []);
+            setHistorialOpen(true);
+          } catch (_) {}
+          break;
+        default:
+          break;
+      }
+    });
+    return () => { if (remove) remove(); };
+  }, [nuevaVenta, guardarVenta, setSearchModalOpen]);
+
   const handleBuscar = () => {
     setSearchModalOpen(true);
   };
@@ -64,6 +104,7 @@ const VentasView = () => {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* Contenido principal */}
       <div className="flex flex-1">
@@ -399,7 +440,49 @@ const VentasView = () => {
         buscarProductos={buscarProductos}
         agregarProducto={agregarProducto}
       />
-    </div>
+  </div>
+
+      {/* Historial ventas modal simple */}
+  {historialOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white w-[800px] max-h-[80vh] rounded shadow border p-4 flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">Historial de Ventas</h3>
+              <button onClick={() => setHistorialOpen(false)} className="text-gray-600 hover:text-gray-900">✕</button>
+            </div>
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-2 px-3">ID</th>
+                    <th className="text-left py-2 px-3">Comprobante</th>
+                    <th className="text-left py-2 px-3">Tipo</th>
+                    <th className="text-left py-2 px-3">Fecha</th>
+                    <th className="text-right py-2 px-3">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ventasHistorial.length === 0 ? (
+                    <tr><td colSpan="5" className="text-center py-6 text-gray-500">Sin registros</td></tr>
+                  ) : ventasHistorial.map(v => (
+                    <tr key={v.id} className="border-b">
+                      <td className="py-2 px-3">{v.id}</td>
+                      <td className="py-2 px-3">{v.numero_comprobante}</td>
+                      <td className="py-2 px-3">{v.tipo_comprobante}</td>
+                      <td className="py-2 px-3">{new Date(v.fecha).toLocaleString()}</td>
+                      <td className="py-2 px-3 text-right">${(Number(v.total)||0).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 text-right">
+              <button onClick={() => setHistorialOpen(false)} className="px-3 py-1 bg-gray-800 text-white rounded">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+  </>
   );
 };
 
