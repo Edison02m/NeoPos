@@ -41,15 +41,7 @@ const ActionPanel = ({
         >
           <Save size={14} />
         </button>
-        {/* Buscar */}
-        <button
-          onClick={onBuscar}
-          title="Buscar producto"
-          className="w-8 h-8 flex items-center justify-center text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-          disabled={loading}
-        >
-          <Search size={14} />
-        </button>
+
     
         {/* Limpiar */}
         <button

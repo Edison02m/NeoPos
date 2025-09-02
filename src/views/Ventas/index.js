@@ -211,17 +211,17 @@ const VentasView = () => {
           </div>
 
           {/* Barcode Scanner Section */}
-          <div className="mb-2 p-3 bg-blue-50 rounded border border-blue-200">
+          <div className="mb-2 p-3 bg-white rounded border border-gray-300">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center">
-                <svg className="w-4 h-4 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-black mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M12 12h-4.01M8 8h4m0 0V4.01M12 8V4m8 4h1m-1 0v1m-1 0h-4m4 0V8m-4 8V8m0 8v4m-4-4h4"></path>
                 </svg>
-                <span className="text-sm font-medium text-blue-800">Escáner de Código de Barras</span>
+                <span className="text-sm font-medium text-black">Escáner de Código de Barras</span>
                 {loading && (
                   <div className="ml-2 flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span className="ml-1 text-xs text-blue-600">Buscando...</span>
+                    <span className="ml-1 text-xs text-black">Buscando...</span>
                   </div>
                 )}
               </div>
@@ -276,7 +276,7 @@ const VentasView = () => {
                         }
                       }
                     }}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded text-sm ${deteccionAutomaticaActiva ? 'bg-gray-50 text-gray-500' : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'}`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded text-sm ${deteccionAutomaticaActiva ? 'bg-gray-50 text-gray-500' : 'focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500'}`}
                     placeholder={deteccionAutomaticaActiva ? 'AUTO ON: escanee sin seleccionar este campo' : 'Escanear código de barras o digitar código...'}
                     disabled={loading || deteccionAutomaticaActiva}
                     autoComplete="off"
@@ -295,7 +295,7 @@ const VentasView = () => {
                 <button
                   type="submit"
                   disabled={loading || !codigoBarras.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                  className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
                   {loading ? 'Buscando...' : 'Agregar'}
                 </button>
@@ -303,7 +303,7 @@ const VentasView = () => {
             </form>
             
             {/* Instrucciones de uso */}
-            <div className="text-xs text-blue-700 mt-2 flex items-center">
+            <div className="text-xs text-gray-600 mt-2 flex items-center">
               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
