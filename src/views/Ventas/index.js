@@ -276,11 +276,11 @@ const VentasView = () => {
                         }
                       }
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Escanear código de barras o digitar código..."
-                    disabled={loading}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded text-sm ${deteccionAutomaticaActiva ? 'bg-gray-50 text-gray-500' : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'}`}
+                    placeholder={deteccionAutomaticaActiva ? 'AUTO ON: escanee sin seleccionar este campo' : 'Escanear código de barras o digitar código...'}
+                    disabled={loading || deteccionAutomaticaActiva}
                     autoComplete="off"
-                    autoFocus
+                    autoFocus={!deteccionAutomaticaActiva}
                   />
                   {codigoBarras && (
                     <button

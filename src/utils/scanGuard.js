@@ -93,6 +93,7 @@ export function startScanGuard(options = {}) {
   }
 
   const onKeyPress = (e) => {
+  const autoActive = !!window.__barcodeAutoScanActive; // set by ventas/productos when AUTO ON
     const allowRoute = isAllowedRoute();
     const active = document.activeElement;
     // Never block sensitive input types for normal typing
@@ -105,6 +106,14 @@ export function startScanGuard(options = {}) {
     // On allowed routes, only allow typing freely in the target barcode field; otherwise protect
     if (allowRoute && isAllowedTargetInRoute(active)) {
       return;
+    }
+
+    // If auto-scan is active on allowed routes, swallow printable keys to avoid leaking into inputs
+    if (autoActive && allowRoute) {
+      if (e.key && e.key.length === 1) {
+        e.preventDefault();
+        return;
+      }
     }
 
     const now = Date.now();
@@ -159,6 +168,7 @@ export function startScanGuard(options = {}) {
   };
 
   const onKeyDown = (e) => {
+  const autoActive = !!window.__barcodeAutoScanActive;
     const allowRoute = isAllowedRoute();
     const active = document.activeElement;
     if (active && active.tagName && (active.tagName.toLowerCase() === 'input' || active.tagName.toLowerCase() === 'textarea')) {
@@ -167,13 +177,20 @@ export function startScanGuard(options = {}) {
         return;
       }
     }
-    if (allowRoute && isAllowedTargetInRoute(active)) return;
+  if (allowRoute && isAllowedTargetInRoute(active)) return;
 
     const now = Date.now();
     const key = e.key;
 
     // Pre-handle printable characters to avoid first-char leaks
     if (key && key.length === 1) {
+      // When AUTO is active, always block printable characters on allowed routes so the detector can handle them globally
+      if (autoActive && allowRoute) {
+        e.preventDefault();
+        handledCharDown = true;
+        last = now;
+        return;
+      }
       const delta = now - last;
       if (delta > cfg.maxGapMs) {
         buffer = '';
@@ -210,7 +227,7 @@ export function startScanGuard(options = {}) {
       return;
     }
 
-  if (scanning && (e.key === 'Enter' || e.key === 'Tab')) {
+  if ((scanning && (e.key === 'Enter' || e.key === 'Tab')) || (autoActive && allowRoute && (e.key === 'Enter' || e.key === 'Tab'))) {
       // Finish scan; block commit of the buffer into inputs
   e.preventDefault();
       buffer = '';

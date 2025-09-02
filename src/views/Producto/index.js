@@ -44,6 +44,8 @@ const ProductosView = () => {
         'Stock Almacén': producto.almacen || 0,
         'Stock Bodega 1': producto.bodega1 || 0,
         'Stock Bodega 2': producto.bodega2 || 0,
+  // Total de existencias sumando todas las ubicaciones
+  'Stock Total': (producto.almacen || 0) + (producto.bodega1 || 0) + (producto.bodega2 || 0),
         'Mínimo': producto.minimo || 0,
         'Máximo': producto.maximo || 0,
         'Peso': producto.peso || 0,

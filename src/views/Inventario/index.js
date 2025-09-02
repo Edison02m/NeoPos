@@ -39,11 +39,14 @@ const Inventario = () => {
           codbarra as codigo_barras,
           codaux as codigo_auxiliar,
           producto as producto,
-          almacen as existencia,
+          almacen,
+          bodega1,
+          bodega2,
+          (COALESCE(almacen,0) + COALESCE(bodega1,0) + COALESCE(bodega2,0)) as existencia_total,
           pvp as precio_unitario,
-          ROUND(almacen * pvp, 2) as precio_total
+          ROUND((COALESCE(almacen,0) + COALESCE(bodega1,0) + COALESCE(bodega2,0)) * pvp, 2) as precio_total
         FROM producto 
-        WHERE almacen > 0
+        WHERE (COALESCE(almacen,0) + COALESCE(bodega1,0) + COALESCE(bodega2,0)) > 0
         ORDER BY producto ASC
       `);
 
@@ -53,7 +56,7 @@ const Inventario = () => {
         
         // Calcular totales
         const totalProductos = result.data.length;
-        const totalExistencias = result.data.reduce((sum, item) => sum + item.existencia, 0);
+  const totalExistencias = result.data.reduce((sum, item) => sum + (item.existencia_total || 0), 0);
         const totalInvertido = result.data.reduce((sum, item) => sum + item.precio_total, 0);
         
         setTotales({
@@ -86,7 +89,7 @@ const Inventario = () => {
     let filtered = [...inventario];
 
     // Aplicar búsqueda por término y tipo
-    if (term && term.trim()) {
+  if (term && term.trim()) {
       const searchPattern = exactMatch ? term : term.toLowerCase();
       
       filtered = filtered.filter(item => {
@@ -117,7 +120,7 @@ const Inventario = () => {
     // Aplicar filtro especial
     switch (filter) {
       case 'stock_bajo':
-        filtered = filtered.filter(item => item.existencia <= stockMinimo);
+        filtered = filtered.filter(item => (item.existencia_total || 0) <= stockMinimo);
         break;
       case 'alto_valor':
         filtered = filtered.filter(item => item.precio_total >= 100);
@@ -134,7 +137,7 @@ const Inventario = () => {
 
     // Recalcular totales para productos filtrados
     const totalProductos = filtered.length;
-    const totalExistencias = filtered.reduce((sum, item) => sum + item.existencia, 0);
+  const totalExistencias = filtered.reduce((sum, item) => sum + (item.existencia_total || 0), 0);
     const totalInvertido = filtered.reduce((sum, item) => sum + item.precio_total, 0);
     
     setTotales({
@@ -159,7 +162,7 @@ const Inventario = () => {
           item.codigo_barras || '',
           item.codigo_auxiliar || '',
           item.producto || '',
-          item.existencia?.toString() || '0',
+          (item.existencia_total ?? 0).toString(),
           `$${parseFloat(item.precio_unitario || 0).toFixed(2)}`,
           `$${parseFloat(item.precio_total || 0).toFixed(2)}`
         ]),
@@ -204,9 +207,11 @@ const Inventario = () => {
         'Código de Barras': item.codigo_barras,
         'Código Auxiliar': item.codigo_auxiliar,
         'Producto': item.producto,
-        'Existencia': item.existencia,
-        'P. Unitario': item.precio_unitario,
-        'P. Total': item.precio_total
+  // Usar el total (almacén + bodega1 + bodega2) para la existencia en Excel
+  'Existencia': item.existencia_total ?? 0,
+  // Asegurar números para que Excel los trate como valores numéricos
+  'P. Unitario': Number(item.precio_unitario || 0),
+  'P. Total': Number(item.precio_total || 0)
       }));
 
       const result = await window.electronAPI.generateExcelReport(
@@ -396,13 +401,13 @@ const Inventario = () => {
                   width: '300px'
                 },
                 {
-                  key: 'existencia',
+                  key: 'existencia_total',
                   title: 'Stock',
                   width: '80px',
                   align: 'center',
                   fontFamily: 'mono',
                   render: (value, row) => {
-                    const stock = parseInt(value) || 0;
+                    const stock = parseInt(row.existencia_total ?? value) || 0;
                     const isLowStock = stock < 5;
                     return (
                       <div className={`flex items-center justify-center ${isLowStock ? 'text-red-600' : 'text-gray-900'}`}>

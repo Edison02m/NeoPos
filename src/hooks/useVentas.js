@@ -2,9 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import ProductoController from '../controllers/ProductoController';
 import ClienteController from '../controllers/ClienteController';
 import * as BD from '../utils/barcodeDetector';
-const BarcodeDetectorCtor = (typeof BD.BarcodeDetector === 'function')
-  ? BD.BarcodeDetector
-  : (typeof BD.default === 'function' ? BD.default : null);
+// Resolver compatible: intenta named, default o factory
+const __resolveBarcodeCtor = () => {
+  if (typeof BD.BarcodeDetector === 'function') return BD.BarcodeDetector;
+  if (typeof BD.default === 'function') return BD.default;
+  return null;
+};
+const BarcodeDetectorCtor = __resolveBarcodeCtor();
 
 // Exportar como función nombrada (no arrow) para evitar cualquier rareza de interop
 export function useVentas() {
@@ -93,28 +97,48 @@ export function useVentas() {
   // Función para agregar producto a la lista
   const agregarProducto = useCallback((producto) => {
     setProductos(prev => {
-      const productoExistente = prev.find(p => p.codigo === producto.codigo);
-      
-      if (productoExistente) {
-        // Si el producto ya existe, aumentar cantidad
-        return prev.map(p => 
-          p.codigo === producto.codigo 
-            ? { ...p, cantidad: p.cantidad + 1, subtotal: (p.cantidad + 1) * p.precio }
-            : p
-        );
-      } else {
-        // Agregar nuevo producto
-        const nuevoProducto = {
-          codigo: producto.codigo,
-          codbarra: producto.codbarra || producto.codigo,  // Guardar código de barras
-          descripcion: producto.producto || producto.descripcion,
-          precio: parseFloat(producto.pvp) || 0,
-          cantidad: 1,
-          stock: producto.almacen || 0,
-          subtotal: parseFloat(producto.pvp) || 0
-        };
-        return [...prev, nuevoProducto];
+      const stock = parseInt(producto.almacen ?? producto.stock ?? 0, 10) || 0;
+      const existente = prev.find(p => p.codigo === producto.codigo);
+
+      // No permitir venta si no hay stock
+      if (!existente && stock <= 0) {
+        if (window.barcodeDetectorInstance) {
+          window.barcodeDetectorInstance.playErrorSound?.();
+          window.barcodeDetectorInstance.vibrate?.('error');
+        }
+        alert('Stock insuficiente: el producto no tiene existencias.');
+        return prev;
       }
+
+      if (existente) {
+        if (existente.cantidad >= (existente.stock || stock || 0)) {
+          if (window.barcodeDetectorInstance) {
+            window.barcodeDetectorInstance.playErrorSound?.();
+            window.barcodeDetectorInstance.vibrate?.('error');
+          }
+          alert('No puede superar el stock disponible para este producto.');
+          return prev;
+        }
+        // Incrementar sin superar stock
+        return prev.map(p => {
+          if (p.codigo !== producto.codigo) return p;
+          const nuevaCantidad = Math.min((p.cantidad + 1), (p.stock || stock || 0));
+          return { ...p, cantidad: nuevaCantidad, subtotal: nuevaCantidad * p.precio };
+        });
+      }
+
+      // Agregar nuevo producto (cantidad inicial 1, ya validado stock>0)
+      const precio = parseFloat(producto.pvp) || 0;
+      const nuevoProducto = {
+        codigo: producto.codigo,
+        codbarra: producto.codbarra || producto.codigo,
+        descripcion: producto.producto || producto.descripcion,
+        precio,
+        cantidad: 1,
+        stock: stock,
+        subtotal: precio
+      };
+      return [...prev, nuevoProducto];
     });
   }, []);
 
@@ -141,7 +165,18 @@ export function useVentas() {
       
       if (response.success && response.data) {
         console.log('Producto encontrado:', response.data);
-        
+        // Validar stock antes de agregar
+        const stock = parseInt(response.data.almacen ?? 0, 10) || 0;
+        if (stock <= 0) {
+          if (window.barcodeDetectorInstance) {
+            window.barcodeDetectorInstance.playErrorSound?.();
+            window.barcodeDetectorInstance.vibrate?.('error');
+          }
+          alert('Producto sin existencias. No se puede vender.');
+          setCodigoBarras('');
+          return;
+        }
+
         // Agregar el producto automáticamente
         agregarProducto(response.data);
         setCodigoBarras(''); // Limpiar campo de código de barras
@@ -214,6 +249,12 @@ export function useVentas() {
         window.barcodeDetectorInstance.stopListening();
         delete window.barcodeDetectorInstance;
       }
+      // Comunicar al ScanGuard para que bloquee escritura en inputs mientras AUTO está activo
+      if (newValue) {
+        window.__barcodeAutoScanActive = true;
+      } else {
+        delete window.__barcodeAutoScanActive;
+      }
       
       return newValue;
     });
@@ -231,20 +272,111 @@ export function useVentas() {
         window.barcodeDetectorInstance.stopListening();
         delete window.barcodeDetectorInstance;
       }
+  // Desactivar el flag global
+  delete window.__barcodeAutoScanActive;
       return;
     }
 
-    console.log('[VENTAS] Creando nuevo detector de códigos de barras');
+  console.log('[VENTAS] Creando nuevo detector de códigos de barras');
     
     // Crear instancia del detector específico para ventas
+  let barcodeDetector = null;
     if (!BarcodeDetectorCtor) {
-      console.error('[VENTAS] BarcodeDetector constructor not found', {
-        keys: Object.keys(BD || {}),
-        types: { def: typeof BD.default, named: typeof BD.BarcodeDetector }
-      });
-      return () => {};
-    }
-    const barcodeDetector = new BarcodeDetectorCtor((barcode) => {
+      // Intentar con la factory si existe
+      if (typeof BD.createBarcodeDetector === 'function') {
+        try {
+          barcodeDetector = BD.createBarcodeDetector((barcode) => {
+            console.log('[VENTAS] Código de barras escaneado con escáner físico:', barcode);
+            setCodigoBarras(barcode);
+            setTimeout(() => {
+              console.log('[VENTAS] Buscando producto automáticamente:', barcode);
+              buscarPorCodigoBarras(barcode);
+            }, 150);
+            const barcodeInput = document.querySelector('input[name="codigoBarras"], input[id="codigoBarras"], input[placeholder*="buscar producto"]');
+            if (barcodeInput) {
+              barcodeInput.value = barcode;
+              const inputEvent = new Event('input', { bubbles: true });
+              barcodeInput.dispatchEvent(inputEvent);
+            }
+          }, {
+            moduleContext: 'ventas',
+            targetInputId: 'codigoBarras',
+            minBarcodeLength: 4,
+            maxBarcodeLength: 30,
+            sounds: { enabled: true },
+            vibration: { enabled: true }
+          });
+        } catch (err) {
+          console.error('[VENTAS] Error creando detector con factory:', err);
+        }
+      }
+      if (!barcodeDetector) {
+        console.warn('[VENTAS] Módulo BarcodeDetector no disponible; usando detector mínimo inline');
+        // Fallback mínimo: detector inline basado en keydown/keypress
+        const config = { minLen: 4, maxLen: 50, maxGap: 120 };
+        let buffer = '';
+        let last = 0;
+        let endTimer = null;
+        const handleCommit = () => {
+          if (buffer.length >= config.minLen) {
+            const code = buffer;
+            buffer = '';
+            last = 0;
+            // Disparar flujo de búsqueda como hace el detector real
+            console.log('[VENTAS][InlineDetector] Código detectado:', code);
+            setCodigoBarras(code);
+            setTimeout(() => buscarPorCodigoBarras(code), 100);
+            const barcodeInput = document.querySelector('input[name="codigoBarras"], input[id="codigoBarras"], input[placeholder*="buscar producto"]');
+            if (barcodeInput) {
+              barcodeInput.value = code;
+              const inputEvent = new Event('input', { bubbles: true });
+              barcodeInput.dispatchEvent(inputEvent);
+            }
+          }
+        };
+        const onKeyDown = (e) => {
+          // Solo en ruta de ventas
+          const loc = (window.location && (window.location.hash || window.location.pathname)).toLowerCase();
+          if (!(loc.includes('venta'))) return;
+          const now = Date.now();
+          if (e.key && e.key.length === 1) {
+            // reinicio por pausa larga
+            if (now - last > config.maxGap) buffer = '';
+            last = now;
+            // bloquear escritura para no ensuciar inputs
+            e.preventDefault();
+            buffer += e.key;
+            if (buffer.length > config.maxLen) buffer = buffer.slice(-config.maxLen);
+            if (endTimer) clearTimeout(endTimer);
+            endTimer = setTimeout(handleCommit, config.maxGap + 20);
+          } else if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            if (endTimer) { clearTimeout(endTimer); endTimer = null; }
+            handleCommit();
+          }
+        };
+        const onKeyPress = (e) => {
+          // No usado principalmente; keydown ya captura y previene
+        };
+        const inlineDetector = {
+          startListening() {
+            document.addEventListener('keydown', onKeyDown, true);
+            document.addEventListener('keypress', onKeyPress, true);
+          },
+          stopListening() {
+            document.removeEventListener('keydown', onKeyDown, true);
+            document.removeEventListener('keypress', onKeyPress, true);
+            buffer = '';
+            if (endTimer) { clearTimeout(endTimer); endTimer = null; }
+          },
+          playSuccessSound() {},
+          playErrorSound() {},
+          vibrate() {}
+        };
+        barcodeDetector = inlineDetector;
+      }
+    } else {
+      barcodeDetector = new BarcodeDetectorCtor((barcode) => {
       console.log('[VENTAS] Código de barras escaneado con escáner físico:', barcode);
       
       // Actualizar el campo de código de barras
@@ -256,13 +388,10 @@ export function useVentas() {
         buscarPorCodigoBarras(barcode);
       }, 150);
       
-      // Enfocar el input de código de barras para mejor UX
+      // No requerimos foco en el input; solo actualizar valor si existe como feedback visual
       const barcodeInput = document.querySelector('input[name="codigoBarras"], input[id="codigoBarras"], input[placeholder*="buscar producto"]');
       if (barcodeInput) {
-        barcodeInput.focus();
         barcodeInput.value = barcode;
-        
-        // Disparar eventos
         const inputEvent = new Event('input', { bubbles: true });
         barcodeInput.dispatchEvent(inputEvent);
       }
@@ -274,19 +403,47 @@ export function useVentas() {
       sounds: { enabled: true },
       vibration: { enabled: true }
     });
+    }
     
     // Guardar referencia global para usar en otras funciones
   window.barcodeDetectorInstance = barcodeDetector;
+    // Levantar flag global para que ScanGuard bloquee escritura en inputs
+    window.__barcodeAutoScanActive = true;
+
+    // Crear un input oculto que mantenga el foco cuando AUTO está activo (modo supermercado)
+    const ensureHiddenSink = () => {
+      let el = document.getElementById('__autoScanSink');
+      if (!el) {
+        el = document.createElement('input');
+        el.type = 'text';
+        el.id = '__autoScanSink';
+        el.setAttribute('autocomplete', 'off');
+        el.setAttribute('autocapitalize', 'off');
+        el.setAttribute('autocorrect', 'off');
+        el.setAttribute('aria-hidden', 'true');
+        el.style.position = 'fixed';
+        el.style.left = '-9999px';
+        el.style.top = '0';
+        el.style.opacity = '0';
+        el.style.width = '1px';
+        el.style.height = '1px';
+        el.style.pointerEvents = 'none';
+        document.body.appendChild(el);
+      }
+      return el;
+    };
+
+    const sink = ensureHiddenSink();
+    const refocus = () => {
+      if (!deteccionAutomaticaActiva) return;
+      try { sink.focus(); } catch (_) {}
+    };
+    // Mantener foco: si se pierde, volver a enfocar en el próximo tick
+    sink.addEventListener('blur', () => setTimeout(refocus, 0));
+    // Enfocar inicialmente
+    refocus();
     
-    // Iniciar escucha
-    // Asegurar foco al input específico antes de escuchar
-    const ventasField = document.querySelector('input[name="codigoBarras"], input[id="codigoBarras"], input[placeholder*="buscar producto"]');
-    if (ventasField) {
-      ventasField.focus();
-      // Colocar caret al final sin modificar valor
-      const val = ventasField.value || '';
-      ventasField.setSelectionRange(val.length, val.length);
-    }
+  // Iniciar escucha (sin requerir foco)
     barcodeDetector.startListening();
     console.log('[VENTAS] Detector iniciado');
     
@@ -297,9 +454,15 @@ export function useVentas() {
       if (window.barcodeDetectorInstance === barcodeDetector) {
         delete window.barcodeDetectorInstance;
       }
+      delete window.__barcodeAutoScanActive;
       if (window.barcodeTimeout) {
         clearTimeout(window.barcodeTimeout);
         delete window.barcodeTimeout;
+      }
+      // Remover input oculto
+      const existing = document.getElementById('__autoScanSink');
+      if (existing && existing.parentNode) {
+        try { existing.remove(); } catch (_) { existing.parentNode.removeChild(existing); }
       }
     };
   }, [deteccionAutomaticaActiva, buscarPorCodigoBarras]);
@@ -392,11 +555,19 @@ export function useVentas() {
       return;
     }
     
-    setProductos(productos.map(p => 
-      p.codigo === codigo 
-        ? { ...p, cantidad: nuevaCantidad, subtotal: nuevaCantidad * p.precio }
-        : p
-    ));
+    setProductos(productos.map(p => {
+      if (p.codigo !== codigo) return p;
+      const maxCant = parseInt(p.stock ?? 0, 10) || 0;
+      const cant = Math.min(nuevaCantidad, Math.max(maxCant, 0));
+      if (cant < nuevaCantidad) {
+        if (window.barcodeDetectorInstance) {
+          window.barcodeDetectorInstance.playErrorSound?.();
+          window.barcodeDetectorInstance.vibrate?.('error');
+        }
+        alert('No puede superar el stock disponible para este producto.');
+      }
+      return { ...p, cantidad: cant, subtotal: cant * p.precio };
+    }));
   };
 
   // Función para eliminar producto
@@ -457,6 +628,32 @@ export function useVentas() {
 
     setLoading(true);
     try {
+      // Validar stock actual en BD antes de iniciar transacción
+      for (const item of productos) {
+        try {
+          const res = await window.electronAPI.dbGetSingle('SELECT almacen, producto FROM producto WHERE codigo = ?', [item.codigo]);
+          const disponible = parseInt(res?.data?.almacen ?? 0, 10) || 0;
+          if (disponible < item.cantidad) {
+            if (window.barcodeDetectorInstance) {
+              window.barcodeDetectorInstance.playErrorSound?.();
+              window.barcodeDetectorInstance.vibrate?.('error');
+            }
+            alert(`Stock insuficiente para "${res?.data?.producto ?? item.descripcion}". Disponible: ${disponible}, solicitado: ${item.cantidad}`);
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error('Error verificando stock antes de guardar:', e);
+          if (window.barcodeDetectorInstance) {
+            window.barcodeDetectorInstance.playErrorSound?.();
+            window.barcodeDetectorInstance.vibrate?.('error');
+          }
+          alert('No se pudo validar el stock actual. Intente nuevamente.');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Preparar datos de la venta
       const tipoTexto = (ventaData.tipo_comprobante === 'factura') ? 'Factura' : 'Nota de venta';
       const fechaIso = new Date().toISOString();
