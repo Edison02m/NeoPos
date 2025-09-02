@@ -557,6 +557,56 @@ class WindowManager {
         ]
       },
       {
+        label: 'Editar',
+        submenu: [
+          {
+            label: 'Tipo de venta',
+            submenu: [
+              {
+                label: 'Venta al contado',
+                type: 'radio',
+                checked: true,
+                click: () => ventasWindow.webContents.send('menu-venta-contado')
+              },
+              {
+                label: 'Venta a crédito',
+                type: 'radio',
+                click: () => ventasWindow.webContents.send('menu-venta-credito')
+              },
+              {
+                label: 'Venta con plan acumulativo',
+                type: 'radio',
+                click: () => ventasWindow.webContents.send('menu-venta-plan')
+              }
+            ]
+          },
+          { type: 'separator' },
+          {
+            label: 'Pago en efectivo',
+            click: () => ventasWindow.webContents.send('menu-pago-efectivo')
+          },
+          {
+            label: 'Pago con cheque',
+            click: () => ventasWindow.webContents.send('menu-pago-cheque')
+          },
+          {
+            label: 'Pago con tarjeta de crédito',
+            submenu: [
+              { label: 'Mastercard', click: () => ventasWindow.webContents.send('menu-pago-tarjeta-mastercard') },
+              { label: 'Visa', click: () => ventasWindow.webContents.send('menu-pago-tarjeta-visa') },
+              { label: 'Diners Club', click: () => ventasWindow.webContents.send('menu-pago-tarjeta-diners') },
+              { label: 'Cuota Fácil', click: () => ventasWindow.webContents.send('menu-pago-tarjeta-cuota-facil') },
+              { label: 'American Express', click: () => ventasWindow.webContents.send('menu-pago-tarjeta-amex') }
+            ]
+          },
+          { type: 'separator' },
+          {
+            label: 'Editar comprobante…',
+            click: () => ventasWindow.webContents.send('menu-editar-comprobante')
+          }
+        ]
+      },
+      {
         label: 'Ventana',
         submenu: [
           {

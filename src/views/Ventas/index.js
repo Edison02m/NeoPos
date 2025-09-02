@@ -3,6 +3,7 @@ import useVentas from '../../hooks/useVentas';
 import ActionPanel from './ActionPanel';
 import TotalesPanel from './TotalesPanel';
 import BuscarProductoModal from './BuscarProductoModal';
+import TipoPagoModal from './TipoPagoModal';
 import { useEffect, useState } from 'react';
 
 const VentasView = () => {
@@ -14,7 +15,8 @@ const VentasView = () => {
     cliente,
     ventaData,
     ventaActiva,
-    tipoVenta,
+  tipoVenta,
+  formaPago,
     searchModalOpen,
     resultadosBusqueda,
     clienteSugerencias,
@@ -27,7 +29,9 @@ const VentasView = () => {
     setCodigoBarras,
     setBusquedaProducto,
     setVentaData,
-    setTipoVenta,
+  setTipoVenta,
+  setFormaPago,
+  setCreditoConfig,
     setSearchModalOpen,
     
     // Funciones
@@ -51,6 +55,7 @@ const VentasView = () => {
   // Historial de ventas (simple)
   const [historialOpen, setHistorialOpen] = useState(false);
   const [ventasHistorial, setVentasHistorial] = useState([]);
+  const [tipoPagoModalOpen, setTipoPagoModalOpen] = useState(false);
 
   useEffect(() => {
     if (!window.electronAPI?.onMenuAction) return;
@@ -79,6 +84,54 @@ const VentasView = () => {
             if (res.success) setVentasHistorial(res.data || []);
             setHistorialOpen(true);
           } catch (_) {}
+          break;
+        case 'menu-venta-contado':
+          setTipoVenta('contado');
+          break;
+        case 'menu-venta-credito':
+          setTipoVenta('credito');
+          break;
+        case 'menu-venta-plan':
+          setTipoVenta('plan');
+          break;
+        case 'menu-pago-efectivo':
+          setFormaPago({ tipo: 'efectivo', tarjeta: null });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-pago-cheque':
+          setFormaPago({ tipo: 'cheque', tarjeta: null });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-pago-tarjeta-mastercard':
+          setFormaPago({ tipo: 'tarjeta', tarjeta: 'Mastercard' });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-pago-tarjeta-visa':
+          setFormaPago({ tipo: 'tarjeta', tarjeta: 'Visa' });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-pago-tarjeta-diners':
+          setFormaPago({ tipo: 'tarjeta', tarjeta: 'Diners Club' });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-pago-tarjeta-cuota-facil':
+          setFormaPago({ tipo: 'tarjeta', tarjeta: 'Cuota Fácil' });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-pago-tarjeta-amex':
+          setFormaPago({ tipo: 'tarjeta', tarjeta: 'American Express' });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-editar-comprobante':
+          {
+            const nuevoTipo = window.prompt('Tipo de comprobante (nota/factura):', ventaData.tipo_comprobante || 'nota');
+            if (nuevoTipo && (nuevoTipo === 'nota' || nuevoTipo === 'factura')) {
+              const nuevoNumero = window.prompt('Número de comprobante:', ventaData.numero_comprobante || '');
+              if (nuevoNumero) {
+                setVentaData({ ...ventaData, tipo_comprobante: nuevoTipo, numero_comprobante: nuevoNumero });
+              }
+            }
+          }
           break;
         default:
           break;
@@ -166,6 +219,10 @@ const VentasView = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
                 />
               </div>
+            </div>
+            <div className="text-xs text-gray-600 mt-2">
+              Tipo de venta: <span className="font-semibold">{tipoVenta}</span> · Forma de pago: <span className="font-semibold">{formaPago?.tipo}{formaPago?.tarjeta ? ` (${formaPago.tarjeta})` : ''}</span>
+              <button className="ml-3 px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300" onClick={() => setTipoPagoModalOpen(true)}>Cambiar…</button>
             </div>
           </div>
 
@@ -482,6 +539,17 @@ const VentasView = () => {
           </div>
         </div>
       )}
+      <TipoPagoModal
+        isOpen={tipoPagoModalOpen}
+        onClose={() => setTipoPagoModalOpen(false)}
+        tipoVenta={tipoVenta}
+        setTipoVenta={setTipoVenta}
+        formaPago={formaPago}
+        setFormaPago={setFormaPago}
+        creditoConfig={{}}
+        setCreditoConfig={setCreditoConfig}
+        total={totales.total}
+      />
   </>
   );
 };

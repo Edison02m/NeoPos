@@ -225,12 +225,48 @@ class DatabaseController {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE
     )`;
+
+    // Tabla legacy 'venta' (singular) para compatibilidad con sistemas anteriores
+    const ventaLegacyTable = `CREATE TABLE IF NOT EXISTS venta (
+      id TEXT(14) NOT NULL,
+      idcliente TEXT(14),
+      fecha TEXT,
+      subtotal REAL(9, 3),
+      descuento REAL(8, 2),
+      total REAL(8, 2),
+      fpago REAL(11, 0),
+      comprob TEXT(1),
+      numfactura TEXT(50),
+      formapago REAL(11, 0),
+      anulado TEXT(1),
+      codempresa INTEGER NOT NULL,
+      iva REAL(9, 3),
+      fechapago TEXT,
+      usuario TEXT(21),
+      ordencompra TEXT(60),
+      ispago TEXT(1),
+      transporte REAL(8, 2),
+      trial279 TEXT(1)
+    )`;
+
+    // Tabla para plazos y abonos de la venta
+    const ventaCuotasTable = `CREATE TABLE IF NOT EXISTS venta_cuotas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      venta_id TEXT NOT NULL,
+      plazo_dias INTEGER NOT NULL,
+      abono_inicial REAL NOT NULL DEFAULT 0,
+      saldo REAL NOT NULL DEFAULT 0,
+      fechapago TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`;
     
     await this.runQuery(usuarioTable);
     await this.runQuery(empresaTable);
     await this.runQuery(clienteTable);
     await this.runQuery(ventasTable);
     await this.runQuery(ventaItemsTable);
+  await this.runQuery(ventaLegacyTable);
+  await this.runQuery(ventaCuotasTable);
   }
 
   async updateTableStructures() {

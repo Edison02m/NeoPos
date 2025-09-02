@@ -18,6 +18,10 @@ export function useVentas() {
   const [busquedaProducto, setBusquedaProducto] = useState('');
   const [ventaActiva, setVentaActiva] = useState(false);
   const [tipoVenta, setTipoVenta] = useState('contado'); // contado | credito | plan
+  // Forma de pago y detalle de tarjeta (cuando aplique)
+  const [formaPago, setFormaPago] = useState({ tipo: 'efectivo', tarjeta: null });
+  // Configuración de crédito/plan: plazo y abono inicial
+  const [creditoConfig, setCreditoConfig] = useState({ plazoDias: 30, abonoInicial: 0 });
   const [deteccionAutomaticaActiva, setDeteccionAutomaticaActiva] = useState(false); // Estado para controlar detección automática
   const [cliente, setCliente] = useState({
     nombres: '',
@@ -668,7 +672,7 @@ export function useVentas() {
         }
       }
 
-      // Insertar venta
+  // Insertar venta
   const ventaInsert = await window.electronAPI.dbRun(
         `INSERT INTO ventas (
           numero_comprobante, tipo_comprobante, fecha,
@@ -707,6 +711,91 @@ export function useVentas() {
         alert('No se pudo registrar la venta: ID de venta no generado.');
         setLoading(false);
         return;
+      }
+
+  // Registrar también en tabla legacy 'venta' (singular) y, si corresponde, cuotas
+      const buildLegacyId = () => {
+        const d = new Date();
+        const p = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`.slice(0, 14);
+      };
+      const legacyId = buildLegacyId();
+
+      // Mapear forma de venta y forma de pago a códigos numéricos sencillos
+      const tipoVentaCode = tipoVenta === 'contado' ? 0 : (tipoVenta === 'credito' ? 1 : 2);
+      const formaPagoCode = (fp) => {
+        if (!fp) return 1;
+        const t = (fp.tipo || 'efectivo').toLowerCase();
+        return t === 'cheque' ? 2 : t.startsWith('tarjeta') ? 3 : 1;
+      };
+
+      // Determinar comprobante (F para factura, N para nota de venta)
+      const comprobSigla = (ventaData.tipo_comprobante === 'factura') ? 'F' : 'N';
+      const numFactura = (ventaData.tipo_comprobante === 'factura') ? (ventaData.numero_comprobante || null) : null;
+
+      // Datos de plazo/abono cuando aplica
+      let plazoDias = 0;
+      let abonoInicial = 0;
+      let saldo = Number(totales.total) || 0;
+      let fechaPagoStr = null;
+      if (tipoVenta === 'credito' || tipoVenta === 'plan') {
+        plazoDias = Math.max(parseInt(creditoConfig?.plazoDias ?? 0, 10) || 0, 0);
+        abonoInicial = Math.max(parseFloat(creditoConfig?.abonoInicial ?? 0) || 0, 0);
+        if (abonoInicial > saldo) abonoInicial = saldo;
+        saldo = Math.max(saldo - abonoInicial, 0);
+        const f = new Date();
+        f.setDate(f.getDate() + plazoDias);
+        fechaPagoStr = f.toISOString();
+      }
+
+      // Insertar fila legacy
+      const legacyInsert = await window.electronAPI.dbRun(
+        `INSERT INTO venta (
+          id, idcliente, fecha, subtotal, descuento, total,
+          fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
+          fechapago, usuario, ordencompra, ispago, transporte, trial279
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          legacyId,
+          cliente.ruc || null,
+          fechaIso,
+          Number(totales.subtotal) || 0,
+          0,
+          Number(totales.total) || 0,
+          tipoVentaCode,
+          comprobSigla,
+          numFactura,
+          formaPagoCode(formaPago),
+          'N',
+          1,
+          Number(totales.iva) || 0,
+          fechaPagoStr,
+          'admin',
+          null,
+          (tipoVenta === 'contado') ? 'S' : 'N',
+          0,
+          '0'
+        ]
+      );
+      if (!legacyInsert || legacyInsert.success === false) {
+        try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+        alert('No se pudo registrar en la tabla "venta" (compatibilidad). La operación fue revertida.');
+        setLoading(false);
+        return;
+      }
+
+      // Si tiene plazo/abono, registrar en venta_cuotas
+      if (tipoVenta === 'credito' || tipoVenta === 'plan') {
+        const cuotasInsert = await window.electronAPI.dbRun(
+          `INSERT INTO venta_cuotas (venta_id, plazo_dias, abono_inicial, saldo, fechapago) VALUES (?, ?, ?, ?, ?)`,
+          [legacyId, plazoDias, abonoInicial, saldo, fechaPagoStr]
+        );
+        if (!cuotasInsert || cuotasInsert.success === false) {
+          try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+          alert('No se pudo registrar plazos/abonos. La operación fue revertida.');
+          setLoading(false);
+          return;
+        }
       }
 
       // Insertar items y actualizar stock
@@ -789,6 +878,8 @@ export function useVentas() {
     loading,
     totales,
     deteccionAutomaticaActiva,
+  formaPago,
+  creditoConfig,
     
     // Setters
     setCodigoBarras,
@@ -796,6 +887,8 @@ export function useVentas() {
     setCliente,
   setVentaData,
   setTipoVenta,
+  setFormaPago,
+  setCreditoConfig,
     setSearchModalOpen,
     
     // Funciones
