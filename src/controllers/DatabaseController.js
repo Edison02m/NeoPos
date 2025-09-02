@@ -191,10 +191,46 @@ class DatabaseController {
       trial272 TEXT(1),
       PRIMARY KEY (cod)
     )`;
+
+    // Tabla de ventas
+    const ventasTable = `CREATE TABLE IF NOT EXISTS ventas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      numero_comprobante TEXT NOT NULL UNIQUE,
+      tipo_comprobante TEXT NOT NULL,
+      fecha TEXT NOT NULL,
+      subtotal REAL NOT NULL DEFAULT 0,
+      descuento REAL NOT NULL DEFAULT 0,
+      iva REAL NOT NULL DEFAULT 0,
+      total REAL NOT NULL DEFAULT 0,
+      cliente_nombres TEXT,
+      cliente_apellidos TEXT,
+      cliente_ruc_ci TEXT,
+      cliente_telefono TEXT,
+      cliente_direccion TEXT,
+      estado TEXT DEFAULT 'activa',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`;
+
+    // Tabla de items de venta
+    const ventaItemsTable = `CREATE TABLE IF NOT EXISTS venta_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      venta_id INTEGER NOT NULL,
+      producto_id INTEGER NOT NULL,
+      codigo_barras TEXT,
+      descripcion TEXT NOT NULL,
+      cantidad REAL NOT NULL,
+      precio_unitario REAL NOT NULL,
+      subtotal REAL NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE
+    )`;
     
     await this.runQuery(usuarioTable);
     await this.runQuery(empresaTable);
     await this.runQuery(clienteTable);
+    await this.runQuery(ventasTable);
+    await this.runQuery(ventaItemsTable);
   }
 
   async updateTableStructures() {

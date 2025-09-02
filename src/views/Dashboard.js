@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Empresa from '../models/Empresa';
 
 const Dashboard = ({ user, onLogout }) => {
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [empresaData, setEmpresaData] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -69,7 +71,6 @@ const Dashboard = ({ user, onLogout }) => {
             Bienvenido, {user?.alias || user?.usuario || 'Usuario'}
           </p>
           <div className="space-x-4">
-
             <button 
               onClick={onLogout}
               className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"

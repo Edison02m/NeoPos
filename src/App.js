@@ -73,6 +73,17 @@ function AppContent() {
             }
         };
 
+        // Handle navigation messages from menu
+        const handleMenuNavigation = (event) => {
+            if (event.data && event.data.type === 'NAVIGATE_TO') {
+                console.log('[APP] Navegando a:', event.data.path);
+                navigate(event.data.path);
+            }
+        };
+
+        // Listen for navigation messages
+        window.addEventListener('message', handleMenuNavigation);
+
     
     
     
@@ -110,6 +121,7 @@ function AppContent() {
             
             return () => {
                 if (removeListener) removeListener();
+                window.removeEventListener('message', handleMenuNavigation);
             };
         } else {
         

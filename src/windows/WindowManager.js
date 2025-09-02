@@ -14,7 +14,21 @@ class WindowManager {
   // Helper para cargar URL o archivo según el modo
   loadContent(window, route) {
     if (this.isDevelopment()) {
-      window.loadURL(`http://localhost:3000/#${route}`);
+      const targetUrl = `http://localhost:3000/#${route}`;
+      console.log(`[WindowManager] Cargando URL (dev): ${targetUrl}`);
+      window.loadURL(targetUrl);
+
+      // Diagnósticos de carga en desarrollo
+      window.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error('[WindowManager] did-fail-load:', { errorCode, errorDescription, validatedURL });
+      });
+      window.webContents.on('did-finish-load', () => {
+        console.log('[WindowManager] did-finish-load OK:', targetUrl);
+      });
+      window.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        // Reenviar mensajes de consola del renderer al proceso principal para depuración
+        console.log(`[Renderer][lvl:${level}] ${message} (${sourceId}:${line})`);
+      });
     } else {
       // En producción, usar la misma ruta que la ventana principal
       // Buscar el index.html en varios lugares posibles
@@ -431,6 +445,144 @@ class WindowManager {
 
     this.windows.set('inventario', inventarioWindow);
     return inventarioWindow;
+  }
+
+  createVentasWindow(parentWindow) {
+    const ventasWindow = new BrowserWindow({
+      width: 1400,
+      height: 900,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Punto de Venta',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(ventasWindow, '/ventas');
+
+    // Logs adicionales de diagnóstico específicos para Ventas
+    ventasWindow.webContents.on('dom-ready', () => {
+      console.log('[VentasWindow] dom-ready');
+    });
+    ventasWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('[VentasWindow] did-fail-load:', { errorCode, errorDescription, validatedURL });
+    });
+    ventasWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      console.log(`[VentasWindow][lvl:${level}] ${message} (${sourceId}:${line})`);
+    });
+
+    // Menú específico para la ventana de ventas
+    const menuTemplate = [
+      {
+        label: 'Ventas',
+        submenu: [
+          {
+            label: 'Nueva Venta',
+            accelerator: 'Ctrl+N',
+            click: () => {
+              ventasWindow.webContents.send('menu-nueva-venta');
+            }
+          },
+          {
+            label: 'Buscar Producto',
+            accelerator: 'F2',
+            click: () => {
+              ventasWindow.webContents.send('menu-buscar-producto');
+            }
+          },
+          {
+            label: 'Guardar Venta',
+            accelerator: 'Ctrl+S',
+            click: () => {
+              ventasWindow.webContents.send('menu-guardar-venta');
+            }
+          },
+          { type: 'separator' },
+          {
+            label: 'Imprimir Comprobante',
+            accelerator: 'Ctrl+P',
+            click: () => {
+              ventasWindow.webContents.send('menu-imprimir-comprobante');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Cliente',
+        submenu: [
+          {
+            label: 'Buscar Cliente',
+            accelerator: 'Ctrl+F',
+            click: () => {
+              ventasWindow.webContents.send('menu-buscar-cliente');
+            }
+          },
+          {
+            label: 'Nuevo Cliente',
+            accelerator: 'Ctrl+Alt+N',
+            click: () => {
+              ventasWindow.webContents.send('menu-nuevo-cliente');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Ver',
+        submenu: [
+          {
+            label: 'Actualizar',
+            accelerator: 'F5',
+            click: () => {
+              ventasWindow.webContents.reload();
+            }
+          },
+          {
+            label: 'Herramientas de Desarrollador',
+            accelerator: 'F12',
+            click: () => {
+              ventasWindow.webContents.openDevTools();
+            }
+          }
+        ]
+      },
+      {
+        label: 'Ventana',
+        submenu: [
+          {
+            label: 'Cerrar',
+            accelerator: 'Ctrl+W',
+            click: () => {
+              ventasWindow.close();
+            }
+          }
+        ]
+      }
+    ];
+
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    ventasWindow.setMenu(menu);
+
+    ventasWindow.once('ready-to-show', () => {
+      ventasWindow.show();
+    });
+
+    ventasWindow.on('closed', () => {
+      this.windows.delete('ventas');
+    });
+
+    this.windows.set('ventas', ventasWindow);
+    return ventasWindow;
   }
 
   closeWindow(windowName) {

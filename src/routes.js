@@ -9,6 +9,7 @@ import ClientesView from './views/Client/index';
 import ProveedoresView from './views/Proveedor/index';
 import ProductosView from './views/Producto/index';
 import InventarioView from './views/Inventario/index';
+import VentasView from './views/Ventas/index';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -68,6 +69,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/inventario" 
         element={<InventarioView />} 
+      />
+      <Route 
+        path="/ventas" 
+        element={<VentasView />} 
       />
     </Routes>
   );

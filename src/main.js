@@ -3,6 +3,15 @@ const path = require('path');
 const DatabaseController = require('./controllers/DatabaseController');
 const WindowManager = require('./windows/WindowManager');
 
+// Mitigar problemas de pantalla en blanco en Windows por fallos de GPU
+// Ref: https://www.electronjs.org/docs/latest/api/app#appdisablehardwareacceleration
+try {
+  app.disableHardwareAcceleration();
+  console.log('⚙️  Hardware acceleration disabled to prevent white screen issues');
+} catch (e) {
+  console.warn('No se pudo deshabilitar la aceleración por hardware:', e?.message);
+}
+
 class MainController {
   constructor() {
     this.mainWindow = null;
@@ -30,8 +39,8 @@ class MainController {
       // Configurar menú inicial
       this.setupMenu(false); // Start with login menu
       
-      this.isInitialized = true;
-      console.log('✅ Aplicación inicializada correctamente');
+  this.isInitialized = true;
+  console.log('✅ Aplicación inicializada correctamente');
       
     } catch (error) {
       console.error('❌ Error crítico al inicializar la aplicación:', error);
@@ -133,7 +142,7 @@ class MainController {
               label: 'Ventas',
               accelerator: 'CmdOrCtrl+V',
               click: () => {
-                this.mainWindow.webContents.send('menu-transactions-sales');
+                this.windowManager.createVentasWindow(this.mainWindow);
               }
             },
             {
@@ -448,6 +457,14 @@ class MainController {
       return { success: true };
     });
 
+    ipcMain.handle('open-ventas-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createVentasWindow(this.mainWindow);
+      return { success: true };
+    });
+
     // Agregar listener para debugging de eventos de menú
     ipcMain.handle('debug-menu-event', (event, menuEvent) => {
       console.log('Debug: Simulando evento de menú:', menuEvent);
@@ -563,6 +580,72 @@ class MainController {
           success: false,
           data: null,
           message: 'Error al generar reporte de inventario: ' + error.message
+        };
+      }
+    });
+
+    // ==================== HANDLERS DE VENTAS ====================
+    
+    // Crear nueva venta
+    ipcMain.handle('venta-crear', async (event, { venta, items }) => {
+      try {
+        const VentaController = require('./controllers/VentaController');
+        const controller = new VentaController();
+        return await controller.createVenta(venta, items);
+      } catch (error) {
+        console.error('Error al crear venta:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al crear venta: ' + error.message
+        };
+      }
+    });
+
+    // Buscar productos para ventas
+    ipcMain.handle('producto-buscar', async (event, { termino }) => {
+      try {
+        const VentaController = require('./controllers/VentaController');
+        const controller = new VentaController();
+        return await controller.buscarProducto(termino);
+      } catch (error) {
+        console.error('Error al buscar productos:', error);
+        return {
+          success: false,
+          data: [],
+          message: 'Error al buscar productos: ' + error.message
+        };
+      }
+    });
+
+    // Buscar cliente por RUC
+    ipcMain.handle('cliente-buscar-ruc', async (event, { ruc }) => {
+      try {
+        const VentaController = require('./controllers/VentaController');
+        const controller = new VentaController();
+        return await controller.buscarClientePorRuc(ruc);
+      } catch (error) {
+        console.error('Error al buscar cliente:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al buscar cliente: ' + error.message
+        };
+      }
+    });
+
+    // Obtener último número de comprobante
+    ipcMain.handle('obtener-ultimo-comprobante', async (event, { tipo }) => {
+      try {
+        const VentaController = require('./controllers/VentaController');
+        const controller = new VentaController();
+        return await controller.obtenerUltimoNumeroComprobante(tipo);
+      } catch (error) {
+        console.error('Error al obtener número de comprobante:', error);
+        return {
+          success: false,
+          data: null,
+          message: 'Error al obtener número de comprobante: ' + error.message
         };
       }
     });

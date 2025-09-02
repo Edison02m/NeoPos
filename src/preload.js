@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openProveedorWindow: () => ipcRenderer.invoke('open-proveedor-window'),
     openProductoWindow: () => ipcRenderer.invoke('open-producto-window'),
     openInventarioWindow: () => ipcRenderer.invoke('open-inventario-window'),
+    openVentasWindow: () => ipcRenderer.invoke('open-ventas-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
     closeCurrentWindow: () => ipcRenderer.invoke('close-current-window'),
 
