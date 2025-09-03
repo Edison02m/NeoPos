@@ -4,6 +4,7 @@ import ActionPanel from './ActionPanel';
 import TotalesPanel from './TotalesPanel';
 import BuscarProductoModal from './BuscarProductoModal';
 import TipoPagoModal from './TipoPagoModal';
+import Modal from '../../components/Modal';
 import { useEffect, useState } from 'react';
 
 const VentasView = () => {
@@ -49,7 +50,11 @@ const VentasView = () => {
     cambiarTipoComprobante,
     handleCodigoBarrasChange,
     detectarCodigoBarras,
-    toggleDeteccionAutomatica
+    toggleDeteccionAutomatica,
+    // Modal functions and state
+    modalState,
+    showAlert,
+    showConfirm
   } = useVentas();
 
   // Ensure a comprobante number is always present for the current type
@@ -567,6 +572,16 @@ const VentasView = () => {
         creditoConfig={{}}
         setCreditoConfig={setCreditoConfig}
         total={totales.total}
+      />
+
+      {/* Modal de alertas y confirmaciones */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={modalState.onClose}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
       />
   </>
   );

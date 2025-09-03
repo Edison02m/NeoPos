@@ -3,6 +3,7 @@ import ProductoController from '../controllers/ProductoController';
 import ClienteController from '../controllers/ClienteController';
 import AbonoLegacy from '../models/AbonoLegacy';
 import CreditoLegacy from '../models/CreditoLegacy';
+import useModal from './useModal';
 import * as BD from '../utils/barcodeDetector';
 // Resolver compatible: intenta named, default o factory
 const __resolveBarcodeCtor = () => {
@@ -20,6 +21,9 @@ export function useVentas() {
     // Evitar -0
     return x === 0 ? 0 : x;
   };
+
+  // Hook para mostrar modales
+  const { modalState, showAlert, showConfirm } = useModal();
   // Estados principales
   const [productos, setProductos] = useState([]);
   const [codigoBarras, setCodigoBarras] = useState('');
@@ -76,53 +80,120 @@ export function useVentas() {
   const generarNumeroComprobante = useCallback(async (tipo = 'nota') => {
     try {
       if (!window?.electronAPI?.dbGetSingle) {
+        // Fallback si no hay acceso a BD
         const ts = Date.now().toString().slice(-6);
         const base = tipo === 'factura' ? '002-001' : '001-001';
         setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: `${base}-${ts}` }));
         return;
       }
-      const tipoTexto = tipo === 'factura' ? 'Factura' : 'Nota de venta';
-  // Legacy no lleva correlativo; fallback simple
-  const ts = Date.now().toString().slice(-5);
-  const base = tipo === 'factura' ? '002-001' : '001-001';
-  setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: `${base}-${ts}` }));
+
+      // Obtener el último número de comprobante para el tipo específico
+      let ultimoNumero = 0;
+      
+      if (tipo === 'factura') {
+        // Para facturas, buscar en el campo numfactura
+        const result = await window.electronAPI.dbGetSingle(
+          "SELECT numfactura FROM venta WHERE comprob = 'F' AND numfactura IS NOT NULL ORDER BY id DESC LIMIT 1"
+        );
+        if (result?.success && result.data?.numfactura) {
+          // Extraer el número secuencial del formato 002-001-000001
+          const parts = result.data.numfactura.split('-');
+          if (parts.length === 3) {
+            ultimoNumero = parseInt(parts[2]) || 0;
+          }
+        }
+      } else {
+        // Para notas de venta, buscar en ordencompra donde se almacena el número de nota
+        const result = await window.electronAPI.dbGetSingle(
+          "SELECT ordencompra FROM venta WHERE comprob = 'N' AND ordencompra IS NOT NULL AND ordencompra LIKE '%-%' ORDER BY id DESC LIMIT 1"
+        );
+        
+        if (result?.success && result.data?.ordencompra) {
+          // Extraer el número secuencial del formato 001-001-000001
+          const parts = result.data.ordencompra.split('-');
+          if (parts.length === 3) {
+            ultimoNumero = parseInt(parts[2]) || 0;
+          }
+        }
+      }
+
+      // Incrementar el número
+      const siguienteNumero = ultimoNumero + 1;
+      
+      // Formatear según el tipo de comprobante
+      let numeroCompleto;
+      if (tipo === 'factura') {
+        // Formato: 002-001-000001 (para facturas)
+        numeroCompleto = `002-001-${siguienteNumero.toString().padStart(6, '0')}`;
+      } else {
+        // Formato: 001-001-000001 (para notas de venta)
+        numeroCompleto = `001-001-${siguienteNumero.toString().padStart(6, '0')}`;
+      }
+
+      setVentaData(prev => ({ 
+        ...prev, 
+        tipo_comprobante: tipo, 
+        numero_comprobante: numeroCompleto 
+      }));
+      
     } catch (e) {
       console.error('Error generando número de comprobante:', e);
-      const ts = Date.now().toString().slice(-5);
+      // Fallback en caso de error
+      const ts = Date.now().toString().slice(-6);
       const base = tipo === 'factura' ? '002-001' : '001-001';
-      setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: `${base}-${ts}` }));
+      setVentaData(prev => ({ 
+        ...prev, 
+        tipo_comprobante: tipo, 
+        numero_comprobante: `${base}-${ts}` 
+      }));
     }
   }, []);
 
   // Función para agregar producto a la lista
   const agregarProducto = useCallback((producto) => {
+    console.log('=== AGREGAR PRODUCTO ===');
+    console.log('Producto recibido:', JSON.stringify(producto, null, 2));
+    
     setProductos(prev => {
-      const stock = parseInt(producto.almacen ?? producto.stock ?? 0, 10) || 0;
+      // Calcular stock total de todas las bodegas
+      const almacen = parseInt(producto.almacen ?? 0, 10) || 0;
+      const bodega1 = parseInt(producto.bodega1 ?? 0, 10) || 0;
+      const bodega2 = parseInt(producto.bodega2 ?? 0, 10) || 0;
+      const stockTotal = almacen + bodega1 + bodega2;
+      
+      console.log('Stock en agregarProducto:');
+      console.log('- almacen:', almacen);
+      console.log('- bodega1:', bodega1);
+      console.log('- bodega2:', bodega2);
+      console.log('- total:', stockTotal);
+      
       const existente = prev.find(p => p.codigo === producto.codigo);
 
       // No permitir venta si no hay stock
-      if (!existente && stock <= 0) {
+      if (!existente && stockTotal <= 0) {
+        console.log('=== RECHAZADO EN AGREGAR PRODUCTO ===');
+        console.log('Stock total:', stockTotal);
         if (window.barcodeDetectorInstance) {
           window.barcodeDetectorInstance.playErrorSound?.();
           window.barcodeDetectorInstance.vibrate?.('error');
         }
-        alert('Stock insuficiente: el producto no tiene existencias.');
+        showAlert('Stock insuficiente: el producto no tiene existencias.', 'Error');
         return prev;
       }
 
       if (existente) {
-        if (existente.cantidad >= (existente.stock || stock || 0)) {
+        if (existente.cantidad >= (existente.stock || stockTotal || 0)) {
           if (window.barcodeDetectorInstance) {
             window.barcodeDetectorInstance.playErrorSound?.();
             window.barcodeDetectorInstance.vibrate?.('error');
           }
-          alert('No puede superar el stock disponible para este producto.');
+          showAlert('No puede superar el stock disponible para este producto.', 'Error');
           return prev;
         }
         // Incrementar sin superar stock
         return prev.map(p => {
           if (p.codigo !== producto.codigo) return p;
-          const nuevaCantidad = Math.min((p.cantidad + 1), (p.stock || stock || 0));
+          const nuevaCantidad = Math.min((p.cantidad + 1), (p.stock || stockTotal || 0));
           return { ...p, cantidad: nuevaCantidad, subtotal: nuevaCantidad * p.precio };
         });
       }
@@ -135,12 +206,16 @@ export function useVentas() {
         descripcion: producto.producto || producto.descripcion,
         precio,
         cantidad: 1,
-        stock: stock,
+        stock: stockTotal,
         subtotal: precio
       };
+      
+      console.log('=== PRODUCTO AGREGADO EXITOSAMENTE ===');
+      console.log('Nuevo producto:', nuevoProducto);
+      
       return [...prev, nuevoProducto];
     });
-  }, []);
+  }, [showAlert]);
 
   // Función para buscar productos por código de barras
   const buscarPorCodigoBarras = useCallback(async (codigo) => {
@@ -164,18 +239,42 @@ export function useVentas() {
       }
       
       if (response.success && response.data) {
-        console.log('Producto encontrado:', response.data);
-        // Validar stock antes de agregar
-        const stock = parseInt(response.data.almacen ?? 0, 10) || 0;
-        if (stock <= 0) {
+        console.log('=== PRODUCTO ENCONTRADO ===');
+        console.log('Datos completos del producto:', JSON.stringify(response.data, null, 2));
+        console.log('Campo almacen:', response.data.almacen);
+        console.log('Tipo de almacen:', typeof response.data.almacen);
+        console.log('Campo bodega1:', response.data.bodega1);
+        console.log('Campo bodega2:', response.data.bodega2);
+        
+        // Validar stock antes de agregar - probemos diferentes campos
+        const almacen = response.data.almacen;
+        const bodega1 = response.data.bodega1;
+        const bodega2 = response.data.bodega2;
+        
+        console.log('Valores originales - almacen:', almacen, 'bodega1:', bodega1, 'bodega2:', bodega2);
+        
+        const stockAlmacen = parseInt(almacen ?? 0, 10) || 0;
+        const stockBodega1 = parseInt(bodega1 ?? 0, 10) || 0;
+        const stockBodega2 = parseInt(bodega2 ?? 0, 10) || 0;
+        const stockTotal = stockAlmacen + stockBodega1 + stockBodega2;
+        
+        console.log('Stock parseado - almacen:', stockAlmacen, 'bodega1:', stockBodega1, 'bodega2:', stockBodega2);
+        console.log('Stock total:', stockTotal);
+        
+        if (stockTotal <= 0) {
+          console.log('=== STOCK INSUFICIENTE ===');
+          console.log('Stock total calculado:', stockTotal);
           if (window.barcodeDetectorInstance) {
             window.barcodeDetectorInstance.playErrorSound?.();
             window.barcodeDetectorInstance.vibrate?.('error');
           }
-          alert('Producto sin existencias. No se puede vender.');
+          showAlert('Producto sin existencias. No se puede vender.', 'Error');
           setCodigoBarras('');
           return;
         }
+        
+        console.log('=== STOCK SUFICIENTE ===');
+        console.log('Procediendo a agregar producto...');
 
         // Agregar el producto automáticamente
         agregarProducto(response.data);
@@ -195,15 +294,15 @@ export function useVentas() {
           window.barcodeDetectorInstance.vibrate('error');
         }
         
-        alert(`Producto no encontrado para el código: ${codigo}`);
+        showAlert(`Producto no encontrado para el código: ${codigo}`, 'Error');
       }
     } catch (error) {
       console.error('Error al buscar producto:', error);
-      alert('Error al buscar producto');
+      showAlert('Error al buscar producto', 'Error');
     } finally {
       setLoading(false);
     }
-  }, [agregarProducto]);
+  }, [agregarProducto, showAlert]);
 
   // Función para detectar automáticamente códigos de barras en el input
   const detectarCodigoBarras = useCallback((codigo) => {
@@ -592,7 +691,7 @@ export function useVentas() {
           window.barcodeDetectorInstance.playErrorSound?.();
           window.barcodeDetectorInstance.vibrate?.('error');
         }
-        alert('No puede superar el stock disponible para este producto.');
+        showAlert('No puede superar el stock disponible para este producto.', 'Error');
       }
       return { ...p, cantidad: cant, subtotal: cant * p.precio };
     }));
@@ -645,12 +744,12 @@ export function useVentas() {
   // Función para guardar venta
   const guardarVenta = async () => {
     if (productos.length === 0) {
-      alert('Debe agregar al menos un producto');
+      showAlert('Debe agregar al menos un producto', 'Error');
       return;
     }
 
     if ((tipoVenta === 'credito' || tipoVenta === 'plan') && (!cliente.ruc && !cliente.nombres)) {
-      alert('Para ventas a crédito o plan acumulativo debe seleccionar/ingresar un cliente');
+      showAlert('Para ventas a crédito o plan acumulativo debe seleccionar/ingresar un cliente', 'Error');
       return;
     }
 
@@ -666,7 +765,7 @@ export function useVentas() {
               window.barcodeDetectorInstance.playErrorSound?.();
               window.barcodeDetectorInstance.vibrate?.('error');
             }
-            alert(`Stock insuficiente para "${res?.data?.producto ?? item.descripcion}". Disponible: ${disponible}, solicitado: ${item.cantidad}`);
+            showAlert(`Stock insuficiente para "${res?.data?.producto ?? item.descripcion}". Disponible: ${disponible}, solicitado: ${item.cantidad}`, 'Error');
             setLoading(false);
             return;
           }
@@ -676,7 +775,7 @@ export function useVentas() {
             window.barcodeDetectorInstance.playErrorSound?.();
             window.barcodeDetectorInstance.vibrate?.('error');
           }
-          alert('No se pudo validar el stock actual. Intente nuevamente.');
+          showAlert('No se pudo validar el stock actual. Intente nuevamente.', 'Error');
           setLoading(false);
           return;
         }
@@ -709,6 +808,7 @@ export function useVentas() {
       // Determinar comprobante (F para factura, N para nota de venta)
       const comprobSigla = (ventaData.tipo_comprobante === 'factura') ? 'F' : 'N';
       const numFactura = (ventaData.tipo_comprobante === 'factura') ? (ventaData.numero_comprobante || null) : null;
+      const numNota = (ventaData.tipo_comprobante === 'nota') ? (ventaData.numero_comprobante || null) : null;
 
       // Datos de plazo/abono cuando aplica
       let plazoDias = 0;
@@ -728,7 +828,7 @@ export function useVentas() {
         fechaPagoStr = f.toISOString();
       }
 
-      // Insertar fila legacy
+      // Insertar fila legacy - usar ordencompra para números de nota de venta
       const legacyInsert = await window.electronAPI.dbRun(
         `INSERT INTO venta (
           id, idcliente, fecha, subtotal, descuento, total,
@@ -751,7 +851,7 @@ export function useVentas() {
           ivaVenta,
           fechaPagoStr,
           'admin',
-          null,
+          numNota, // Usar ordencompra para almacenar número de nota de venta
           (tipoVenta === 'contado') ? 'S' : 'N',
           0,
           '0'
@@ -759,7 +859,7 @@ export function useVentas() {
       );
       if (!legacyInsert || legacyInsert.success === false) {
         try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-        alert('No se pudo registrar en la tabla "venta" (compatibilidad). La operación fue revertida.');
+        showAlert('No se pudo registrar en la tabla "venta" (compatibilidad). La operación fue revertida.', 'Error');
         setLoading(false);
         return;
       }
@@ -839,7 +939,7 @@ export function useVentas() {
         );
         if (!stockUpdate || stockUpdate.success === false) {
           try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-          alert('No se pudo actualizar el stock. La operación fue revertida.');
+          showAlert('No se pudo actualizar el stock. La operación fue revertida.', 'Error');
           setLoading(false);
           return;
         }
@@ -848,7 +948,7 @@ export function useVentas() {
       // Confirmar transacción
   await window.electronAPI.dbRun('COMMIT');
 
-  alert('Venta guardada exitosamente');
+  showAlert('Venta guardada exitosamente', 'Éxito');
   // After blocking alert closes, ensure guard is not paused so inputs work
   delete window.__barcodeAutoScanPaused;
       limpiarVenta();
@@ -858,7 +958,7 @@ export function useVentas() {
     } catch (error) {
       console.error('Error al guardar venta:', error);
       try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-  alert('Error al guardar venta');
+  showAlert('Error al guardar venta', 'Error');
   delete window.__barcodeAutoScanPaused;
     } finally {
       setLoading(false);
@@ -914,7 +1014,11 @@ export function useVentas() {
     guardarVenta,
     handleCodigoBarrasChange,
     detectarCodigoBarras,
-    toggleDeteccionAutomatica
+    toggleDeteccionAutomatica,
+    // Modal states and functions
+    modalState,
+    showAlert,
+    showConfirm
   };
 }
 

@@ -29,6 +29,7 @@ class VentaController {
         // Mapear campos mínimos a tabla 'venta'
         const comprob = ventaData.tipo_comprobante === 'factura' ? 'F' : 'N';
         const numfactura = comprob === 'F' ? (ventaData.numero_comprobante || null) : null;
+        const ordencompra = comprob === 'N' ? (ventaData.numero_comprobante || null) : null;
         const fpago = Number(ventaData.fpago ?? 0); // 0 contado, 1 credito, 2 plan
         const formapago = Number(ventaData.formapago ?? 1); // 1 efectivo, 2 cheque, 3 tarjeta
         const fecha = ventaData.fecha || new Date().toISOString();
@@ -37,12 +38,13 @@ class VentaController {
   const descuento = round2(ventaData.descuento);
   const total = round2(ventaData.total);
 
+        // Insertar en la tabla venta usando ordencompra para números de nota de venta
         await db.run(`
           INSERT INTO venta (
             id, idcliente, fecha, subtotal, descuento, total,
             fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
             fechapago, usuario, ordencompra, ispagos, transporte, trial279
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 1, ?, NULL, 'admin', NULL, ?, 0, '0')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 1, ?, NULL, 'admin', ?, ?, 0, '0')
         `, [
           legacyId,
           ventaData.idcliente || ventaData.cliente_ruc_ci || null,
@@ -55,6 +57,7 @@ class VentaController {
           numfactura,
           formapago,
           iva,
+          ordencompra, // Usar ordencompra para almacenar número de nota de venta
           (fpago === 0 ? 'S' : 'N')
         ]);
 
