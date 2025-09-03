@@ -189,48 +189,12 @@ class DatabaseController {
       PRIMARY KEY (cod)
     )`;
 
-  // Tabla legacy 'venta' (singular) para compatibilidad con sistemas anteriores
-    const ventaLegacyTable = `CREATE TABLE IF NOT EXISTS venta (
-      id TEXT(14) NOT NULL,
-      idcliente TEXT(14),
-      fecha TEXT,
-      subtotal REAL(9, 3),
-      descuento REAL(8, 2),
-      total REAL(8, 2),
-      fpago REAL(11, 0),
-      comprob TEXT(1),
-      numfactura TEXT(50),
-      formapago REAL(11, 0),
-      anulado TEXT(1),
-      codempresa INTEGER NOT NULL,
-      iva REAL(9, 3),
-      fechapago TEXT,
-      usuario TEXT(21),
-      ordencompra TEXT(60),
-      ispago TEXT(1),
-      transporte REAL(8, 2),
-      trial279 TEXT(1)
-    )`;
+  // NO crear tablas legacy de ventas aquí; se asume que existen en la BD legacy
     
-  // Tabla legacy de abonos (por venta legacy)
-    const abonoLegacyTable = `CREATE TABLE IF NOT EXISTS abono (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      idventa TEXT(14),
-      idcliente TEXT(14),
-      fecha TEXT,
-      monto REAL,
-      fpago REAL,
-      nrorecibo TEXT(20),
-      formapago REAL,
-      idusuario INTEGER,
-      trial272 TEXT(1)
-    )`;
 
     await this.runQuery(usuarioTable);
     await this.runQuery(empresaTable);
     await this.runQuery(clienteTable);
-  await this.runQuery(ventaLegacyTable);
-  await this.runQuery(abonoLegacyTable);
   }
 
   async updateTableStructures() {

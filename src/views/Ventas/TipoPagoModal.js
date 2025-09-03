@@ -3,21 +3,22 @@ import React, { useState, useEffect } from 'react';
 const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, setFormaPago, creditoConfig, setCreditoConfig, total }) => {
   const [localTipo, setLocalTipo] = useState(tipoVenta || 'contado');
   const [localForma, setLocalForma] = useState(formaPago || { tipo: 'efectivo', tarjeta: null });
-  const [plazo, setPlazo] = useState(creditoConfig?.plazoDias ?? 30);
-  const [abono, setAbono] = useState(creditoConfig?.abonoInicial ?? 0);
+  // Keep as strings while typing to avoid leading zero/decimal glitches
+  const [plazo, setPlazo] = useState(String(creditoConfig?.plazoDias ?? '30'));
+  const [abono, setAbono] = useState(String(creditoConfig?.abonoInicial ?? '0'));
 
   useEffect(() => {
     if (isOpen) {
       setLocalTipo(tipoVenta || 'contado');
       setLocalForma(formaPago || { tipo: 'efectivo', tarjeta: null });
-      setPlazo(creditoConfig?.plazoDias ?? 30);
-      setAbono(creditoConfig?.abonoInicial ?? 0);
+  setPlazo(String(creditoConfig?.plazoDias ?? '30'));
+  setAbono(String(creditoConfig?.abonoInicial ?? '0'));
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const saldo = Math.max((Number(total) || 0) - (Number(abono) || 0), 0);
+  const saldo = Math.max((Number(total) || 0) - (parseFloat(abono || '0') || 0), 0);
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -68,11 +69,32 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <label className="flex flex-col">
                   <span className="text-xs text-gray-600">Plazo (días)</span>
-                  <input type="number" min={0} value={plazo} onChange={(e)=>setPlazo(parseInt(e.target.value||'0',10))} className="border rounded px-2 py-1" />
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={plazo}
+                    onChange={(e)=>{
+                      const v = e.target.value.replace(/[^0-9]/g,'');
+                      setPlazo(v);
+                    }}
+                    className="border rounded px-2 py-1" />
                 </label>
                 <label className="flex flex-col">
                   <span className="text-xs text-gray-600">Abono inicial</span>
-                  <input type="number" min={0} step="0.01" value={abono} onChange={(e)=>setAbono(parseFloat(e.target.value||'0'))} className="border rounded px-2 py-1" />
+                  <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" value={abono}
+                    onChange={(e)=>{
+                      let v = e.target.value.replace(/[^0-9.,]/g, '');
+                      // normalize decimal separator to dot but keep as string
+                      const parts = v.split(/[.,]/);
+                      if (parts.length > 2) {
+                        v = parts[0] + '.' + parts.slice(1).join('');
+                      } else if (parts.length === 2) {
+                        v = parts[0] + '.' + parts[1];
+                      }
+                      // avoid leading zeros like 010 -> 10 while keeping '0.'
+                      if (/^0+[0-9]+/.test(v)) {
+                        v = String(parseInt(v, 10));
+                      }
+                      setAbono(v);
+                    }}
+                    className="border rounded px-2 py-1" />
                 </label>
               </div>
               <div className="text-xs text-gray-700 mt-2">Saldo estimado: <span className="font-semibold">${saldo.toFixed(2)}</span></div>
@@ -85,8 +107,10 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
               onClick={()=>{
                 setTipoVenta(localTipo);
                 setFormaPago(localForma);
+                const plazoNum = Math.max(parseInt(plazo || '0', 10) || 0, 0);
+                const abonoNum = Math.max(parseFloat(String(abono).replace(',', '.')) || 0, 0);
                 if (localTipo==='credito' || localTipo==='plan') {
-                  setCreditoConfig({ plazoDias: Number(plazo)||0, abonoInicial: Math.min(Number(abono)||0, Number(total)||0) });
+                  setCreditoConfig({ plazoDias: plazoNum, abonoInicial: Math.min(abonoNum, Number(total)||0) });
                 } else {
                   setCreditoConfig({ plazoDias: 0, abonoInicial: 0 });
                 }

@@ -14,6 +14,10 @@ class VentaController {
       await db.run('BEGIN TRANSACTION');
       
       try {
+        const round2 = (n) => {
+          const x = Math.round((Number(n) || 0) * 100) / 100;
+          return x === 0 ? 0 : x;
+        };
         // Generar ID legacy de 14 chars (YYYYMMDDHHmmss)
         const buildLegacyId = () => {
           const d = new Date();
@@ -28,16 +32,16 @@ class VentaController {
         const fpago = Number(ventaData.fpago ?? 0); // 0 contado, 1 credito, 2 plan
         const formapago = Number(ventaData.formapago ?? 1); // 1 efectivo, 2 cheque, 3 tarjeta
         const fecha = ventaData.fecha || new Date().toISOString();
-        const iva = Number(ventaData.iva)||0;
-        const subtotal = Number(ventaData.subtotal)||0;
-        const descuento = Number(ventaData.descuento)||0;
-        const total = Number(ventaData.total)||0;
+  const iva = round2(ventaData.iva);
+  const subtotal = round2(ventaData.subtotal);
+  const descuento = round2(ventaData.descuento);
+  const total = round2(ventaData.total);
 
         await db.run(`
           INSERT INTO venta (
             id, idcliente, fecha, subtotal, descuento, total,
             fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
-            fechapago, usuario, ordencompra, ispago, transporte, trial279
+            fechapago, usuario, ordencompra, ispagos, transporte, trial279
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 1, ?, NULL, 'admin', NULL, ?, 0, '0')
         `, [
           legacyId,
@@ -72,9 +76,47 @@ class VentaController {
               item.codigo,
               Number(item.cantidad)||0,
               Number(item.precio_unitario ?? item.precio)||0,
-              item.descripcion || '',
               item.descripcion || ''
             ]);
+          }
+        }
+
+        // Compatibilidad: si la venta es crédito/plan y existe tabla legacy 'cuotas', registrar una fila mínima
+        if (fpago === 1 || fpago === 2) {
+          // Legacy: registrar crédito (tabla 'credito') si existe
+          const hasCreditoLegacy = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='credito'");
+          const abonoInicialRaw = Number(ventaData.abono_inicial)||0;
+          const abonoInicial = round2(Math.max(abonoInicialRaw, 0));
+          const saldo = round2(Math.max(total - abonoInicial, 0));
+          if (hasCreditoLegacy) {
+            try {
+              await db.run(`INSERT INTO credito (idventa, plazo, saldo, trial275) VALUES (?, ?, ?, '0')`, [legacyId, Number(ventaData.plazo_dias)||0, saldo]);
+            } catch (e) {
+              console.warn('[VentaController] No se pudo insertar en credito (legacy):', e.message);
+            }
+          }
+          const hasCuotasLegacy = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
+          if (hasCuotasLegacy) {
+            const fechapago = ventaData.fechapago || null;
+            await db.run(
+              `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`,
+              [legacyId, 1, fechapago, abonoInicial, 0, saldo, 0, null, 0]
+            );
+          }
+
+          // Legacy: registrar abono inicial en 'abono' si existe y > 0
+          if (abonoInicial > 0) {
+            const hasAbonoLegacy = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='abono'");
+            if (hasAbonoLegacy) {
+              try {
+                await db.run(
+                  `INSERT INTO abono (idventa, idcliente, fecha, monto, fpago, nrorecibo, formapago, idusuario, trial272) VALUES (?, ?, DATE('now'), ?, ?, ?, ?, ?, '0')`,
+                  [legacyId, (ventaData.idcliente || ventaData.cliente_ruc_ci || null), abonoInicial, 1, null, formapago, 1]
+                );
+              } catch (e) {
+                console.warn('[VentaController] No se pudo registrar abono inicial (legacy):', e.message);
+              }
+            }
           }
         }
 

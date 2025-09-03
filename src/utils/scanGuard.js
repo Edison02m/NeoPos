@@ -93,6 +93,9 @@ export function startScanGuard(options = {}) {
   }
 
   const onKeyPress = (e) => {
+  // Allow pausing guard (e.g., while a modal is open)
+  const paused = !!window.__barcodeAutoScanPaused;
+  if (paused) return;
   const autoActive = !!window.__barcodeAutoScanActive; // set by ventas/productos when AUTO ON
     const allowRoute = isAllowedRoute();
     const active = document.activeElement;
@@ -108,8 +111,8 @@ export function startScanGuard(options = {}) {
       return;
     }
 
-    // If auto-scan is active on allowed routes, swallow printable keys to avoid leaking into inputs
-    if (autoActive && allowRoute) {
+  // If auto-scan is active on allowed routes, swallow printable keys to avoid leaking into inputs
+  if (autoActive && allowRoute) {
       if (e.key && e.key.length === 1) {
         e.preventDefault();
         return;
@@ -168,6 +171,8 @@ export function startScanGuard(options = {}) {
   };
 
   const onKeyDown = (e) => {
+  const paused = !!window.__barcodeAutoScanPaused;
+  if (paused) return;
   const autoActive = !!window.__barcodeAutoScanActive;
     const allowRoute = isAllowedRoute();
     const active = document.activeElement;

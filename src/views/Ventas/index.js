@@ -52,10 +52,28 @@ const VentasView = () => {
     toggleDeteccionAutomatica
   } = useVentas();
 
+  // Ensure a comprobante number is always present for the current type
+  useEffect(() => {
+    if (!ventaData?.numero_comprobante) {
+      cambiarTipoComprobante(ventaData?.tipo_comprobante || 'nota');
+    }
+  }, [ventaData?.tipo_comprobante]);
+
   // Historial de ventas (simple)
   const [historialOpen, setHistorialOpen] = useState(false);
   const [ventasHistorial, setVentasHistorial] = useState([]);
   const [tipoPagoModalOpen, setTipoPagoModalOpen] = useState(false);
+
+  // Pause auto-scan while any modal is open to avoid input blocking
+  useEffect(() => {
+    const anyModal = tipoPagoModalOpen || searchModalOpen || historialOpen;
+    if (anyModal) {
+      window.__barcodeAutoScanPaused = true;
+    } else {
+      delete window.__barcodeAutoScanPaused;
+    }
+    return () => { delete window.__barcodeAutoScanPaused; };
+  }, [tipoPagoModalOpen, searchModalOpen, historialOpen]);
 
   useEffect(() => {
     if (!window.electronAPI?.onMenuAction) return;
@@ -541,7 +559,7 @@ const VentasView = () => {
       )}
       <TipoPagoModal
         isOpen={tipoPagoModalOpen}
-        onClose={() => setTipoPagoModalOpen(false)}
+  onClose={() => setTipoPagoModalOpen(false)}
         tipoVenta={tipoVenta}
         setTipoVenta={setTipoVenta}
         formaPago={formaPago}

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import ProductoController from '../controllers/ProductoController';
 import ClienteController from '../controllers/ClienteController';
+import AbonoLegacy from '../models/AbonoLegacy';
+import CreditoLegacy from '../models/CreditoLegacy';
 import * as BD from '../utils/barcodeDetector';
 // Resolver compatible: intenta named, default o factory
 const __resolveBarcodeCtor = () => {
@@ -12,6 +14,12 @@ const BarcodeDetectorCtor = __resolveBarcodeCtor();
 
 // Exportar como función nombrada (no arrow) para evitar cualquier rareza de interop
 export function useVentas() {
+  // Utilidad para redondear a 2 decimales de forma consistente (evitar 0.16128, etc.)
+  const round2 = (n) => {
+    const x = Math.round((Number(n) || 0) * 100) / 100;
+    // Evitar -0
+    return x === 0 ? 0 : x;
+  };
   // Estados principales
   const [productos, setProductos] = useState([]);
   const [codigoBarras, setCodigoBarras] = useState('');
@@ -427,7 +435,7 @@ export function useVentas() {
 
     const sink = ensureHiddenSink();
     const refocus = () => {
-      if (!deteccionAutomaticaActiva) return;
+      if (!deteccionAutomaticaActiva || window.__barcodeAutoScanPaused) return;
       try { sink.focus(); } catch (_) {}
     };
     // Mantener foco: si se pierde, volver a enfocar en el próximo tick
@@ -438,6 +446,32 @@ export function useVentas() {
   // Iniciar escucha (sin requerir foco)
     barcodeDetector.startListening();
     console.log('[VENTAS] Detector iniciado');
+
+    // While AUTO ON, if user focuses any editable input (not the barcode field), pause scanning
+    const onFocusIn = (ev) => {
+      const t = ev.target;
+      const tag = (t && t.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) {
+        const id = (t.id || '').toLowerCase();
+        const name = (t.name || '').toLowerCase();
+        if (id !== 'codigobarras' && name !== 'codigobarras') {
+          window.__barcodeAutoScanPaused = true;
+        }
+      }
+    };
+    const onFocusOut = () => {
+      // small delay to allow next focus target to apply pause if needed
+      setTimeout(() => {
+        const a = document.activeElement;
+        const tag = (a && a.tagName || '').toLowerCase();
+        const isEditable = a && (tag === 'input' || tag === 'textarea' || a.isContentEditable);
+        if (!isEditable && !window.__barcodeModalOpen) {
+          delete window.__barcodeAutoScanPaused;
+        }
+      }, 120);
+    };
+    document.addEventListener('focusin', onFocusIn, true);
+    document.addEventListener('focusout', onFocusOut, true);
     
     // Cleanup
     return () => {
@@ -451,9 +485,11 @@ export function useVentas() {
         clearTimeout(window.barcodeTimeout);
         delete window.barcodeTimeout;
       }
-      // Remover input oculto
+  // Remover listeners e input oculto
+  document.removeEventListener('focusin', onFocusIn, true);
+  document.removeEventListener('focusout', onFocusOut, true);
       const existing = document.getElementById('__autoScanSink');
-      if (existing && existing.parentNode) {
+  if (existing && existing.parentNode) {
         try { existing.remove(); } catch (_) { existing.parentNode.removeChild(existing); }
       }
     };
@@ -647,8 +683,8 @@ export function useVentas() {
       }
 
       // Preparar datos de la venta
-      const tipoTexto = (ventaData.tipo_comprobante === 'factura') ? 'Factura' : 'Nota de venta';
-      const fechaIso = new Date().toISOString();
+  const tipoTexto = (ventaData.tipo_comprobante === 'factura') ? 'Factura' : 'Nota de venta';
+  const fechaIso = new Date().toISOString();
 
       // Iniciar transacción
   // Iniciar transacción manual (legacy)
@@ -677,13 +713,16 @@ export function useVentas() {
       // Datos de plazo/abono cuando aplica
       let plazoDias = 0;
       let abonoInicial = 0;
-      let saldo = Number(totales.total) || 0;
+      let totalVenta = round2(totales.total);
+      let subtotalVenta = round2(totales.subtotal);
+      let ivaVenta = round2(totales.iva);
+      let saldo = totalVenta;
       let fechaPagoStr = null;
       if (tipoVenta === 'credito' || tipoVenta === 'plan') {
         plazoDias = Math.max(parseInt(creditoConfig?.plazoDias ?? 0, 10) || 0, 0);
-        abonoInicial = Math.max(parseFloat(creditoConfig?.abonoInicial ?? 0) || 0, 0);
+        abonoInicial = round2(Math.max(parseFloat(creditoConfig?.abonoInicial ?? 0) || 0, 0));
         if (abonoInicial > saldo) abonoInicial = saldo;
-        saldo = Math.max(saldo - abonoInicial, 0);
+        saldo = round2(Math.max(saldo - abonoInicial, 0));
         const f = new Date();
         f.setDate(f.getDate() + plazoDias);
         fechaPagoStr = f.toISOString();
@@ -694,22 +733,22 @@ export function useVentas() {
         `INSERT INTO venta (
           id, idcliente, fecha, subtotal, descuento, total,
           fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
-          fechapago, usuario, ordencompra, ispago, transporte, trial279
+          fechapago, usuario, ordencompra, ispagos, transporte, trial279
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           legacyId,
           cliente.ruc || null,
           fechaIso,
-          Number(totales.subtotal) || 0,
+          subtotalVenta,
           0,
-          Number(totales.total) || 0,
+          totalVenta,
           tipoVentaCode,
           comprobSigla,
           numFactura,
           formaPagoCode(formaPago),
           'N',
           1,
-          Number(totales.iva) || 0,
+          ivaVenta,
           fechaPagoStr,
           'admin',
           null,
@@ -725,15 +764,60 @@ export function useVentas() {
         return;
       }
 
-      // Si tiene plazo/abono, registrar en venta_cuotas
-      // No crear venta_cuotas automáticamente. Si la tabla existe, podemos opcionalmente insertar.
+      // Si tiene plazo/abono, registrar en tablas de crédito legacy si existen
       if (tipoVenta === 'credito' || tipoVenta === 'plan') {
-        const hasCuotas = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='venta_cuotas'");
-        if (hasCuotas?.data?.name === 'venta_cuotas') {
-          await window.electronAPI.dbRun(
-            `INSERT INTO venta_cuotas (venta_id, plazo_dias, abono_inicial, saldo, fechapago) VALUES (?, ?, ?, ?, ?)`,
-            [legacyId, plazoDias, abonoInicial, saldo, fechaPagoStr]
-          );
+        // 1) Tabla legacy 'credito' (idventa, plazo, saldo)
+        try {
+          await CreditoLegacy.create({ idventa: legacyId, plazo: plazoDias, saldo });
+        } catch (e) {
+          console.warn('No se pudo registrar en credito (legacy):', e.message);
+        }
+
+        // 2) Tabla legacy 'cuotas' (compatibilidad: una fila resumen)
+        try {
+          const hasCuotasLegacy = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
+          if (hasCuotasLegacy?.data?.name === 'cuotas') {
+            await window.electronAPI.dbRun(
+              `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`,
+              [legacyId, 1, fechaPagoStr, round2(abonoInicial), 0, round2(saldo), 0, null, 0]
+            );
+          }
+        } catch (e) {
+          console.warn('No se pudo registrar en cuotas (legacy):', e.message);
+        }
+
+        // 3) Registrar abono inicial en 'abono' si abonoInicial > 0 y tabla existe
+        try {
+          if (abonoInicial > 0) {
+            const existsAbono = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='abono'");
+            if (existsAbono?.data?.name === 'abono') {
+              await AbonoLegacy.create({
+                idventa: legacyId,
+                idcliente: cliente.ruc || null,
+                fecha: new Date().toISOString(),
+                monto: round2(abonoInicial),
+                fpago: 1,
+                nrorecibo: null,
+                formapago: formaPagoCode(formaPago),
+                idusuario: 1
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('No se pudo registrar abono inicial (legacy):', e.message);
+        }
+
+        // 4) Ruta moderna opcional 'venta_cuotas'
+        try {
+          const hasCuotas = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='venta_cuotas'");
+          if (hasCuotas?.data?.name === 'venta_cuotas') {
+            await window.electronAPI.dbRun(
+              `INSERT INTO venta_cuotas (venta_id, plazo_dias, abono_inicial, saldo, fechapago) VALUES (?, ?, ?, ?, ?)`,
+              [legacyId, plazoDias, round2(abonoInicial), round2(saldo), fechaPagoStr]
+            );
+          }
+        } catch (e) {
+          console.warn('No se pudo registrar en venta_cuotas (moderna):', e.message);
         }
       }
 
@@ -764,7 +848,9 @@ export function useVentas() {
       // Confirmar transacción
   await window.electronAPI.dbRun('COMMIT');
 
-      alert('Venta guardada exitosamente');
+  alert('Venta guardada exitosamente');
+  // After blocking alert closes, ensure guard is not paused so inputs work
+  delete window.__barcodeAutoScanPaused;
       limpiarVenta();
       setVentaActiva(false);
       // Preparar siguiente número para la próxima venta
@@ -772,7 +858,8 @@ export function useVentas() {
     } catch (error) {
       console.error('Error al guardar venta:', error);
       try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-      alert('Error al guardar venta');
+  alert('Error al guardar venta');
+  delete window.__barcodeAutoScanPaused;
     } finally {
       setLoading(false);
     }
