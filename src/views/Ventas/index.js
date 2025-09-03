@@ -79,7 +79,7 @@ const VentasView = () => {
         case 'menu-historial-ventas':
           try {
             const res = await window.electronAPI.dbQuery(
-              `SELECT id, numero_comprobante, tipo_comprobante, fecha, total FROM ventas ORDER BY fecha DESC, id DESC LIMIT 200`
+              `SELECT id, fecha, total, fpago, formapago, comprob, numfactura FROM venta ORDER BY fecha DESC, id DESC LIMIT 200`
             );
             if (res.success) setVentasHistorial(res.data || []);
             setHistorialOpen(true);

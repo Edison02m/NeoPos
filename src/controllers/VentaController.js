@@ -5,7 +5,7 @@ class VentaController {
     this.dbController = new DatabaseController();
   }
 
-  // Crear nueva venta
+  // Crear nueva venta (compatibilidad con tablas legacy: venta, ventadet)
   async crearVenta(ventaData, items) {
     try {
       const db = await this.dbController.getDatabase();
@@ -14,64 +14,76 @@ class VentaController {
       await db.run('BEGIN TRANSACTION');
       
       try {
-        // Insertar venta
-        const ventaResult = await db.run(`
-          INSERT INTO ventas (
-            numero_comprobante, tipo_comprobante, fecha,
-            cliente_nombres, cliente_apellidos, cliente_ruc_ci,
-            cliente_telefono, cliente_direccion,
-            subtotal, descuento, iva, total, estado, observaciones
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        // Generar ID legacy de 14 chars (YYYYMMDDHHmmss)
+        const buildLegacyId = () => {
+          const d = new Date();
+          const p = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`.slice(0,14);
+        };
+        const legacyId = ventaData.id || buildLegacyId();
+
+        // Mapear campos mínimos a tabla 'venta'
+        const comprob = ventaData.tipo_comprobante === 'factura' ? 'F' : 'N';
+        const numfactura = comprob === 'F' ? (ventaData.numero_comprobante || null) : null;
+        const fpago = Number(ventaData.fpago ?? 0); // 0 contado, 1 credito, 2 plan
+        const formapago = Number(ventaData.formapago ?? 1); // 1 efectivo, 2 cheque, 3 tarjeta
+        const fecha = ventaData.fecha || new Date().toISOString();
+        const iva = Number(ventaData.iva)||0;
+        const subtotal = Number(ventaData.subtotal)||0;
+        const descuento = Number(ventaData.descuento)||0;
+        const total = Number(ventaData.total)||0;
+
+        await db.run(`
+          INSERT INTO venta (
+            id, idcliente, fecha, subtotal, descuento, total,
+            fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
+            fechapago, usuario, ordencompra, ispago, transporte, trial279
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 1, ?, NULL, 'admin', NULL, ?, 0, '0')
         `, [
-          ventaData.numero_comprobante,
-          ventaData.tipo_comprobante,
-          ventaData.fecha,
-          ventaData.cliente_nombres,
-          ventaData.cliente_apellidos,
-          ventaData.cliente_ruc_ci,
-          ventaData.cliente_telefono,
-          ventaData.cliente_direccion,
-          ventaData.subtotal,
-          ventaData.descuento,
-          ventaData.iva,
-          ventaData.total,
-          ventaData.estado || 'completada',
-          ventaData.observaciones
+          legacyId,
+          ventaData.idcliente || ventaData.cliente_ruc_ci || null,
+          fecha,
+          subtotal,
+          descuento,
+          total,
+          fpago,
+          comprob,
+          numfactura,
+          formapago,
+          iva,
+          (fpago === 0 ? 'S' : 'N')
         ]);
 
-        const ventaId = ventaResult.lastID;
-
-        // Insertar items de venta
+        // Insertar detalle en 'ventadet' si existe; si no, degradar a actualización de stock solamente
+        const hasVentadet = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='ventadet'");
+        let itemSeq = 1;
         for (const item of items) {
-          await db.run(`
-            INSERT INTO venta_items (
-              venta_id, producto_id, codigo_barras, descripcion,
-              cantidad, precio_unitario, subtotal
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-          `, [
-            ventaId,
-            item.producto_id,
-            item.codigo_barras,
-            item.descripcion,
-            item.cantidad,
-            item.precio_unitario,
-            item.subtotal
-          ]);
+          // Actualizar stock del producto (por codigo)
+          await db.run(`UPDATE producto SET almacen = almacen - ? WHERE codigo = ?`, [Number(item.cantidad)||0, item.codigo]);
 
-          // Actualizar stock del producto
-          await db.run(`
-            UPDATE producto 
-            SET almacen = almacen - ? 
-            WHERE id = ?
-          `, [item.cantidad, item.producto_id]);
+          if (hasVentadet) {
+            await db.run(`
+              INSERT INTO ventadet (
+                item, idventa, codprod, cantidad, precio, producto
+              ) VALUES (?, ?, ?, ?, ?, ?)
+            `, [
+              itemSeq++,
+              legacyId,
+              item.codigo,
+              Number(item.cantidad)||0,
+              Number(item.precio_unitario ?? item.precio)||0,
+              item.descripcion || '',
+              item.descripcion || ''
+            ]);
+          }
         }
 
         await db.run('COMMIT');
         
         return {
           success: true,
-          data: { id: ventaId, ...ventaData },
-          message: 'Venta registrada exitosamente'
+          data: { id: legacyId, ...ventaData },
+          message: 'Venta registrada exitosamente (legacy)'
         };
 
       } catch (error) {
@@ -96,17 +108,18 @@ class VentaController {
       
       const query = `
         SELECT 
-          id,
+          codigo as codigo,
           codbarra as codigo_barras,
           codaux as codigo_auxiliar,
           producto as descripcion,
           pvp as precio_unitario,
           almacen as stock
         FROM producto 
-        WHERE 
+        WHERE (
           codbarra LIKE ? OR 
           codaux LIKE ? OR 
           producto LIKE ?
+        )
         AND almacen > 0
         ORDER BY producto ASC
         LIMIT 20
@@ -131,60 +144,38 @@ class VentaController {
     }
   }
 
-  // Obtener último número de comprobante
+  // Obtener último número de comprobante (desde tabla legacy 'venta')
   async obtenerUltimoNumeroComprobante(tipo = 'nota') {
     try {
       const db = await this.dbController.getDatabase();
-      
-      const tipoComprobante = tipo === 'factura' ? 'Factura' : 'Nota de venta';
-      
-      const result = await db.get(`
-        SELECT numero_comprobante 
-        FROM ventas 
-        WHERE tipo_comprobante = ?
-        ORDER BY id DESC 
-        LIMIT 1
-      `, [tipoComprobante]);
-
-      if (result) {
-        // Extraer el número secuencial y incrementarlo
-        const partes = result.numero_comprobante.split('-');
-        if (partes.length === 3) {
-          const secuencial = parseInt(partes[2]) + 1;
-          const nuevoNumero = `${partes[0]}-${partes[1]}-${secuencial.toString().padStart(5, '0')}`;
-          return nuevoNumero;
-        }
-      }
-
-      // Si no hay registros, empezar desde el primer número
-      return tipo === 'factura' ? '002-001-00001' : '001-001-00001';
+      // En legacy no existe un correlativo único estándar; devolvemos un timestamp-like fallback
+      const ts = Date.now().toString().slice(-5);
+  return { success: true, data: (tipo === 'factura' ? `002-001-${ts}` : `001-001-${ts}`) };
 
     } catch (error) {
       console.error('Error al obtener último número de comprobante:', error);
       // Fallback a número generado automáticamente
-      const timestamp = Date.now().toString().slice(-5);
-      return tipo === 'factura' ? `002-001-${timestamp}` : `001-001-${timestamp}`;
+  const timestamp = Date.now().toString().slice(-5);
+  return { success: true, data: (tipo === 'factura' ? `002-001-${timestamp}` : `001-001-${timestamp}`) };
     }
   }
 
-  // Obtener todas las ventas
+  // Obtener todas las ventas desde tabla legacy 'venta'
   async obtenerVentas(limite = 50) {
     try {
       const db = await this.dbController.getDatabase();
       
       const result = await db.all(`
         SELECT 
-          id,
-          numero_comprobante,
-          tipo_comprobante,
-          fecha,
-          cliente_nombres,
-          cliente_apellidos,
-          cliente_ruc_ci,
-          total,
-          estado
-        FROM ventas 
-        ORDER BY fecha DESC, id DESC
+          v.id as id,
+          v.fecha as fecha,
+          v.total as total,
+          v.fpago as fpago,
+          v.formapago as formapago,
+          v.comprob as comprob,
+          v.numfactura as numero
+        FROM venta v
+        ORDER BY v.fecha DESC, v.id DESC
         LIMIT ?
       `, [limite]);
 
@@ -204,15 +195,12 @@ class VentaController {
     }
   }
 
-  // Obtener venta por ID con items
+  // Obtener venta por ID con items (legacy)
   async obtenerVentaPorId(id) {
     try {
       const db = await this.dbController.getDatabase();
       
-      // Obtener datos de la venta
-      const venta = await db.get(`
-        SELECT * FROM ventas WHERE id = ?
-      `, [id]);
+      const venta = await db.get(`SELECT * FROM venta WHERE id = ?`, [id]);
 
       if (!venta) {
         return {
@@ -222,10 +210,11 @@ class VentaController {
         };
       }
 
-      // Obtener items de la venta
-      const items = await db.all(`
-        SELECT * FROM venta_items WHERE venta_id = ?
-      `, [id]);
+      let items = [];
+      const hasVentadet = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='ventadet'");
+      if (hasVentadet) {
+        items = await db.all(`SELECT * FROM ventadet WHERE idventa = ?`, [id]);
+      }
 
       return {
         success: true,
@@ -246,7 +235,7 @@ class VentaController {
     }
   }
 
-  // Buscar cliente por RUC/CI
+  // Buscar cliente por RUC/CI (tabla legacy 'cliente')
   async buscarClientePorRuc(ruc) {
     try {
       const db = await this.dbController.getDatabase();
@@ -255,11 +244,11 @@ class VentaController {
         SELECT 
           nombres,
           apellidos,
-          ruc_ci,
+          cedula as ruc_ci,
           telefono,
           direccion
-        FROM clientes 
-        WHERE ruc_ci = ?
+        FROM cliente 
+        WHERE cedula = ?
       `, [ruc]);
 
       return {

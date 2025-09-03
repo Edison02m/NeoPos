@@ -74,22 +74,10 @@ export function useVentas() {
         return;
       }
       const tipoTexto = tipo === 'factura' ? 'Factura' : 'Nota de venta';
-      const res = await window.electronAPI.dbGetSingle(
-        'SELECT numero_comprobante FROM ventas WHERE tipo_comprobante = ? ORDER BY id DESC LIMIT 1',
-        [tipoTexto]
-      );
-      let nuevo;
-      if (res?.success && res.data?.numero_comprobante) {
-        const partes = String(res.data.numero_comprobante).split('-');
-        if (partes.length === 3) {
-          const sec = String((parseInt(partes[2], 10) || 0) + 1).padStart(5, '0');
-          nuevo = `${partes[0]}-${partes[1]}-${sec}`;
-        }
-      }
-      if (!nuevo) {
-        nuevo = tipo === 'factura' ? '002-001-00001' : '001-001-00001';
-      }
-      setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: nuevo }));
+  // Legacy no lleva correlativo; fallback simple
+  const ts = Date.now().toString().slice(-5);
+  const base = tipo === 'factura' ? '002-001' : '001-001';
+  setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: `${base}-${ts}` }));
     } catch (e) {
       console.error('Error generando número de comprobante:', e);
       const ts = Date.now().toString().slice(-5);
@@ -663,57 +651,10 @@ export function useVentas() {
       const fechaIso = new Date().toISOString();
 
       // Iniciar transacción
-      {
-        const tx = await window.electronAPI.dbRun('BEGIN TRANSACTION');
-        if (!tx || tx.success === false) {
-          alert('No se pudo iniciar la transacción de la venta.');
-          setLoading(false);
-          return;
-        }
-      }
+  // Iniciar transacción manual (legacy)
+  await window.electronAPI.dbRun('BEGIN TRANSACTION');
 
-  // Insertar venta
-  const ventaInsert = await window.electronAPI.dbRun(
-        `INSERT INTO ventas (
-          numero_comprobante, tipo_comprobante, fecha,
-          cliente_nombres, cliente_apellidos, cliente_ruc_ci,
-          cliente_telefono, cliente_direccion,
-          subtotal, descuento, iva, total, estado
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          ventaData.numero_comprobante,
-          tipoTexto,
-          fechaIso,
-          cliente.nombres || null,
-          cliente.apellidos || null,
-          cliente.ruc || null,
-          cliente.telefono || null,
-          cliente.direccion || null,
-          Number(totales.subtotal) || 0,
-          0,
-          Number(totales.iva) || 0,
-          Number(totales.total) || 0,
-          'completada'
-        ]
-      );
-      if (!ventaInsert || ventaInsert.success === false) {
-        try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-        alert('No se pudo registrar la venta.');
-        setLoading(false);
-        return;
-      }
-
-      // Obtener el ID de la venta insertada desde result.data.id
-      const ventaId = ventaInsert && ventaInsert.data ? ventaInsert.data.id : undefined;
-      if (!ventaId) {
-        // Si no obtuvimos un ID válido, revertimos y mostramos error
-        try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-        alert('No se pudo registrar la venta: ID de venta no generado.');
-        setLoading(false);
-        return;
-      }
-
-  // Registrar también en tabla legacy 'venta' (singular) y, si corresponde, cuotas
+  // Registrar en tabla legacy 'venta' (singular) y, si corresponde, cuotas
       const buildLegacyId = () => {
         const d = new Date();
         const p = (n) => String(n).padStart(2, '0');
@@ -785,43 +726,28 @@ export function useVentas() {
       }
 
       // Si tiene plazo/abono, registrar en venta_cuotas
+      // No crear venta_cuotas automáticamente. Si la tabla existe, podemos opcionalmente insertar.
       if (tipoVenta === 'credito' || tipoVenta === 'plan') {
-        const cuotasInsert = await window.electronAPI.dbRun(
-          `INSERT INTO venta_cuotas (venta_id, plazo_dias, abono_inicial, saldo, fechapago) VALUES (?, ?, ?, ?, ?)`,
-          [legacyId, plazoDias, abonoInicial, saldo, fechaPagoStr]
-        );
-        if (!cuotasInsert || cuotasInsert.success === false) {
-          try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-          alert('No se pudo registrar plazos/abonos. La operación fue revertida.');
-          setLoading(false);
-          return;
+        const hasCuotas = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='venta_cuotas'");
+        if (hasCuotas?.data?.name === 'venta_cuotas') {
+          await window.electronAPI.dbRun(
+            `INSERT INTO venta_cuotas (venta_id, plazo_dias, abono_inicial, saldo, fechapago) VALUES (?, ?, ?, ?, ?)`,
+            [legacyId, plazoDias, abonoInicial, saldo, fechaPagoStr]
+          );
         }
       }
 
-      // Insertar items y actualizar stock
-      for (const item of productos) {
-        const itemInsert = await window.electronAPI.dbRun(
-          `INSERT INTO venta_items (
-            venta_id, producto_id, codigo_barras, descripcion,
-            cantidad, precio_unitario, subtotal
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            ventaId,
-            parseInt(item.codigo, 10) || 0,
-            item.codbarra || null,
-            item.descripcion,
-            Number(item.cantidad) || 0,
-            Number(item.precio) || 0,
-            Number(item.subtotal) || 0
-          ]
-        );
-        if (!itemInsert || itemInsert.success === false) {
-          try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-          alert('No se pudo registrar un ítem de la venta. La operación fue revertida.');
-          setLoading(false);
-          return;
+  // Insertar items y actualizar stock
+  let itemSeq = 1;
+  for (const item of productos) {
+        // Insertar en ventadet si existe
+        const hasVentadet = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='ventadet'");
+        if (hasVentadet?.data?.name === 'ventadet') {
+          await window.electronAPI.dbRun(
+    `INSERT INTO ventadet (item, idventa, codprod, cantidad, precio, producto) VALUES (?, ?, ?, ?, ?, ?)`,
+    [itemSeq++, legacyId, item.codigo, Number(item.cantidad)||0, Number(item.precio)||0, item.descripcion || '']
+          );
         }
-
         // Actualizar stock por código
         const stockUpdate = await window.electronAPI.dbRun(
           'UPDATE producto SET almacen = almacen - ? WHERE codigo = ?',
@@ -836,12 +762,7 @@ export function useVentas() {
       }
 
       // Confirmar transacción
-      const commit = await window.electronAPI.dbRun('COMMIT');
-      if (!commit || commit.success === false) {
-        alert('No se pudo confirmar la venta (commit falló).');
-        setLoading(false);
-        return;
-      }
+  await window.electronAPI.dbRun('COMMIT');
 
       alert('Venta guardada exitosamente');
       limpiarVenta();

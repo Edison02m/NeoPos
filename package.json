@@ -12,7 +12,7 @@
     "build-beta": "node increment-version.js && npm run build && npm run electron-build",
     "electron-build": "electron-builder --config electron-builder.json",
     "rebuild": "electron-rebuild -f -w sqlite3",
-    "postinstall": "electron-builder install-app-deps"
+  "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
     "electron",

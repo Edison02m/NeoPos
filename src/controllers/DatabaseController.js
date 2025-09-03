@@ -32,7 +32,8 @@ class DatabaseController {
 
     console.log('🔧 Modo detectado:', this.isDev ? 'DESARROLLO' : 'PRODUCCIÓN');
     console.log('📂 Ruta de BD destino:', this.dbPath);
-    console.log('📦 Ruta de BD recurso:', this.resourceDbPath);
+  // Nota: this.resourceDbPath no se usa; dejamos log de candidatos
+  console.log('📦 Rutas candidatas de recurso:', this.seedCandidates.join(' | '));
     this.isClosed = false;
   }
 
@@ -113,14 +114,9 @@ class DatabaseController {
       console.log('🔧 Configurando base de datos...');
       await this.runQuery('PRAGMA foreign_keys = ON');
 
-      // Crear tablas si no existen
-      await this.createTables();
-      
-      // Verificar y actualizar estructura de tablas existentes
-      await this.updateTableStructures();
-      
-      // Insertar datos de ejemplo si la base de datos está vacía
-      await this.seedDatabase();
+  // Solo asegurar tablas críticas mínimas (usuario, empresa, cliente) si faltan
+  await this.createTables();
+  // No alteramos estructuras ni agregamos columnas automáticamente fuera de las mínimas aprobadas
 
       console.log('✅ Base de datos inicializada completamente');
       return true;
@@ -143,6 +139,7 @@ class DatabaseController {
   }
 
   async createTables() {
+    // Solo crear tablas mínimas aprobadas si faltan. NO crear tablas nuevas de ventas.
     const usuarioTable = `CREATE TABLE IF NOT EXISTS usuario (
       cod INTEGER PRIMARY KEY AUTOINCREMENT,
       usuario TEXT NOT NULL,
@@ -192,41 +189,7 @@ class DatabaseController {
       PRIMARY KEY (cod)
     )`;
 
-    // Tabla de ventas
-    const ventasTable = `CREATE TABLE IF NOT EXISTS ventas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      numero_comprobante TEXT NOT NULL UNIQUE,
-      tipo_comprobante TEXT NOT NULL,
-      fecha TEXT NOT NULL,
-      subtotal REAL NOT NULL DEFAULT 0,
-      descuento REAL NOT NULL DEFAULT 0,
-      iva REAL NOT NULL DEFAULT 0,
-      total REAL NOT NULL DEFAULT 0,
-      cliente_nombres TEXT,
-      cliente_apellidos TEXT,
-      cliente_ruc_ci TEXT,
-      cliente_telefono TEXT,
-      cliente_direccion TEXT,
-      estado TEXT DEFAULT 'activa',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )`;
-
-    // Tabla de items de venta
-    const ventaItemsTable = `CREATE TABLE IF NOT EXISTS venta_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      venta_id INTEGER NOT NULL,
-      producto_id INTEGER NOT NULL,
-      codigo_barras TEXT,
-      descripcion TEXT NOT NULL,
-      cantidad REAL NOT NULL,
-      precio_unitario REAL NOT NULL,
-      subtotal REAL NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE
-    )`;
-
-    // Tabla legacy 'venta' (singular) para compatibilidad con sistemas anteriores
+  // Tabla legacy 'venta' (singular) para compatibilidad con sistemas anteriores
     const ventaLegacyTable = `CREATE TABLE IF NOT EXISTS venta (
       id TEXT(14) NOT NULL,
       idcliente TEXT(14),
@@ -248,49 +211,30 @@ class DatabaseController {
       transporte REAL(8, 2),
       trial279 TEXT(1)
     )`;
-
-    // Tabla para plazos y abonos de la venta
-    const ventaCuotasTable = `CREATE TABLE IF NOT EXISTS venta_cuotas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      venta_id TEXT NOT NULL,
-      plazo_dias INTEGER NOT NULL,
-      abono_inicial REAL NOT NULL DEFAULT 0,
-      saldo REAL NOT NULL DEFAULT 0,
-      fechapago TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )`;
     
+  // Tabla legacy de abonos (por venta legacy)
+    const abonoLegacyTable = `CREATE TABLE IF NOT EXISTS abono (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      idventa TEXT(14),
+      idcliente TEXT(14),
+      fecha TEXT,
+      monto REAL,
+      fpago REAL,
+      nrorecibo TEXT(20),
+      formapago REAL,
+      idusuario INTEGER,
+      trial272 TEXT(1)
+    )`;
+
     await this.runQuery(usuarioTable);
     await this.runQuery(empresaTable);
     await this.runQuery(clienteTable);
-    await this.runQuery(ventasTable);
-    await this.runQuery(ventaItemsTable);
   await this.runQuery(ventaLegacyTable);
-  await this.runQuery(ventaCuotasTable);
+  await this.runQuery(abonoLegacyTable);
   }
 
   async updateTableStructures() {
-    try {
-      // Verificar si la columna trial279 existe en la tabla producto
-      const tableInfo = await this.executeQuery("PRAGMA table_info(producto)");
-      const hasTrialColumn = tableInfo.some(column => column.name === 'trial279');
-      const hasIvaPercentageColumn = tableInfo.some(column => column.name === 'iva_percentage');
-      
-      if (!hasTrialColumn) {
-        console.log('Agregando columna trial279 a la tabla producto...');
-        await this.runQuery('ALTER TABLE producto ADD COLUMN trial279 INTEGER DEFAULT 0');
-        console.log('Columna trial279 agregada exitosamente');
-      }
-      
-      if (!hasIvaPercentageColumn) {
-        console.log('Agregando columna iva_percentage a la tabla producto...');
-        await this.runQuery('ALTER TABLE producto ADD COLUMN iva_percentage REAL DEFAULT 12.0');
-        console.log('Columna iva_percentage agregada exitosamente');
-      }
-    } catch (error) {
-      console.error('Error al actualizar estructura de tablas:', error);
-      // No lanzar error para no interrumpir la inicialización
-    }
+  // Por solicitud, no alterar estructuras automáticamente aquí
   }
 
   async seedDatabase() {
@@ -373,10 +317,24 @@ class DatabaseController {
         if (err) {
           reject(err);
         } else {
-          resolve({ id: this.lastID, changes: this.changes });
+          resolve({ id: this.lastID, changes: this.changes, success: true });
         }
       });
     });
+  }
+
+  // Exponer la instancia bruta para controladores que la requieren
+  async getDatabase() {
+    if (!this.db || this.isClosed) {
+      await this.initializeDatabase();
+    }
+    // Adapt a minimal wrapper API similar to what some controllers expect
+    const db = this.db;
+    return {
+      run: (sql, params=[]) => new Promise((res, rej) => db.run(sql, params, function(err){ err?rej(err):res({ lastID: this.lastID, changes: this.changes }); })),
+      all: (sql, params=[]) => new Promise((res, rej) => db.all(sql, params, (err, rows)=> err?rej(err):res(rows))),
+      get: (sql, params=[]) => new Promise((res, rej) => db.get(sql, params, (err, row)=> err?rej(err):res(row)))
+    };
   }
 
   close() {

@@ -591,7 +591,8 @@ class MainController {
       try {
         const VentaController = require('./controllers/VentaController');
         const controller = new VentaController();
-        return await controller.createVenta(venta, items);
+  // Usar el método legacy correcto
+  return await controller.crearVenta(venta, items);
       } catch (error) {
         console.error('Error al crear venta:', error);
         return {
