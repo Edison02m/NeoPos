@@ -91,9 +91,9 @@ export function useVentas() {
       let ultimoNumero = 0;
       
       if (tipo === 'factura') {
-        // Para facturas, buscar en el campo numfactura
+        // Para facturas, buscar números que empiecen con 002 en numfactura
         const result = await window.electronAPI.dbGetSingle(
-          "SELECT numfactura FROM venta WHERE comprob = 'F' AND numfactura IS NOT NULL ORDER BY id DESC LIMIT 1"
+          "SELECT numfactura FROM venta WHERE numfactura LIKE '002-%' ORDER BY id DESC LIMIT 1"
         );
         if (result?.success && result.data?.numfactura) {
           // Extraer el número secuencial del formato 002-001-000001
@@ -103,14 +103,14 @@ export function useVentas() {
           }
         }
       } else {
-        // Para notas de venta, buscar en ordencompra donde se almacena el número de nota
+        // Para notas de venta, buscar números que empiecen con 001 en numfactura
         const result = await window.electronAPI.dbGetSingle(
-          "SELECT ordencompra FROM venta WHERE comprob = 'N' AND ordencompra IS NOT NULL AND ordencompra LIKE '%-%' ORDER BY id DESC LIMIT 1"
+          "SELECT numfactura FROM venta WHERE numfactura LIKE '001-%' ORDER BY id DESC LIMIT 1"
         );
         
-        if (result?.success && result.data?.ordencompra) {
+        if (result?.success && result.data?.numfactura) {
           // Extraer el número secuencial del formato 001-001-000001
-          const parts = result.data.ordencompra.split('-');
+          const parts = result.data.numfactura.split('-');
           if (parts.length === 3) {
             ultimoNumero = parseInt(parts[2]) || 0;
           }
@@ -758,8 +758,17 @@ export function useVentas() {
       // Validar stock actual en BD antes de iniciar transacción
       for (const item of productos) {
         try {
-          const res = await window.electronAPI.dbGetSingle('SELECT almacen, producto FROM producto WHERE codigo = ?', [item.codigo]);
-          const disponible = parseInt(res?.data?.almacen ?? 0, 10) || 0;
+          const res = await window.electronAPI.dbGetSingle('SELECT almacen, bodega1, bodega2, producto FROM producto WHERE codigo = ?', [item.codigo]);
+          console.log('Validación stock final - Producto:', res?.data);
+          
+          // Calcular stock total sumando almacen + bodega1 + bodega2
+          const almacen = parseInt(res?.data?.almacen ?? 0, 10) || 0;
+          const bodega1 = parseInt(res?.data?.bodega1 ?? 0, 10) || 0;
+          const bodega2 = parseInt(res?.data?.bodega2 ?? 0, 10) || 0;
+          const disponible = almacen + bodega1 + bodega2;
+          
+          console.log(`Stock final - Almacén: ${almacen}, Bodega1: ${bodega1}, Bodega2: ${bodega2}, Total: ${disponible}, Solicitado: ${item.cantidad}`);
+          
           if (disponible < item.cantidad) {
             if (window.barcodeDetectorInstance) {
               window.barcodeDetectorInstance.playErrorSound?.();
@@ -807,8 +816,8 @@ export function useVentas() {
 
       // Determinar comprobante (F para factura, N para nota de venta)
       const comprobSigla = (ventaData.tipo_comprobante === 'factura') ? 'F' : 'N';
-      const numFactura = (ventaData.tipo_comprobante === 'factura') ? (ventaData.numero_comprobante || null) : null;
-      const numNota = (ventaData.tipo_comprobante === 'nota') ? (ventaData.numero_comprobante || null) : null;
+      // Todos los números van a numfactura, diferenciados por prefijo
+      const numeroComprobante = ventaData.numero_comprobante || null;
 
       // Datos de plazo/abono cuando aplica
       let plazoDias = 0;
@@ -844,14 +853,14 @@ export function useVentas() {
           totalVenta,
           tipoVentaCode,
           comprobSigla,
-          numFactura,
+          numeroComprobante, // Todos los números van a numfactura
           formaPagoCode(formaPago),
           'N',
           1,
           ivaVenta,
           fechaPagoStr,
           'admin',
-          numNota, // Usar ordencompra para almacenar número de nota de venta
+          null, // ordencompra se deja en null
           (tipoVenta === 'contado') ? 'S' : 'N',
           0,
           '0'
@@ -1012,6 +1021,7 @@ export function useVentas() {
     seleccionarCliente,
     limpiarVenta,
     guardarVenta,
+    cambiarTipoComprobante,
     handleCodigoBarrasChange,
     detectarCodigoBarras,
     toggleDeteccionAutomatica,

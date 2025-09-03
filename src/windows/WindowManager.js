@@ -546,13 +546,6 @@ class WindowManager {
             click: () => {
               ventasWindow.webContents.send('menu-historial-ventas');
             }
-          },
-          {
-            label: 'Herramientas de Desarrollador',
-            accelerator: 'F12',
-            click: () => {
-              ventasWindow.webContents.openDevTools();
-            }
           }
         ]
       },
@@ -598,11 +591,6 @@ class WindowManager {
               { label: 'Cuota Fácil', click: () => ventasWindow.webContents.send('menu-pago-tarjeta-cuota-facil') },
               { label: 'American Express', click: () => ventasWindow.webContents.send('menu-pago-tarjeta-amex') }
             ]
-          },
-          { type: 'separator' },
-          {
-            label: 'Editar comprobante…',
-            click: () => ventasWindow.webContents.send('menu-editar-comprobante')
           }
         ]
       },

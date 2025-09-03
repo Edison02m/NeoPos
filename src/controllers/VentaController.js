@@ -28,8 +28,8 @@ class VentaController {
 
         // Mapear campos mínimos a tabla 'venta'
         const comprob = ventaData.tipo_comprobante === 'factura' ? 'F' : 'N';
-        const numfactura = comprob === 'F' ? (ventaData.numero_comprobante || null) : null;
-        const ordencompra = comprob === 'N' ? (ventaData.numero_comprobante || null) : null;
+        // Todos los números van a numfactura, diferenciados por prefijo
+        const numfactura = ventaData.numero_comprobante || null;
         const fpago = Number(ventaData.fpago ?? 0); // 0 contado, 1 credito, 2 plan
         const formapago = Number(ventaData.formapago ?? 1); // 1 efectivo, 2 cheque, 3 tarjeta
         const fecha = ventaData.fecha || new Date().toISOString();
@@ -57,7 +57,7 @@ class VentaController {
           numfactura,
           formapago,
           iva,
-          ordencompra, // Usar ordencompra para almacenar número de nota de venta
+          null, // ordencompra se deja en null
           (fpago === 0 ? 'S' : 'N')
         ]);
 

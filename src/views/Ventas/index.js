@@ -101,12 +101,62 @@ const VentasView = () => {
           break;
         case 'menu-historial-ventas':
           try {
+            // Consulta principal de ventas
             const res = await window.electronAPI.dbQuery(
-              `SELECT id, fecha, total, fpago, formapago, comprob, numfactura FROM venta ORDER BY fecha DESC, id DESC LIMIT 200`
+              `SELECT id, fecha, total, fpago, formapago, numfactura FROM venta ORDER BY fecha DESC, id DESC LIMIT 200`
             );
-            if (res.success) setVentasHistorial(res.data || []);
+            
+            if (res.success && res.data) {
+              // Para cada venta, obtener los detalles adicionales
+              const ventasConDetalles = await Promise.all(res.data.map(async (venta) => {
+                // Obtener productos de ventadet
+                const productosRes = await window.electronAPI.dbQuery(
+                  `SELECT cantidad, producto FROM ventadet WHERE idventa = ? ORDER BY item`,
+                  [venta.id]
+                );
+                
+                // Obtener información de crédito si aplica
+                let creditoInfo = null;
+                if (venta.fpago !== 0) { // Si no es contado
+                  const creditoRes = await window.electronAPI.dbQuery(
+                    `SELECT plazo_dias, abono_inicial, saldo FROM venta_cuotas WHERE venta_id = ?`,
+                    [venta.id]
+                  );
+                  
+                  const cuotasRes = await window.electronAPI.dbQuery(
+                    `SELECT COUNT(*) as num_cuotas FROM cuotas WHERE idventa = ?`,
+                    [venta.id]
+                  );
+                  
+                  const abonosRes = await window.electronAPI.dbQuery(
+                    `SELECT COUNT(*) as num_abonos, SUM(monto) as total_abonos FROM abono WHERE idventa = ?`,
+                    [venta.id]
+                  );
+                  
+                  creditoInfo = {
+                    plazo_dias: creditoRes.success && creditoRes.data?.[0]?.plazo_dias || 0,
+                    abono_inicial: creditoRes.success && creditoRes.data?.[0]?.abono_inicial || 0,
+                    saldo: creditoRes.success && creditoRes.data?.[0]?.saldo || 0,
+                    num_cuotas: cuotasRes.success && cuotasRes.data?.[0]?.num_cuotas || 0,
+                    num_abonos: abonosRes.success && abonosRes.data?.[0]?.num_abonos || 0,
+                    total_abonos: abonosRes.success && abonosRes.data?.[0]?.total_abonos || 0
+                  };
+                }
+                
+                return {
+                  ...venta,
+                  productos: productosRes.success ? productosRes.data.map(p => `${p.cantidad} x ${p.producto}`).join(', ') : 'Sin productos',
+                  tipo_pago: venta.fpago === 0 ? 'Contado' : (venta.fpago === 1 ? 'Crédito' : 'Plan'),
+                  creditoInfo
+                };
+              }));
+              
+              setVentasHistorial(ventasConDetalles);
+            }
             setHistorialOpen(true);
-          } catch (_) {}
+          } catch (e) {
+            console.error('Error al cargar historial:', e);
+          }
           break;
         case 'menu-venta-contado':
           setTipoVenta('contado');
@@ -145,23 +195,12 @@ const VentasView = () => {
           setFormaPago({ tipo: 'tarjeta', tarjeta: 'American Express' });
           setTipoPagoModalOpen(true);
           break;
-        case 'menu-editar-comprobante':
-          {
-            const nuevoTipo = window.prompt('Tipo de comprobante (nota/factura):', ventaData.tipo_comprobante || 'nota');
-            if (nuevoTipo && (nuevoTipo === 'nota' || nuevoTipo === 'factura')) {
-              const nuevoNumero = window.prompt('Número de comprobante:', ventaData.numero_comprobante || '');
-              if (nuevoNumero) {
-                setVentaData({ ...ventaData, tipo_comprobante: nuevoTipo, numero_comprobante: nuevoNumero });
-              }
-            }
-          }
-          break;
         default:
           break;
       }
     });
     return () => { if (remove) remove(); };
-  }, [nuevaVenta, guardarVenta, setSearchModalOpen]);
+  }, [nuevaVenta, guardarVenta, setSearchModalOpen, setFormaPago, setTipoPagoModalOpen]);
 
   const handleBuscar = () => {
     setSearchModalOpen(true);
@@ -535,8 +574,8 @@ const VentasView = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="text-left py-2 px-3">ID</th>
-                    <th className="text-left py-2 px-3">Comprobante</th>
-                    <th className="text-left py-2 px-3">Tipo</th>
+                    <th className="text-left py-2 px-3">Productos</th>
+                    <th className="text-left py-2 px-3">Tipo Pago</th>
                     <th className="text-left py-2 px-3">Fecha</th>
                     <th className="text-right py-2 px-3">Total</th>
                   </tr>
@@ -546,9 +585,22 @@ const VentasView = () => {
                     <tr><td colSpan="5" className="text-center py-6 text-gray-500">Sin registros</td></tr>
                   ) : ventasHistorial.map(v => (
                     <tr key={v.id} className="border-b">
-                      <td className="py-2 px-3">{v.id}</td>
-                      <td className="py-2 px-3">{v.numero_comprobante}</td>
-                      <td className="py-2 px-3">{v.tipo_comprobante}</td>
+                      <td className="py-2 px-3">{v.numfactura || v.id}</td>
+                      <td className="py-2 px-3 max-w-xs truncate" title={v.productos}>{v.productos}</td>
+                      <td className="py-2 px-3">
+                        <div>
+                          <span className="font-medium">{v.tipo_pago}</span>
+                          {v.creditoInfo && v.fpago !== 0 && (
+                            <div className="text-xs text-gray-600">
+                              {v.creditoInfo.plazo_dias > 0 && <span>Plazo: {v.creditoInfo.plazo_dias} días</span>}
+                              {v.creditoInfo.abono_inicial > 0 && <span> | Abono inicial: ${Number(v.creditoInfo.abono_inicial).toFixed(2)}</span>}
+                              {v.creditoInfo.num_cuotas > 0 && <span> | Cuotas: {v.creditoInfo.num_cuotas}</span>}
+                              {v.creditoInfo.num_abonos > 0 && <span> | Abonos: {v.creditoInfo.num_abonos}</span>}
+                              {v.creditoInfo.saldo > 0 && <span> | Saldo: ${Number(v.creditoInfo.saldo).toFixed(2)}</span>}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-2 px-3">{new Date(v.fecha).toLocaleString()}</td>
                       <td className="py-2 px-3 text-right">${(Number(v.total)||0).toFixed(2)}</td>
                     </tr>
