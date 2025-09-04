@@ -168,7 +168,7 @@ const Inventario = () => {
         ]),
         headers: ['Cód. Barras', 'Cód. Auxiliar', 'Producto', 'Stock', 'P. Unitario', 'P. Total'],
         footerTotals: {
-          label: 'TOTALES',
+          label: 'TOTAL',
           labelIndex: 2, // Columna "Producto"
           totals: {
             3: totales.total_existencias, // Columna "Stock"
