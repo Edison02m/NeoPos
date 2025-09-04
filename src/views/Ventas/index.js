@@ -4,8 +4,10 @@ import ActionPanel from './ActionPanel';
 import TotalesPanel from './TotalesPanel';
 import BuscarProductoModal from './BuscarProductoModal';
 import TipoPagoModal from './TipoPagoModal';
+import ComprobanteVenta from '../../components/ComprobanteVenta';
 import Modal from '../../components/Modal';
 import { useEffect, useState } from 'react';
+import { TrashIcon } from '../../components/Icons';
 
 const VentasView = () => {
   const {
@@ -20,6 +22,8 @@ const VentasView = () => {
   formaPago,
     searchModalOpen,
     resultadosBusqueda,
+    comprobanteModalOpen,
+    comprobanteData,
     clienteSugerencias,
     showClienteSugerencias,
     loading,
@@ -34,6 +38,7 @@ const VentasView = () => {
   setFormaPago,
   setCreditoConfig,
     setSearchModalOpen,
+  cerrarComprobante,
     
     // Funciones
     nuevaVenta,
@@ -48,6 +53,7 @@ const VentasView = () => {
     limpiarVenta,
     guardarVenta,
     cambiarTipoComprobante,
+    imprimirComprobante,
     handleCodigoBarrasChange,
     detectarCodigoBarras,
     toggleDeteccionAutomatica,
@@ -71,14 +77,32 @@ const VentasView = () => {
 
   // Pause auto-scan while any modal is open to avoid input blocking
   useEffect(() => {
-    const anyModal = tipoPagoModalOpen || searchModalOpen || historialOpen;
+    const anyModal = tipoPagoModalOpen || searchModalOpen || historialOpen || comprobanteModalOpen;
     if (anyModal) {
       window.__barcodeAutoScanPaused = true;
     } else {
       delete window.__barcodeAutoScanPaused;
     }
     return () => { delete window.__barcodeAutoScanPaused; };
-  }, [tipoPagoModalOpen, searchModalOpen, historialOpen]);
+  }, [tipoPagoModalOpen, searchModalOpen, historialOpen, comprobanteModalOpen]);
+
+  // Manejar tecla Escape para cerrar modal del comprobante
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        console.log('Tecla Escape presionada, cerrando modal');
+              cerrarComprobante();
+      }
+    };
+    
+    if (comprobanteModalOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+    }, [comprobanteModalOpen, cerrarComprobante]);
 
   useEffect(() => {
     if (!window.electronAPI?.onMenuAction) return;
@@ -88,11 +112,11 @@ const VentasView = () => {
           // Equivalente a botón Nuevo: limpiar y activar
           nuevaVenta();
           break;
-        case 'menu-buscar-producto':
-          setSearchModalOpen(true);
-          break;
         case 'menu-guardar-venta':
           guardarVenta();
+          break;
+        case 'menu-imprimir-comprobante':
+          imprimirComprobante();
           break;
         case 'menu-nuevo-cliente':
           if (window.electronAPI?.openClienteWindow) {
@@ -118,28 +142,29 @@ const VentasView = () => {
                 // Obtener información de crédito si aplica
                 let creditoInfo = null;
                 if (venta.fpago !== 0) { // Si no es contado
+                  // Tomar info base de la tabla credito si existe
                   const creditoRes = await window.electronAPI.dbQuery(
-                    `SELECT plazo_dias, abono_inicial, saldo FROM venta_cuotas WHERE venta_id = ?`,
+                    `SELECT plazo_dias, abono_inicial, saldo FROM credito WHERE idventa = ? LIMIT 1`,
                     [venta.id]
                   );
-                  
+
                   const cuotasRes = await window.electronAPI.dbQuery(
                     `SELECT COUNT(*) as num_cuotas FROM cuotas WHERE idventa = ?`,
                     [venta.id]
                   );
-                  
+
                   const abonosRes = await window.electronAPI.dbQuery(
                     `SELECT COUNT(*) as num_abonos, SUM(monto) as total_abonos FROM abono WHERE idventa = ?`,
                     [venta.id]
                   );
-                  
+
                   creditoInfo = {
-                    plazo_dias: creditoRes.success && creditoRes.data?.[0]?.plazo_dias || 0,
-                    abono_inicial: creditoRes.success && creditoRes.data?.[0]?.abono_inicial || 0,
-                    saldo: creditoRes.success && creditoRes.data?.[0]?.saldo || 0,
-                    num_cuotas: cuotasRes.success && cuotasRes.data?.[0]?.num_cuotas || 0,
-                    num_abonos: abonosRes.success && abonosRes.data?.[0]?.num_abonos || 0,
-                    total_abonos: abonosRes.success && abonosRes.data?.[0]?.total_abonos || 0
+                    plazo_dias: (creditoRes.success && creditoRes.data?.[0]?.plazo_dias) || 0,
+                    abono_inicial: (creditoRes.success && creditoRes.data?.[0]?.abono_inicial) || 0,
+                    saldo: (creditoRes.success && creditoRes.data?.[0]?.saldo) || 0,
+                    num_cuotas: (cuotasRes.success && cuotasRes.data?.[0]?.num_cuotas) || 0,
+                    num_abonos: (abonosRes.success && abonosRes.data?.[0]?.num_abonos) || 0,
+                    total_abonos: (abonosRes.success && abonosRes.data?.[0]?.total_abonos) || 0
                   };
                 }
                 
@@ -207,7 +232,7 @@ const VentasView = () => {
   };
 
   const handleImprimir = () => {
-    alert('Función de impresión en desarrollo');
+    imprimirComprobante();
   };
 
   const handleSalir = () => {
@@ -490,13 +515,14 @@ const VentasView = () => {
                     <th className="text-left py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">Descripción</th>
                     <th className="text-right py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">P. U.</th>
                     <th className="text-right py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">P. Total</th>
+                    <th className="text-center py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">Eliminar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {productos.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center py-8 text-gray-500 text-sm">
-                        No hay productos agregados. Use el escáner o busque productos con F2.
+                      <td colSpan="8" className="text-center py-8 text-gray-500 text-sm">
+                        No hay productos agregados. Use el escáner.
                       </td>
                     </tr>
                   ) : (
@@ -534,6 +560,17 @@ const VentasView = () => {
                         </td>
                         <td className="py-2 px-3 text-sm text-right text-gray-700">${producto.precio.toFixed(2)}</td>
                         <td className="py-2 px-3 text-sm text-right font-medium text-gray-900">${producto.subtotal.toFixed(2)}</td>
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            onClick={() => eliminarProducto(producto.codigo)}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded bg-red-50 text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                            title="Eliminar producto"
+                            aria-label={`Eliminar ${producto.descripcion}`}
+                            type="button"
+                          >
+                            <TrashIcon size={16} />
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -635,6 +672,65 @@ const VentasView = () => {
         message={modalState.message}
         type={modalState.type}
       />
+
+      {/* Modal del comprobante */}
+      {comprobanteModalOpen && comprobanteData && (
+        <>
+          {console.log('Renderizando modal comprobante', { comprobanteModalOpen, comprobanteData })}
+          <div 
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={(e) => {
+              // Cerrar modal si se hace clic fuera del contenido
+              if (e.target === e.currentTarget) {
+                console.log('Cerrando modal por click fuera');
+                cerrarComprobante();
+              }
+            }}
+          >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">Comprobante de Venta</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                  type="button"
+                >
+                  Imprimir
+                </button>
+                <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Cerrando modal comprobante');
+                  cerrarComprobante();
+                }}
+                className="text-gray-600 hover:text-gray-900 text-xl font-bold w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
+                title="Cerrar"
+                type="button"
+              >
+                ×
+              </button>
+              </div>
+            </div>
+            <div className="overflow-auto max-h-[calc(90vh-120px)]">
+              <ComprobanteVenta
+                ventaData={comprobanteData.ventaData}
+                productos={comprobanteData.productos}
+                totales={comprobanteData.totales}
+                cliente={comprobanteData.cliente}
+                empresa={comprobanteData.empresa}
+                onClose={() => cerrarComprobante()}
+              />
+            </div>
+            {/* Sin botones inferiores: solo se usa la X del encabezado */}
+          </div>
+        </div>
+        </>
+      )}
   </>
   );
 };

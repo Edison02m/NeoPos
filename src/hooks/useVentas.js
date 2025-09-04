@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ProductoController from '../controllers/ProductoController';
 import ClienteController from '../controllers/ClienteController';
+import EmpresaController from '../controllers/EmpresaController';
 import AbonoLegacy from '../models/AbonoLegacy';
 import CreditoLegacy from '../models/CreditoLegacy';
 import useModal from './useModal';
@@ -49,6 +50,16 @@ export function useVentas() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
   
+  // Estado para el modal de comprobante
+  const [comprobanteModalOpen, setComprobanteModalOpen] = useState(false);
+  const [comprobanteData, setComprobanteData] = useState(null);
+
+  // Cerrar comprobante y limpiar datos
+  const cerrarComprobante = useCallback(() => {
+    setComprobanteModalOpen(false);
+    setComprobanteData(null);
+  }, []);
+  
   // Estados para autocompletado de clientes
   const [clienteSugerencias, setClienteSugerencias] = useState([]);
   const [showClienteSugerencias, setShowClienteSugerencias] = useState(false);
@@ -58,6 +69,7 @@ export function useVentas() {
   // Controladores
   const productoController = new ProductoController();
   const clienteController = new ClienteController();
+  const empresaController = new EmpresaController();
 
   // Cargar clientes al inicializar y preparar número de comprobante
   useEffect(() => {
@@ -155,50 +167,62 @@ export function useVentas() {
     console.log('Producto recibido:', JSON.stringify(producto, null, 2));
     
     setProductos(prev => {
-      // Calcular stock total de todas las bodegas
+      // Para ventas solo se considera el stock del almacén
       const almacen = parseInt(producto.almacen ?? 0, 10) || 0;
       const bodega1 = parseInt(producto.bodega1 ?? 0, 10) || 0;
       const bodega2 = parseInt(producto.bodega2 ?? 0, 10) || 0;
-      const stockTotal = almacen + bodega1 + bodega2;
+      const stockBodegas = bodega1 + bodega2;
       
       console.log('Stock en agregarProducto:');
-      console.log('- almacen:', almacen);
+      console.log('- almacén (disponible para venta):', almacen);
       console.log('- bodega1:', bodega1);
       console.log('- bodega2:', bodega2);
-      console.log('- total:', stockTotal);
+      console.log('- stock en bodegas:', stockBodegas);
       
       const existente = prev.find(p => p.codigo === producto.codigo);
 
-      // No permitir venta si no hay stock
-      if (!existente && stockTotal <= 0) {
+      // No permitir venta si no hay stock en almacén
+      if (!existente && almacen <= 0) {
         console.log('=== RECHAZADO EN AGREGAR PRODUCTO ===');
-        console.log('Stock total:', stockTotal);
+        console.log('Stock almacén:', almacen);
         if (window.barcodeDetectorInstance) {
           window.barcodeDetectorInstance.playErrorSound?.();
           window.barcodeDetectorInstance.vibrate?.('error');
         }
-        showAlert('Stock insuficiente: el producto no tiene existencias.', 'Error');
+        
+        // Mensaje diferente si hay stock en bodegas
+        if (stockBodegas > 0) {
+          showAlert(`No hay existencias en almacén para "${producto.producto}". Sin embargo, hay ${stockBodegas} unidades en bodegas. Transfiera stock del bodegaje al almacén para poder vender.`, 'Sin stock en almacén');
+        } else {
+          showAlert('Stock insuficiente: el producto no tiene existencias.', 'Error');
+        }
         return prev;
       }
 
       if (existente) {
-        if (existente.cantidad >= (existente.stock || stockTotal || 0)) {
+        // Para productos existentes, validar contra el stock del almacén
+        if (existente.cantidad >= almacen) {
           if (window.barcodeDetectorInstance) {
             window.barcodeDetectorInstance.playErrorSound?.();
             window.barcodeDetectorInstance.vibrate?.('error');
           }
-          showAlert('No puede superar el stock disponible para este producto.', 'Error');
+          
+          if (stockBodegas > 0) {
+            showAlert(`No puede superar el stock de almacén (${almacen} disponibles). Hay ${stockBodegas} unidades adicionales en bodegas.`, 'Stock almacén agotado');
+          } else {
+            showAlert('No puede superar el stock disponible para este producto.', 'Error');
+          }
           return prev;
         }
-        // Incrementar sin superar stock
+        // Incrementar sin superar stock del almacén
         return prev.map(p => {
           if (p.codigo !== producto.codigo) return p;
-          const nuevaCantidad = Math.min((p.cantidad + 1), (p.stock || stockTotal || 0));
+          const nuevaCantidad = Math.min((p.cantidad + 1), almacen);
           return { ...p, cantidad: nuevaCantidad, subtotal: nuevaCantidad * p.precio };
         });
       }
 
-      // Agregar nuevo producto (cantidad inicial 1, ya validado stock>0)
+      // Agregar nuevo producto (cantidad inicial 1, ya validado stock>0 en almacén)
       const precio = parseFloat(producto.pvp) || 0;
       const nuevoProducto = {
         codigo: producto.codigo,
@@ -206,7 +230,8 @@ export function useVentas() {
         descripcion: producto.producto || producto.descripcion,
         precio,
         cantidad: 1,
-        stock: stockTotal,
+        stock: almacen, // Solo stock del almacén
+        stockBodegas: stockBodegas, // Info adicional para referencia
         subtotal: precio
       };
       
@@ -761,20 +786,26 @@ export function useVentas() {
           const res = await window.electronAPI.dbGetSingle('SELECT almacen, bodega1, bodega2, producto FROM producto WHERE codigo = ?', [item.codigo]);
           console.log('Validación stock final - Producto:', res?.data);
           
-          // Calcular stock total sumando almacen + bodega1 + bodega2
+          // Para ventas solo se considera el stock del almacén
           const almacen = parseInt(res?.data?.almacen ?? 0, 10) || 0;
           const bodega1 = parseInt(res?.data?.bodega1 ?? 0, 10) || 0;
           const bodega2 = parseInt(res?.data?.bodega2 ?? 0, 10) || 0;
-          const disponible = almacen + bodega1 + bodega2;
+          const stockBodegas = bodega1 + bodega2;
           
-          console.log(`Stock final - Almacén: ${almacen}, Bodega1: ${bodega1}, Bodega2: ${bodega2}, Total: ${disponible}, Solicitado: ${item.cantidad}`);
+          console.log(`Stock final - Almacén: ${almacen}, Bodega1: ${bodega1}, Bodega2: ${bodega2}, Stock bodegas: ${stockBodegas}, Solicitado: ${item.cantidad}`);
           
-          if (disponible < item.cantidad) {
+          if (almacen < item.cantidad) {
             if (window.barcodeDetectorInstance) {
               window.barcodeDetectorInstance.playErrorSound?.();
               window.barcodeDetectorInstance.vibrate?.('error');
             }
-            showAlert(`Stock insuficiente para "${res?.data?.producto ?? item.descripcion}". Disponible: ${disponible}, solicitado: ${item.cantidad}`, 'Error');
+            
+            // Mensaje diferente si hay stock en bodegas
+            if (stockBodegas > 0) {
+              showAlert(`Stock insuficiente en almacén para "${res?.data?.producto ?? item.descripcion}". Disponible en almacén: ${almacen}, solicitado: ${item.cantidad}. Hay ${stockBodegas} unidades adicionales en bodegas.`, 'Stock almacén insuficiente');
+            } else {
+              showAlert(`Stock insuficiente para "${res?.data?.producto ?? item.descripcion}". Disponible: ${almacen}, solicitado: ${item.cantidad}`, 'Error');
+            }
             setLoading(false);
             return;
           }
@@ -916,18 +947,7 @@ export function useVentas() {
           console.warn('No se pudo registrar abono inicial (legacy):', e.message);
         }
 
-        // 4) Ruta moderna opcional 'venta_cuotas'
-        try {
-          const hasCuotas = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='venta_cuotas'");
-          if (hasCuotas?.data?.name === 'venta_cuotas') {
-            await window.electronAPI.dbRun(
-              `INSERT INTO venta_cuotas (venta_id, plazo_dias, abono_inicial, saldo, fechapago) VALUES (?, ?, ?, ?, ?)`,
-              [legacyId, plazoDias, round2(abonoInicial), round2(saldo), fechaPagoStr]
-            );
-          }
-        } catch (e) {
-          console.warn('No se pudo registrar en venta_cuotas (moderna):', e.message);
-        }
+  // 4) No usar tabla venta_cuotas (no existe en este esquema). Compatibilidad mantenida con credito/cuotas/abono.
       }
 
   // Insertar items y actualizar stock
@@ -979,6 +999,69 @@ export function useVentas() {
     await generarNumeroComprobante(nuevoTipo);
   };
 
+  // Función para imprimir comprobante
+  const imprimirComprobante = useCallback(async () => {
+    try {
+      // Validar que hay productos en la venta
+      if (!productos || productos.length === 0) {
+        showAlert('No hay productos en la venta para imprimir', 'Error');
+        return;
+      }
+
+      // Obtener información de la empresa usando el controlador
+      let empresaInfo = null;
+      try {
+        const empresaRes = await empresaController.getEmpresa();
+        if (empresaRes && empresaRes.success && empresaRes.data) {
+          empresaInfo = empresaRes.data;
+        }
+      } catch (e) {
+        console.warn('No se pudo obtener información de la empresa:', e);
+      }
+
+      // Si no hay empresa en BD, usar datos por defecto
+      if (!empresaInfo) {
+        empresaInfo = {
+          empresa: 'MI EMPRESA',
+          nombre: 'MI EMPRESA', // Para compatibilidad
+          ruc: '0000000000001',
+          direccion: 'Dirección no especificada',
+          telefono: 'Teléfono no especificado',
+          email: 'contacto@miempresa.com'
+        };
+      } else {
+        // Asegurar que el campo nombre esté disponible también para compatibilidad
+        empresaInfo.nombre = empresaInfo.empresa || empresaInfo.nombre || 'MI EMPRESA';
+      }
+
+      // Preparar datos para el comprobante
+      const comprobanteInfo = {
+        ventaData: {
+          ...ventaData,
+          fecha: new Date().toLocaleDateString(),
+          numero_comprobante: ventaData.numero_comprobante || 'SIN NÚMERO'
+        },
+        productos,
+        totales, // Usar los totales ya calculados del hook (con IVA incluido)
+        cliente: cliente || {
+          nombre: 'Consumidor Final',
+          cedula: '9999999999',
+          direccion: 'N/A',
+          telefono: 'N/A'
+        },
+        empresa: empresaInfo
+      };
+
+      // Mostrar el modal con el comprobante
+      setComprobanteData(comprobanteInfo);
+      setComprobanteModalOpen(true);
+
+    } catch (error) {
+      console.error('Error al preparar comprobante:', error);
+      showAlert('Error al generar el comprobante: ' + error.message, 'Error');
+    }
+  }, [productos, ventaData, cliente, totales, showAlert, empresaController]);
+
   return {
     // Estados
     productos,
@@ -990,6 +1073,8 @@ export function useVentas() {
   tipoVenta,
     searchModalOpen,
     resultadosBusqueda,
+    comprobanteModalOpen,
+    comprobanteData,
     clienteSugerencias,
     showClienteSugerencias,
     loading,
@@ -1006,7 +1091,9 @@ export function useVentas() {
   setTipoVenta,
   setFormaPago,
   setCreditoConfig,
-    setSearchModalOpen,
+  setSearchModalOpen,
+  setComprobanteModalOpen,
+  cerrarComprobante,
     
     // Funciones
   nuevaVenta,
@@ -1022,6 +1109,7 @@ export function useVentas() {
     limpiarVenta,
     guardarVenta,
     cambiarTipoComprobante,
+    imprimirComprobante,
     handleCodigoBarrasChange,
     detectarCodigoBarras,
     toggleDeteccionAutomatica,

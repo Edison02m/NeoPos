@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Generación de reportes
   generateExcelReport: (data, filename, sheetName) => ipcRenderer.invoke('generate-excel-report', data, filename, sheetName),
   generatePDFReport: (reportData, filename) => ipcRenderer.invoke('generate-pdf-report', reportData, filename),
+  openPDF: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
   
   // Diálogos de archivo
   showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),

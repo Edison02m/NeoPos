@@ -495,13 +495,6 @@ class WindowManager {
             }
           },
           {
-            label: 'Buscar Producto',
-            accelerator: 'F2',
-            click: () => {
-              ventasWindow.webContents.send('menu-buscar-producto');
-            }
-          },
-          {
             label: 'Guardar Venta',
             accelerator: 'Ctrl+S',
             click: () => {
