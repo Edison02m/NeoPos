@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Usuario from '../models/Usuario';
 import { FaUser, FaLock, FaSignOutAlt } from 'react-icons/fa';
@@ -8,7 +8,60 @@ const Login = ({ onLogin }) => {
   const [contrasena, setContrasena] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [empresaLogo, setEmpresaLogo] = useState('/logo.png'); // Logo por defecto
+  const [empresaNombre, setEmpresaNombre] = useState('NeoPOS'); // Nombre por defecto
+  const [empresaRazonSocial, setEmpresaRazonSocial] = useState('Sistema de Punto de Venta'); // Descripción por defecto
+  const [logoError, setLogoError] = useState(false); // Para evitar bucle infinito
   const navigate = useNavigate();
+
+  // Cargar logo de la empresa al montar el componente
+  useEffect(() => {
+    const loadEmpresaData = async () => {
+      try {
+        const result = await window.electronAPI.dbGetSingle(
+          'SELECT logo, empresa, rsocial FROM empresa LIMIT 1'
+        );
+        
+        // Verificar la estructura correcta de la respuesta
+        const empresaData = result?.data || result;
+        
+        if (empresaData) {
+          // Establecer nombre de la empresa
+          if (empresaData.empresa && empresaData.empresa.trim() !== '') {
+            setEmpresaNombre(empresaData.empresa);
+          }
+          
+          // Establecer razón social
+          if (empresaData.rsocial && empresaData.rsocial.trim() !== '') {
+            setEmpresaRazonSocial(empresaData.rsocial);
+          }
+          
+          // Cargar logo si existe
+          if (empresaData.logo && empresaData.logo.trim() !== '') {
+            const imageResult = await window.electronAPI.getImageAsBase64(empresaData.logo);
+            
+            if (imageResult.success) {
+              setEmpresaLogo(imageResult.data);
+              setLogoError(false);
+            } else {
+              setEmpresaLogo('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iOCIgZmlsbD0iIzY5NzU4MSIvPgo8dGV4dCB4PSIzMiIgeT0iMzYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE0IiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+TG9nbzwvdGV4dD4KPHN2Zz4=');
+            }
+          } else {
+            setEmpresaLogo('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iOCIgZmlsbD0iIzY5NzU4MSIvPgo8dGV4dCB4PSIzMiIgeT0iMzYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE0IiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+TG9nbzwvdGV4dD4KPHN2Zz4=');
+          }
+        } else {
+          setEmpresaLogo('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iOCIgZmlsbD0iIzY5NzU4MSIvPgo8dGV4dCB4PSIzMiIgeT0iMzYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE0IiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+TG9nbzwvdGV4dD4KPHN2Zz4=');
+        }
+      } catch (error) {
+        console.error('Error al cargar datos de empresa:', error);
+        setEmpresaLogo('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iOCIgZmlsbD0iIzY5NzU4MSIvPgo8dGV4dCB4PSIzMiIgeT0iMzYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE0IiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+TG9nbzwvdGV4dD4KPHN2Zz4=');
+      }
+    };
+
+    if (window.electronAPI) {
+      loadEmpresaData();
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,15 +94,21 @@ const Login = ({ onLogin }) => {
       <div className="p-8 rounded-lg border border-gray-200 shadow-lg max-w-md w-full space-y-8 transform transition-all hover:shadow-xl">
         <div className="text-center">
           <img
-            src="/logo.png"
-            alt="NeoPOS Logo"
+            src={empresaLogo}
+            alt="Logo Empresa"
             className="mx-auto h-16 w-auto mb-4"
+            onError={(e) => {
+              if (!logoError) {
+                setLogoError(true);
+                setEmpresaLogo('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iOCIgZmlsbD0iIzY5NzU4MSIvPgo8dGV4dCB4PSIzMiIgeT0iMzYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE0IiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+TG9nbzwvdGV4dD4KPHN2Zz4=');
+              }
+            }}
           />
           <h2 className="text-3xl font-bold text-gray-900 tracking-tight">
-            NeoPOS
+            {empresaNombre}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Sistema de Punto de Venta
+            {empresaRazonSocial}
           </p>
         </div>
 

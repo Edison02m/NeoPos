@@ -136,6 +136,46 @@ class WindowManager {
     return empresaWindow;
   }
 
+  createConfiguracionSistemaWindow(parentWindow) {
+    const sistemaWindow = new BrowserWindow({
+      width: 800,
+      height: 600,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Configuración del Sistema',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(sistemaWindow, '/configuracion-sistema');
+
+    // Establecer menú vacío para esta ventana específica
+    const emptyMenu = Menu.buildFromTemplate([]);
+    sistemaWindow.setMenu(emptyMenu);
+
+    sistemaWindow.once('ready-to-show', () => {
+      sistemaWindow.show();
+    });
+
+    sistemaWindow.on('closed', () => {
+      this.windows.delete('configuracion-sistema');
+    });
+
+    this.windows.set('configuracion-sistema', sistemaWindow);
+    return sistemaWindow;
+  }
+
   createClienteWindow(parentWindow) {
     const clienteWindow = new BrowserWindow({
       width: 1000,

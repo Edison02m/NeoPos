@@ -31,10 +31,58 @@ const Empresa = () => {
   const [validFields, setValidFields] = useState(new Set());
   const [errors, setErrors] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [imageLoading, setImageLoading] = useState(false);
 
   useEffect(() => {
     loadEmpresaData();
   }, []);
+
+  // Efecto para cargar la imagen cuando cambie la ruta
+  useEffect(() => {
+    const loadImagePreview = async () => {
+      if (!formData.logo || !validateImagePath(formData.logo)) {
+        setImagePreview(null);
+        return;
+      }
+
+      // En navegador web, si es solo un nombre de archivo, no intentar cargar
+      if (!window.electronAPI && !formData.logo.startsWith('data:')) {
+        setImagePreview(null);
+        return;
+      }
+
+      // Si es una ruta absoluta de Windows y tenemos Electron API
+      if (formData.logo.match(/^[A-Za-z]:\\/) && window.electronAPI?.readImageAsBase64) {
+        try {
+          setImageLoading(true);
+          const result = await window.electronAPI.readImageAsBase64(formData.logo);
+          if (result.success && result.data) {
+            setImagePreview(result.data);
+          } else {
+            console.warn('No se pudo cargar la imagen:', formData.logo, result.error);
+            setImagePreview(null);
+          }
+        } catch (error) {
+          console.error('Error cargando imagen:', error);
+          setImagePreview(null);
+        } finally {
+          setImageLoading(false);
+        }
+      } else if (formData.logo.startsWith('data:')) {
+        // Si ya es base64, usar directamente
+        setImagePreview(formData.logo);
+      } else {
+        // Fallback para otros casos
+        setImagePreview(getImageUrl(formData.logo));
+      }
+    };
+
+    // Solo ejecutar si tenemos un logo
+    if (formData.logo) {
+      loadImagePreview();
+    }
+  }, [formData.logo]);
 
   const loadEmpresaData = async () => {
     try {
@@ -95,6 +143,101 @@ const Empresa = () => {
     if (message) {
       setMessage('');
     }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      try {
+        // En navegador web, usar FileReader para crear una preview
+        if (!window.electronAPI) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64String = event.target.result;
+            setImagePreview(base64String);
+            // Guardar solo el nombre del archivo en la BD para navegador
+            setFormData(prev => ({ ...prev, logo: file.name }));
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+
+        // Para Electron: intentar obtener la ruta completa
+        let filePath = '';
+        
+        // En algunos navegadores y Electron, 'path' está disponible
+        if (file.path) {
+          filePath = file.path;
+        } 
+        // En otros casos, usar webkitRelativePath si está disponible
+        else if (file.webkitRelativePath) {
+          filePath = file.webkitRelativePath;
+        }
+        // Fallback: solo el nombre del archivo
+        else {
+          filePath = file.name;
+        }
+        
+        // Normalizar separadores de ruta para Windows
+        filePath = filePath.replace(/\//g, '\\');
+        
+        setFormData(prev => ({ ...prev, logo: filePath }));
+        
+        // Limpiar vista previa anterior
+        setImagePreview(null);
+        
+        // Si tenemos API de Electron, verificar que el archivo existe
+        if (window.electronAPI?.fileExists && filePath.includes('\\')) {
+          window.electronAPI.fileExists(filePath).then(result => {
+            if (!result.exists) {
+              console.warn('El archivo seleccionado puede no existir:', filePath);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error procesando archivo:', error);
+        setFormData(prev => ({ ...prev, logo: file.name }));
+        setImagePreview(null);
+      }
+    }
+  };
+
+  // Función para validar si la imagen existe y es válida
+  const validateImagePath = (path) => {
+    if (!path || typeof path !== 'string') {
+      return false;
+    }
+    
+    // Verificar extensiones válidas
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    const lastDotIndex = path.lastIndexOf('.');
+    
+    if (lastDotIndex === -1) {
+      return false;
+    }
+    
+    const extension = path.toLowerCase().slice(lastDotIndex);
+    const isValid = validExtensions.includes(extension);
+    
+    return isValid;
+  };
+
+  // Función para convertir ruta de Windows a URL para vista previa
+  const getImageUrl = (path) => {
+    // Si ya tenemos una vista previa cargada, usarla
+    if (imagePreview) {
+      return imagePreview;
+    }
+
+    if (!path) return '';
+    
+    // Si es una ruta absoluta de Windows (ej: C:\...), intentar convertir a file:// URL como fallback
+    if (path.match(/^[A-Za-z]:\\/)) {
+      return `file:///${path.replace(/\\/g, '/')}`;
+    }
+    
+    // Si es una ruta relativa o ya es una URL, usarla directamente
+    return path;
   };
 
   const validateField = (fieldName, value) => {
@@ -473,6 +616,98 @@ const Empresa = () => {
               className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               placeholder="www.empresa.com"
             />
+          </div>
+
+          {/* Logo de la Empresa */}
+          <div className="mb-5">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <svg className="inline mr-2 align-middle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21,15 16,10 5,21"/>
+              </svg>
+              Logo de la Empresa
+            </label>
+            <div className="space-y-2">
+              {/* Campo de ruta de imagen */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  name="logo"
+                  value={formData.logo}
+                  onChange={handleInputChange}
+                  placeholder="Ruta del logo (ej: C:\logos\empresa.jpg)"
+                  className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg text-sm transition-all duration-200 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('logoFileInput').click()}
+                  className="px-4 py-2 text-sm bg-gray-100 border-2 border-gray-200 rounded-lg hover:bg-gray-200 whitespace-nowrap transition-colors"
+                >
+                  Examinar
+                </button>
+                <input
+                  id="logoFileInput"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </div>
+              
+              {/* Vista previa de la imagen */}
+              {formData.logo && validateImagePath(formData.logo) && (
+                <div className="border-2 border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="text-xs text-gray-600 mb-2 font-medium">Vista previa del logo:</div>
+                  <div className="flex justify-center">
+                    {imageLoading ? (
+                      <div className="flex items-center justify-center h-24 text-sm text-gray-500">
+                        <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Cargando logo...
+                      </div>
+                    ) : imagePreview ? (
+                      <img
+                        src={imagePreview}
+                        alt="Logo de la empresa"
+                        className="max-w-full max-h-24 object-contain border border-gray-200 rounded"
+                        onError={(e) => {
+                          console.error('Error cargando logo en elemento img');
+                          setImagePreview(null);
+                        }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-24 text-sm text-amber-600 text-center p-3">
+                        <div>
+                          <svg className="w-8 h-8 mx-auto mb-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div>
+                            <div className="font-semibold">Logo detectado pero no se puede cargar</div>
+                            <div className="mt-1 text-xs">
+                              Ruta: <span className="font-mono break-all">{formData.logo}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              • Verifique que la imagen existe<br/>
+                              • Verifique que tiene permisos de lectura<br/>
+                              • Intente con una ruta sin acentos o espacios
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Información adicional */}
+                  <div className="mt-2 text-xs text-gray-500">
+                    <div>Archivo: <span className="font-mono">{formData.logo.split('\\').pop() || formData.logo}</span></div>
+                    <div>Formatos soportados: JPG, PNG, GIF, BMP, WebP</div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Campos adicionales */}

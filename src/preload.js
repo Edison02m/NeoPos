@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Window management
     openUsersWindow: () => ipcRenderer.invoke('open-users-window'),
     openEmpresaWindow: () => ipcRenderer.invoke('open-empresa-window'),
+    openConfiguracionSistemaWindow: () => ipcRenderer.invoke('open-configuracion-sistema-window'),
     openClienteWindow: () => ipcRenderer.invoke('open-cliente-window'),
     openProveedorWindow: () => ipcRenderer.invoke('open-proveedor-window'),
     openProductoWindow: () => ipcRenderer.invoke('open-producto-window'),
@@ -48,6 +49,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  // Convertir imagen local a base64
+  getImageAsBase64: (filePath) => ipcRenderer.invoke('get-image-base64', filePath),
+
   // Validar si un archivo existe
   fileExists: (filePath) => ipcRenderer.invoke('file-exists', filePath),
 
@@ -62,16 +66,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Diálogos de archivo
   showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
 
-  // Eventos del menú
+    // Eventos del menú
   onMenuAction: (callback) => {
     const validActions = [
   // Ventas window specific
   'menu-nueva-venta',
   'menu-buscar-producto',
-  'menu-guardar-venta',
-  'menu-buscar-cliente',
-  'menu-nuevo-cliente',
-  'menu-imprimir-comprobante',
   'menu-historial-ventas',
   'menu-venta-contado',
   'menu-venta-credito',
@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-logout',
       'menu-config-user',
       'menu-config-company',
+      'menu-config-sistema',
       'menu-inventory-customers',
       'menu-inventory-suppliers',
       'menu-ver-personas',
@@ -172,6 +173,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-logout',
       'menu-config-user',
       'menu-config-company',
+      'menu-config-sistema',
       'menu-inventory-customers',
       'menu-inventory-suppliers',
       'menu-ver-personas',

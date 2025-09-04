@@ -5,6 +5,7 @@ import Login from './views/Login';
 import Dashboard from './views/Dashboard';
 import UsuariosView from './views/Usuario';
 import Empresa from './views/Empresa';
+import ConfiguracionSistema from './views/ConfiguracionSistema';
 import ClientesView from './views/Client/index';
 import ProveedoresView from './views/Proveedor/index';
 import ProductosView from './views/Producto/index';
@@ -40,6 +41,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/empresa" 
         element={<Empresa />} 
+      />
+      <Route 
+        path="/configuracion-sistema" 
+        element={<ConfiguracionSistema />} 
       />
       <Route 
         path="/cliente" 

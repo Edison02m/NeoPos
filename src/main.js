@@ -213,6 +213,12 @@ class MainController {
               }
             },
             {
+              label: 'Configuración del Sistema',
+              click: () => {
+                this.mainWindow.webContents.send('menu-config-sistema');
+              }
+            },
+            {
               label: 'Impresión de Facturas',
               click: () => {
                 this.mainWindow.webContents.send('menu-config-invoice-printing');
@@ -342,6 +348,30 @@ class MainController {
       return app.getVersion();
     });
 
+    // Convertir imagen local a base64
+    ipcMain.handle('get-image-base64', async (event, filePath) => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        if (!fs.existsSync(filePath)) {
+          return { success: false, error: 'Archivo no encontrado' };
+        }
+        
+        const imageBuffer = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 
+                        ext === '.png' ? 'image/png' : 
+                        ext === '.gif' ? 'image/gif' : 'image/jpeg';
+        
+        const base64Image = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+        return { success: true, data: base64Image };
+      } catch (error) {
+        console.error('Error converting image to base64:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     // Manejo de archivos
     ipcMain.handle('file-exists', async (event, filePath) => {
       try {
@@ -422,6 +452,14 @@ class MainController {
         return { success: false, error: 'Ventana principal no disponible' };
       }
       this.windowManager.createEmpresaWindow(this.mainWindow);
+      return { success: true };
+    });
+
+    ipcMain.handle('open-configuracion-sistema-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createConfiguracionSistemaWindow(this.mainWindow);
       return { success: true };
     });
 

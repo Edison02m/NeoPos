@@ -39,7 +39,6 @@ function AppContent() {
 
         // Handle menu company config event
         const handleMenuCompanyConfig = async () => {
-            console.log('[APP] Abriendo ventana de configuración de empresa');
             try {
                 const result = await window.electronAPI.openEmpresaWindow();
                 if (!result.success) {
@@ -50,9 +49,20 @@ function AppContent() {
             }
         };
 
+        // Handle menu sistema config event
+        const handleMenuSistemaConfig = async () => {
+            try {
+                const result = await window.electronAPI.openConfiguracionSistemaWindow();
+                if (!result.success) {
+                    console.error('Error al abrir ventana de sistema:', result.error);
+                }
+            } catch (error) {
+                console.error('Error al abrir ventana de sistema:', error);
+            }
+        };
+
         // Handle menu client config event
         const handleMenuClientConfig = async () => {
-            console.log('[APP] Abriendo ventana de configuración de clientes');
             try {
                 const result = await window.electronAPI.openClienteWindow();
                 if (!result.success) {
@@ -65,7 +75,6 @@ function AppContent() {
 
         // Handle menu supplier config event
         const handleMenuSupplierConfig = async () => {
-            console.log('[APP] Abriendo ventana de configuración de proveedores');
             try {
                 const result = await window.electronAPI.openProveedorWindow();
                 if (!result.success) {
@@ -79,7 +88,6 @@ function AppContent() {
         // Handle navigation messages from menu
         const handleMenuNavigation = (event) => {
             if (event.data && event.data.type === 'NAVIGATE_TO') {
-                console.log('[APP] Navegando a:', event.data.path);
                 navigate(event.data.path);
             }
         };
@@ -109,6 +117,9 @@ function AppContent() {
                 } else if (action === 'menu-config-company') {
             
                     handleMenuCompanyConfig();
+                } else if (action === 'menu-config-sistema') {
+            
+                    handleMenuSistemaConfig();
                 } else if (action === 'menu-inventory-customers') {
             
                     handleMenuClientConfig();
