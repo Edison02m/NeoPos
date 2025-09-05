@@ -9,7 +9,8 @@ const ActionPanel = ({
   onBuscar,
   onImprimir,
   onSalir,
-  loading = false
+  loading = false,
+  disabled = false
 }) => {
   return (
     <div className="w-12 h-full bg-white border-r border-gray-200 py-2">
@@ -28,7 +29,7 @@ const ActionPanel = ({
           onClick={onDeshacer}
           title="Deshacer"
           className="w-8 h-8 flex items-center justify-center text-sm bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
-          disabled={loading}
+          disabled={loading || disabled}
         >
           <Undo2 size={14} />
         </button>
@@ -36,7 +37,7 @@ const ActionPanel = ({
         <button
           onClick={onGuardar}
           title={loading ? 'Guardando…' : 'Guardar'}
-          disabled={loading}
+          disabled={loading || disabled}
           className="w-8 h-8 flex items-center justify-center text-lg bg-gray-900 text-white rounded hover:bg-gray-800 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
         >
           <Save size={14} />
@@ -48,7 +49,7 @@ const ActionPanel = ({
           onClick={onLimpiar}
           title="Limpiar venta"
           className="w-8 h-8 flex items-center justify-center text-sm bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
-          disabled={loading}
+          disabled={loading || disabled}
         >
           <Trash2 size={14} />
         </button>
@@ -57,7 +58,7 @@ const ActionPanel = ({
           onClick={onImprimir}
           title="Imprimir comprobante"
           className="w-8 h-8 flex items-center justify-center text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-          disabled={loading}
+          disabled={loading || disabled}
         >
           <Printer size={14} />
         </button>

@@ -258,6 +258,7 @@ const VentasView = () => {
           onImprimir={handleImprimir}
           onSalir={handleSalir}
           loading={loading}
+          disabled={!ventaActiva}
         />
 
         {/* Área central - Formulario y productos */}
@@ -274,7 +275,8 @@ const VentasView = () => {
                 <select
                   value={ventaData.tipo_comprobante || 'nota'}
                   onChange={(e) => cambiarTipoComprobante(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!ventaActiva}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                 >
                   <option value="nota">Nota de venta</option>
                   <option value="factura">Factura</option>
@@ -290,7 +292,8 @@ const VentasView = () => {
                   type="text"
                   value={ventaData.numero_comprobante || ''}
                   readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm"
+                  disabled={!ventaActiva}
+                  className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 text-gray-700 text-sm disabled:opacity-70"
                 />
               </div>
 
@@ -308,8 +311,12 @@ const VentasView = () => {
               </div>
             </div>
             <div className="text-xs text-gray-600 mt-2">
-              Tipo de venta: <span className="font-semibold">{tipoVenta}</span> · Forma de pago: <span className="font-semibold">{formaPago?.tipo}{formaPago?.tarjeta ? ` (${formaPago.tarjeta})` : ''}</span>
-              <button className="ml-3 px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300" onClick={() => setTipoPagoModalOpen(true)}>Cambiar…</button>
+              {ventaActiva ? (
+                <>
+                  Tipo de venta: <span className="font-semibold">{tipoVenta}</span> · Forma de pago: <span className="font-semibold">{formaPago?.tipo}{formaPago?.tarjeta ? ` (${formaPago.tarjeta})` : ''}</span>
+                  <button className="ml-3 px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300" onClick={() => setTipoPagoModalOpen(true)}>Cambiar…</button>
+                </>
+              ) : <span className="italic text-gray-500">Presione "Nuevo" para iniciar una venta</span>}
             </div>
           </div>
 
@@ -323,7 +330,8 @@ const VentasView = () => {
                   type="text"
                   value={cliente.apellidos}
                   onChange={(e) => updateClienteField('apellidos', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!ventaActiva}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="Apellidos"
                 />
               </div>
@@ -333,7 +341,8 @@ const VentasView = () => {
                   type="text"
                   value={cliente.nombres}
                   onChange={(e) => updateClienteField('nombres', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!ventaActiva}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="Nombres"
                 />
               </div>
@@ -348,7 +357,8 @@ const VentasView = () => {
                       updateClienteField('ruc', e.target.value.trim());
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!ventaActiva}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="RUC/CI y presione ENTER"
                 />
               </div>
@@ -358,7 +368,8 @@ const VentasView = () => {
                   type="text"
                   value={cliente.telefono}
                   onChange={(e) => updateClienteField('telefono', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={!ventaActiva}
+                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                   placeholder="Teléfono"
                 />
               </div>
@@ -369,7 +380,8 @@ const VentasView = () => {
                 type="text"
                 value={cliente.direccion}
                 onChange={(e) => updateClienteField('direccion', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={!ventaActiva}
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
                 placeholder="Dirección"
               />
             </div>
@@ -461,11 +473,11 @@ const VentasView = () => {
                         }
                       }
                     }}
-                    className={`w-full px-3 py-2 border border-gray-300 rounded text-sm ${deteccionAutomaticaActiva ? 'bg-gray-50 text-gray-500' : 'focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500'}`}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded text-sm ${!ventaActiva ? 'bg-gray-100 text-gray-400' : (deteccionAutomaticaActiva ? 'bg-gray-50 text-gray-500' : 'focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500')}`}
                     placeholder={deteccionAutomaticaActiva ? 'AUTO ON: escanee sin seleccionar este campo' : 'Escanear código de barras o digitar código...'}
-                    disabled={loading || deteccionAutomaticaActiva}
+                    disabled={!ventaActiva || loading || deteccionAutomaticaActiva}
                     autoComplete="off"
-                    autoFocus={!deteccionAutomaticaActiva}
+                    autoFocus={ventaActiva && !deteccionAutomaticaActiva}
                   />
                   {codigoBarras && (
                     <button
@@ -479,7 +491,7 @@ const VentasView = () => {
                 </div>
                 <button
                   type="submit"
-                  disabled={loading || !codigoBarras.trim()}
+                  disabled={!ventaActiva || loading || !codigoBarras.trim()}
                   className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
                   {loading ? 'Buscando...' : 'Agregar'}
@@ -492,10 +504,11 @@ const VentasView = () => {
               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
-              {deteccionAutomaticaActiva 
-                ? 'Detección automática activada: Solo escanea el código para agregar productos' 
-                : 'Detección automática desactivada: Escanea o escribe el código y presiona "Agregar"'
-              }
+              {!ventaActiva ? 'Presione "Nuevo" para iniciar una venta.' : (
+                deteccionAutomaticaActiva 
+                ? 'Detección automática activada: Solo escanee el código para agregar productos' 
+                : 'Detección automática desactivada: Escanee o escriba el código y presione "Agregar"'
+              )}
             </div>
           </div>
 
@@ -519,7 +532,11 @@ const VentasView = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {productos.length === 0 ? (
+                  {!ventaActiva ? (
+                    <tr>
+                      <td colSpan="8" className="text-center py-8 text-gray-500 text-sm">Presione "Nuevo" para iniciar una venta.</td>
+                    </tr>
+                  ) : productos.length === 0 ? (
                     <tr>
                       <td colSpan="8" className="text-center py-8 text-gray-500 text-sm">
                         No hay productos agregados. Use el escáner.
@@ -541,6 +558,7 @@ const VentasView = () => {
                             <button
                               onClick={() => actualizarCantidad(producto.codigo, producto.cantidad - 1)}
                               className="w-5 h-5 flex items-center justify-center bg-gray-200 text-gray-600 rounded text-xs hover:bg-gray-300"
+                              disabled={!ventaActiva}
                             >
                               -
                             </button>
@@ -564,6 +582,7 @@ const VentasView = () => {
                           <button
                             onClick={() => eliminarProducto(producto.codigo)}
                             className="inline-flex items-center justify-center w-7 h-7 rounded bg-red-50 text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                            disabled={!ventaActiva}
                             title="Eliminar producto"
                             aria-label={`Eliminar ${producto.descripcion}`}
                             type="button"

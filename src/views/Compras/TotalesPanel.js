@@ -1,33 +1,35 @@
 import React from 'react';
 
 const TotalesPanel = ({ compraData, setCompraData, totales }) => {
-	const fmt = n => Number(n || 0).toFixed(2);
+	const { subtotal = 0, iva = 0, total = 0 } = totales || {};
+
+	const formatMoney = (amount) => new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(amount || 0);
+
 	return (
-		<div className="w-full h-full flex flex-col text-black select-none">
-			<div className="flex-1" />
-			<div className="space-y-2 mb-4">
+			<div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col h-full">
+				<h3 className="text-lg font-semibold mb-4 text-gray-800">Total</h3>
+			<div className="space-y-3 flex-1">
 				<div className="flex justify-between items-center">
-					<span className="text-sm font-medium">Subtotal</span>
-					<input value={fmt(totales.subtotal)} readOnly className="w-24 p-1 border border-gray-400 bg-white text-right text-sm" />
+					<span className="text-sm font-medium text-gray-600">Subtotal:</span>
+					<span className="text-lg font-semibold text-gray-800">{formatMoney(subtotal)}</span>
 				</div>
 				<div className="flex justify-between items-center">
-					<label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-						<input type="checkbox" checked={compraData.considerar_iva} onChange={e=> setCompraData(c=>({...c, considerar_iva:e.target.checked}))} />
-						Considerar IVA
+					<label className="flex items-center gap-2 text-sm font-medium text-gray-600 cursor-pointer select-none">
+						<input type="checkbox" className="rounded border-gray-300" checked={compraData.considerar_iva} onChange={e => setCompraData(c => ({ ...c, considerar_iva: e.target.checked }))} />
+						IVA (15%)
 					</label>
-					<span className="text-xs text-gray-600 pr-1">15%</span>
+					<span className="text-lg font-semibold text-gray-800">{formatMoney(iva)}</span>
 				</div>
-				<div className="flex justify-between items-center">
-					<span className="text-sm font-medium">IVA</span>
-					<input value={fmt(totales.iva)} readOnly className="w-24 p-1 border border-gray-400 bg-white text-right text-sm" />
-				</div>
-				<div className="h-px bg-gray-400" />
-				<div className="flex justify-between items-center">
-					<span className="text-sm font-bold">Total</span>
-					<input value={fmt(totales.total)} readOnly className="w-24 p-1 border border-gray-500 bg-white text-right text-sm font-bold" />
+				<hr className="border-gray-200" />
+				<div className="flex justify-between items-center pt-1">
+					<span className="text-base font-bold text-gray-800">TOTAL:</span>
+					<span className="text-xl font-bold text-blue-600">{formatMoney(total)}</span>
 				</div>
 			</div>
-			<div className="text-[11px] text-gray-700 italic">Modificando una nueva compra</div>
+			<div className="mt-4 pt-3 border-t border-gray-200 text-xs text-gray-500 space-y-1">
+				<div>• Precios sin redondeo final</div>
+				<div>• Valores en USD</div>
+			</div>
 		</div>
 	);
 };
