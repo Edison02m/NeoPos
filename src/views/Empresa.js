@@ -148,57 +148,69 @@ const Empresa = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      try {
-        // En navegador web, usar FileReader para crear una preview
-        if (!window.electronAPI) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const base64String = event.target.result;
-            setImagePreview(base64String);
-            // Guardar solo el nombre del archivo en la BD para navegador
-            setFormData(prev => ({ ...prev, logo: file.name }));
-          };
-          reader.readAsDataURL(file);
-          return;
-        }
+      processLogoFile(file);
+    }
+  };
 
-        // Para Electron: intentar obtener la ruta completa
-        let filePath = '';
-        
-        // En algunos navegadores y Electron, 'path' está disponible
-        if (file.path) {
-          filePath = file.path;
-        } 
-        // En otros casos, usar webkitRelativePath si está disponible
-        else if (file.webkitRelativePath) {
-          filePath = file.webkitRelativePath;
-        }
-        // Fallback: solo el nombre del archivo
-        else {
-          filePath = file.name;
-        }
-        
-        // Normalizar separadores de ruta para Windows
-        filePath = filePath.replace(/\//g, '\\');
-        
-        setFormData(prev => ({ ...prev, logo: filePath }));
-        
-        // Limpiar vista previa anterior
-        setImagePreview(null);
-        
-        // Si tenemos API de Electron, verificar que el archivo existe
-        if (window.electronAPI?.fileExists && filePath.includes('\\')) {
-          window.electronAPI.fileExists(filePath).then(result => {
-            if (!result.exists) {
-              console.warn('El archivo seleccionado puede no existir:', filePath);
-            }
-          });
-        }
-      } catch (error) {
-        console.error('Error procesando archivo:', error);
-        setFormData(prev => ({ ...prev, logo: file.name }));
-        setImagePreview(null);
+  // Procesa un archivo de imagen para el logo (soporta navegador y Electron)
+  const processLogoFile = (file) => {
+    try {
+      if (!window.electronAPI) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64String = event.target.result;
+          setImagePreview(base64String);
+          setFormData(prev => ({ ...prev, logo: file.name }));
+        };
+        reader.readAsDataURL(file);
+        return;
       }
+
+      let filePath = '';
+      if (file.path) {
+        filePath = file.path;
+      } else if (file.webkitRelativePath) {
+        filePath = file.webkitRelativePath;
+      } else {
+        filePath = file.name;
+      }
+      filePath = filePath.replace(/\//g, '\\');
+
+      setFormData(prev => ({ ...prev, logo: filePath }));
+      setImagePreview(null);
+
+      if (window.electronAPI?.fileExists && filePath.includes('\\')) {
+        window.electronAPI.fileExists(filePath).then(result => {
+          if (!result.exists) {
+            console.warn('El archivo seleccionado puede no existir:', filePath);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error procesando archivo:', error);
+      setFormData(prev => ({ ...prev, logo: file.name }));
+      setImagePreview(null);
+    }
+  };
+
+  // Evita que arrastrar/soltar imágenes sobre otros inputs pegue base64
+  const handleFormDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleFormDrop = (e) => {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const targetEl = e.target;
+      const dropZone = targetEl.closest ? targetEl.closest('.logo-drop-zone-empresa') : null;
+      if (dropZone) {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file) processLogoFile(file);
+      } else {
+        e.preventDefault();
+      }
+    } else {
+      e.preventDefault();
     }
   };
 
@@ -418,7 +430,7 @@ const Empresa = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+  <form onSubmit={handleSubmit} onDragOver={handleFormDragOver} onDrop={handleFormDrop}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -630,7 +642,7 @@ const Empresa = () => {
             </label>
             <div className="space-y-2">
               {/* Campo de ruta de imagen */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 logo-drop-zone-empresa">
                 <input
                   type="text"
                   name="logo"

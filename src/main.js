@@ -149,7 +149,7 @@ class MainController {
               label: 'Compras',
               accelerator: 'CmdOrCtrl+B',
               click: () => {
-                this.mainWindow.webContents.send('menu-transactions-purchases');
+                this.windowManager.createComprasWindow(this.mainWindow);
               }
             },
             {

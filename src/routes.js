@@ -11,6 +11,8 @@ import ProveedoresView from './views/Proveedor/index';
 import ProductosView from './views/Producto/index';
 import InventarioView from './views/Inventario/index';
 import VentasView from './views/Ventas/index';
+import ComprasView from './views/Compras';
+console.log('[routes] typeof ComprasView =', typeof ComprasView, ComprasView);
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -78,6 +80,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/ventas" 
         element={<VentasView />} 
+      />
+      <Route 
+        path="/compras" 
+        element={<ComprasView />} 
       />
     </Routes>
   );

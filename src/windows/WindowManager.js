@@ -656,6 +656,184 @@ class WindowManager {
     return ventasWindow;
   }
 
+  createComprasWindow(parentWindow) {
+    const comprasWindow = new BrowserWindow({
+      width: 1400,
+      height: 900,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Gestión de Compras',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    // Cargar contenido según el modo de desarrollo/producción
+    this.loadContent(comprasWindow, '/compras');
+
+    // Logs adicionales de diagnóstico específicos para Compras
+    comprasWindow.webContents.on('dom-ready', () => {
+      console.log('[ComprasWindow] dom-ready');
+    });
+    comprasWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('[ComprasWindow] did-fail-load:', { errorCode, errorDescription, validatedURL });
+    });
+    comprasWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      console.log(`[ComprasWindow][lvl:${level}] ${message} (${sourceId}:${line})`);
+    });
+
+    // Menú específico para la ventana de compras
+    const menuTemplate = [
+      {
+        label: 'Compras',
+        submenu: [
+          {
+            label: 'Nueva Compra',
+            accelerator: 'Ctrl+N',
+            click: () => {
+              comprasWindow.webContents.send('menu-nueva-compra');
+            }
+          },
+          {
+            label: 'Guardar Compra',
+            accelerator: 'Ctrl+S',
+            click: () => {
+              comprasWindow.webContents.send('menu-guardar-compra');
+            }
+          },
+          { type: 'separator' },
+          {
+            label: 'Buscar Producto',
+            accelerator: 'F2',
+            click: () => {
+              comprasWindow.webContents.send('menu-buscar-producto');
+            }
+          },
+          {
+            label: 'Seleccionar Proveedor',
+            accelerator: 'Ctrl+P',
+            click: () => {
+              comprasWindow.webContents.send('menu-seleccionar-proveedor');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Proveedor',
+        submenu: [
+          {
+            label: 'Nuevo Proveedor',
+            accelerator: 'Ctrl+Alt+N',
+            click: () => {
+              // Abrir la ventana de proveedores para registrar uno nuevo
+              if (this.createProveedorWindow) {
+                this.createProveedorWindow(comprasWindow);
+              } else {
+                comprasWindow.webContents.send('menu-nuevo-proveedor');
+              }
+            }
+          },
+          {
+            label: 'Exportar Datos Proveedor',
+            click: () => {
+              comprasWindow.webContents.send('menu-exportar-proveedor');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Ver',
+        submenu: [
+          {
+            label: 'Historial de Compras',
+            accelerator: 'Ctrl+H',
+            click: () => {
+              comprasWindow.webContents.send('menu-historial-compras');
+            }
+          },
+          {
+            label: 'Compras por Proveedor',
+            click: () => {
+              comprasWindow.webContents.send('menu-compras-proveedor');
+            }
+          }
+        ]
+      },
+      {
+        label: 'Editar',
+        submenu: [
+          {
+            label: 'Forma de pago',
+            submenu: [
+              {
+                label: 'Pago en efectivo',
+                type: 'radio',
+                checked: true,
+                click: () => comprasWindow.webContents.send('menu-pago-efectivo')
+              },
+              {
+                label: 'Pago con cheque',
+                type: 'radio',
+                click: () => comprasWindow.webContents.send('menu-pago-cheque')
+              },
+              {
+                label: 'Pago a crédito',
+                type: 'radio',
+                click: () => comprasWindow.webContents.send('menu-pago-credito')
+              }
+            ]
+          },
+          { type: 'separator' },
+          {
+            label: 'Aplicar IVA',
+            type: 'checkbox',
+            checked: true,
+            click: () => comprasWindow.webContents.send('menu-aplicar-iva')
+          },
+          {
+            label: 'Aplicar Descuento',
+            click: () => comprasWindow.webContents.send('menu-aplicar-descuento')
+          }
+        ]
+      },
+      {
+        label: 'Ventana',
+        submenu: [
+          {
+            label: 'Cerrar ventana',
+            accelerator: 'Ctrl+W',
+            click: () => {
+              comprasWindow.close();
+            }
+          }
+        ]
+      }
+    ];
+
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    comprasWindow.setMenu(menu);
+
+    comprasWindow.once('ready-to-show', () => {
+      comprasWindow.show();
+    });
+
+    comprasWindow.on('closed', () => {
+      this.windows.delete('compras');
+    });
+
+    this.windows.set('compras', comprasWindow);
+    return comprasWindow;
+  }
+
   closeWindow(windowName) {
     console.log(`Intentando cerrar ventana: ${windowName}`);
     console.log('Ventanas disponibles:', Array.from(this.windows.keys()));
