@@ -117,7 +117,7 @@ class Compra {
 
     const dbData = this.toDatabase();
 
-    if (this.id) {
+  if (this.id) {
       // Actualizar compra existente
       const updateQuery = `
         UPDATE compra SET 
@@ -141,28 +141,36 @@ class Compra {
       }
       return this;
     } else {
-      // Crear nueva compra
+      // Crear nueva compra (maneja tablas sin AUTOINCREMENT donde id es NOT NULL)
+      if(!this.id) {
+        try {
+          const next = await window.electronAPI.dbGetSingle('SELECT COALESCE(MAX(id),0)+1 as nextId FROM compra');
+          if(next?.success && next.data?.nextId) {
+            this.id = String(next.data.nextId).padStart(1,'0').slice(0,14);
+          } else {
+            this.id = String(Date.now()).slice(-14);
+          }
+        } catch(err){
+          this.id = String(Date.now()).slice(-14);
+        }
+      }
       const insertQuery = `
         INSERT INTO compra (
-          idprov, fecha, subtotal, descuento, total, fpago, codempresa, 
+          id, idprov, fecha, subtotal, descuento, total, fpago, codempresa,
           iva, descripcion, numfactura, autorizacion, subtotal0, credito,
           anticipada, pagado, plazodias, tipo, sustento, trial272
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
-      
       const params = [
-        dbData.idprov, dbData.fecha, dbData.subtotal, dbData.descuento, dbData.total,
+        this.id, dbData.idprov, dbData.fecha, dbData.subtotal, dbData.descuento, dbData.total,
         dbData.fpago, dbData.codempresa, dbData.iva, dbData.descripcion, dbData.numfactura,
         dbData.autorizacion, dbData.subtotal0, dbData.credito, dbData.anticipada, dbData.pagado,
         dbData.plazodias, dbData.tipo, dbData.sustento, dbData.trial272
       ];
-      
       const result = await window.electronAPI.dbRun(insertQuery, params);
-      if (!result.success) {
+      if(!result.success){
         throw new Error(result.error);
       }
-      
-      this.id = result.data.lastID;
       return this;
     }
   }

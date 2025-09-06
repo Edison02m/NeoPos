@@ -1,7 +1,8 @@
 // Global ScanGuard: blocks keyboard-wedge barcode input outside allowed modules
 // Allowed modules: productos, producto, ventas
 
-const ALLOWED_PATHS = ['producto', 'productos', 'venta', 'ventas'];
+// Agregamos 'compra', 'compras' para permitir escaneo manual en Compras
+const ALLOWED_PATHS = ['producto', 'productos', 'venta', 'ventas', 'compra', 'compras'];
 
 function getRouteInfo() {
   const loc = (window.location && (window.location.hash || window.location.pathname)) || '';
@@ -26,6 +27,7 @@ function isAllowedTargetInRoute(elem) {
 
   const inVentas = low.includes('venta');
   const inProductos = low.includes('producto');
+  const inCompras = low.includes('compra');
 
   if (inVentas) {
     if (id === 'codigobarras' || name === 'codigobarras') return true;
@@ -35,6 +37,12 @@ function isAllowedTargetInRoute(elem) {
   if (inProductos) {
     if (id === 'codbarra' || name === 'codbarra') return true;
     if (placeholder.includes('código de barras') || placeholder.includes('codigo de barras')) return true;
+  }
+
+  // Permitir input de código en Compras (campo codigoBarrasCompras) cuando AUTO está apagado
+  if (inCompras) {
+    if (id === 'codigobarrascompras' || name === 'codigobarrascompras') return true;
+    if (placeholder.includes('escanee') || placeholder.includes('código') || placeholder.includes('codigo')) return true;
   }
 
   return false;
@@ -96,7 +104,7 @@ export function startScanGuard(options = {}) {
   // Allow pausing guard (e.g., while a modal is open)
   const paused = !!window.__barcodeAutoScanPaused;
   if (paused) return;
-  const autoActive = !!window.__barcodeAutoScanActive; // set by ventas/productos when AUTO ON
+  const autoActive = !!window.__barcodeAutoScanActive; // cuando está activo bloqueamos escritura directa
     const allowRoute = isAllowedRoute();
     const active = document.activeElement;
     // Never block sensitive input types for normal typing
@@ -107,11 +115,12 @@ export function startScanGuard(options = {}) {
       }
     }
     // On allowed routes, only allow typing freely in the target barcode field; otherwise protect
-    if (allowRoute && isAllowedTargetInRoute(active)) {
+  if (allowRoute && isAllowedTargetInRoute(active)) {
       return;
     }
 
   // If auto-scan is active on allowed routes, swallow printable keys to avoid leaking into inputs
+  // Solo bloquear caracteres cuando AUTO está activo; si AUTO off en Compras permitimos escritura en su input
   if (autoActive && allowRoute) {
       if (e.key && e.key.length === 1) {
         e.preventDefault();
@@ -182,7 +191,7 @@ export function startScanGuard(options = {}) {
         return;
       }
     }
-  if (allowRoute && isAllowedTargetInRoute(active)) return;
+  if (allowRoute && isAllowedTargetInRoute(active)) return; // permitir escritura normal en campos autorizados (incluye compras)
 
     const now = Date.now();
     const key = e.key;

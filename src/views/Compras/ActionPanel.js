@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Save, Undo2, Redo2, Trash2, X, Edit } from 'lucide-react';
+import { Plus, Save, Undo2, Redo2, Trash2, X, Edit, ScanBarcode, RotateCcw } from 'lucide-react';
 
 const ActionPanel = ({
 	onNuevo,
@@ -7,6 +7,8 @@ const ActionPanel = ({
 	onRehacer,
 	onEliminar,
 	onGuardar,
+	onAbrirImei,
+	onDevolucion,
 	onCerrar,
 	loading = false,
 	disabled = false
@@ -23,6 +25,10 @@ const ActionPanel = ({
 				<button title="Rehacer" onClick={onRehacer} disabled={loading || disabled} className={`${base} bg-gray-600 text-white hover:bg-gray-700`}><Redo2 size={14} /></button>
 				{/* Guardar */}
 				<button title="Guardar" onClick={onGuardar} disabled={loading || disabled} className={`${base} bg-gray-900 text-white hover:bg-gray-800`}><Save size={14} /></button>
+				{/* IMEI */}
+				<button title="Registrar IMEIs" onClick={onAbrirImei} disabled={loading || disabled} className={`${base} bg-indigo-600 text-white hover:bg-indigo-700`}><ScanBarcode size={14} /></button>
+				{/* Devolución */}
+				<button title="Devolución" onClick={onDevolucion} disabled={loading || disabled} className={`${base} bg-amber-600 text-white hover:bg-amber-700`}><RotateCcw size={14} /></button>
 				{/* Eliminar */}
 				<button title="Eliminar" onClick={onEliminar} disabled={loading || disabled} className={`${base} bg-red-600 text-white hover:bg-red-700`}><Trash2 size={14} /></button>
 				<div className="h-2" />
