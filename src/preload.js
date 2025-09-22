@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openProductoWindow: () => ipcRenderer.invoke('open-producto-window'),
     openInventarioWindow: () => ipcRenderer.invoke('open-inventario-window'),
     openVentasWindow: () => ipcRenderer.invoke('open-ventas-window'),
+  openCreditoWindow: () => ipcRenderer.invoke('open-credito-window'),
+  openReservasWindow: () => ipcRenderer.invoke('open-reservas-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
     closeCurrentWindow: () => ipcRenderer.invoke('close-current-window'),
 
@@ -117,6 +119,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-ultimo-registro',
   'menu-ir-registro',
   'menu-reporte-productos',
+  // Crédito window specific
+  'menu-credito-registrar-abono',
+  'menu-credito-imprimir',
+  'menu-credito-ver-datos-cliente',
+  'menu-credito-ver-detalle',
+  'menu-credito-ver-abonos',
+  'menu-credito-filtrar-fecha-hoy',
+  'menu-credito-filtrar-fecha-30',
+  'menu-credito-filtrar-saldo-pendiente',
+  'menu-credito-filtrar-saldo-cancelado',
+  // Reservas window specific
+  'menu-reserva-registrar-abono',
+  'menu-reserva-imprimir',
+  'menu-reserva-ver-datos-cliente',
+  'menu-reserva-ver-detalle',
+  'menu-reserva-ver-abonos',
+  'menu-reserva-filtrar-activas',
+  'menu-reserva-filtrar-completadas',
   // Compras window specific
   'menu-nueva-compra',
   'menu-guardar-compra',
@@ -210,6 +230,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   'menu-ir-registro',
   'menu-reporte-productos'
   , 'menu-nueva-compra','menu-guardar-compra','menu-seleccionar-proveedor','menu-historial-compras','menu-compras-proveedor','menu-aplicar-iva','menu-aplicar-descuento'
+  // Crédito window specific
+  ,'menu-credito-registrar-abono','menu-credito-imprimir','menu-credito-ver-datos-cliente','menu-credito-ver-detalle','menu-credito-ver-abonos','menu-credito-filtrar-fecha-hoy','menu-credito-filtrar-fecha-30','menu-credito-filtrar-saldo-pendiente','menu-credito-filtrar-saldo-cancelado'
+  // Reservas window specific
+  ,'menu-reserva-registrar-abono','menu-reserva-imprimir','menu-reserva-ver-datos-cliente','menu-reserva-ver-detalle','menu-reserva-ver-abonos','menu-reserva-filtrar-activas','menu-reserva-filtrar-completadas'
     ];
 
     console.log('[PRELOAD] Eventos válidos registrados:', validActions);

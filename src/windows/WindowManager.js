@@ -839,6 +839,209 @@ class WindowManager {
     return comprasWindow;
   }
 
+  createCreditoWindow(parentWindow) {
+    const creditoWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Créditos de Clientes',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    this.loadContent(creditoWindow, '/credito');
+
+    creditoWindow.webContents.on('dom-ready', () => {
+      console.log('[CreditoWindow] dom-ready');
+    });
+
+    const menuTemplate = [
+      {
+        label: 'Crédito',
+        submenu: [
+          {
+            label: 'Registrar abono',
+            accelerator: 'Ctrl+N',
+            click: () => creditoWindow.webContents.send('menu-credito-registrar-abono')
+          },
+          { type: 'separator' },
+          {
+            label: 'Imprimir',
+            click: () => creditoWindow.webContents.send('menu-credito-imprimir')
+          }
+        ]
+      },
+      {
+        label: 'Edición',
+        submenu: [
+          {
+            label: 'Ver datos del cliente',
+            click: () => creditoWindow.webContents.send('menu-credito-ver-datos-cliente')
+          },
+            {
+              label: 'Ver detalle del Crédito',
+              click: () => creditoWindow.webContents.send('menu-credito-ver-detalle')
+            },
+            {
+              label: 'Ver abonos realizados',
+              click: () => creditoWindow.webContents.send('menu-credito-ver-abonos')
+            },
+            { type: 'separator' },
+            {
+              label: 'Filtrar por Fecha',
+              submenu: [
+                {
+                  label: 'Hoy',
+                  click: () => creditoWindow.webContents.send('menu-credito-filtrar-fecha-hoy')
+                },
+                {
+                  label: 'Últimos 30 días',
+                  click: () => creditoWindow.webContents.send('menu-credito-filtrar-fecha-30')
+                }
+              ]
+            },
+            {
+              label: 'Filtrar por Saldo',
+              submenu: [
+                {
+                  label: 'Con saldo pendiente',
+                  click: () => creditoWindow.webContents.send('menu-credito-filtrar-saldo-pendiente')
+                },
+                {
+                  label: 'Cancelados',
+                  click: () => creditoWindow.webContents.send('menu-credito-filtrar-saldo-cancelado')
+                }
+              ]
+            }
+        ]
+      },
+      {
+        label: 'Ventana',
+        submenu: [
+          {
+            label: 'Cerrar la ventana Crédito',
+            accelerator: 'Ctrl+W',
+            click: () => creditoWindow.close()
+          }
+        ]
+      }
+    ];
+
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    creditoWindow.setMenu(menu);
+
+    creditoWindow.once('ready-to-show', () => creditoWindow.show());
+    creditoWindow.on('closed', () => this.windows.delete('credito'));
+    this.windows.set('credito', creditoWindow);
+    return creditoWindow;
+  }
+
+  createReservasWindow(parentWindow) {
+    const reservasWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Reservaciones de Clientes',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    this.loadContent(reservasWindow, '/reservaciones');
+
+    reservasWindow.webContents.on('dom-ready', () => {
+      console.log('[ReservasWindow] dom-ready');
+    });
+
+    const menuTemplate = [
+      {
+        label: 'Reservaciones',
+        submenu: [
+          {
+            label: 'Registrar abono',
+            accelerator: 'Ctrl+N',
+            click: () => reservasWindow.webContents.send('menu-reserva-registrar-abono')
+          },
+          { type: 'separator' },
+          {
+            label: 'Imprimir',
+            click: () => reservasWindow.webContents.send('menu-reserva-imprimir')
+          }
+        ]
+      },
+      {
+        label: 'Edición',
+        submenu: [
+          {
+            label: 'Ver datos del cliente',
+            click: () => reservasWindow.webContents.send('menu-reserva-ver-datos-cliente')
+          },
+          {
+            label: 'Ver detalle de Reservación',
+            click: () => reservasWindow.webContents.send('menu-reserva-ver-detalle')
+          },
+          {
+            label: 'Ver abonos realizados',
+            click: () => reservasWindow.webContents.send('menu-reserva-ver-abonos')
+          },
+          { type: 'separator' },
+          {
+            label: 'Filtrar por Estado',
+            submenu: [
+              {
+                label: 'Activas',
+                click: () => reservasWindow.webContents.send('menu-reserva-filtrar-activas')
+              },
+              {
+                label: 'Completadas',
+                click: () => reservasWindow.webContents.send('menu-reserva-filtrar-completadas')
+              }
+            ]
+          }
+        ]
+      },
+      {
+        label: 'Ventana',
+        submenu: [
+          {
+            label: 'Cerrar la ventana Reservaciones',
+            accelerator: 'Ctrl+W',
+            click: () => reservasWindow.close()
+          }
+        ]
+      }
+    ];
+
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    reservasWindow.setMenu(menu);
+
+    reservasWindow.once('ready-to-show', () => reservasWindow.show());
+    reservasWindow.on('closed', () => this.windows.delete('reservaciones'));
+    this.windows.set('reservaciones', reservasWindow);
+    return reservasWindow;
+  }
+
   closeWindow(windowName) {
     console.log(`Intentando cerrar ventana: ${windowName}`);
     console.log('Ventanas disponibles:', Array.from(this.windows.keys()));

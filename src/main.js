@@ -156,14 +156,14 @@ class MainController {
               label: 'Crédito',
               accelerator: 'CmdOrCtrl+R',
               click: () => {
-                this.mainWindow.webContents.send('menu-transactions-credit');
+                this.windowManager.createCreditoWindow(this.mainWindow);
               }
             },
             {
               label: 'Reservaciones',
               accelerator: 'CmdOrCtrl+E',
               click: () => {
-                this.mainWindow.webContents.send('menu-transactions-reservations');
+                this.windowManager.createReservasWindow(this.mainWindow);
               }
             }
           ]
@@ -549,6 +549,24 @@ class MainController {
         return { success: false, error: 'Ventana principal no disponible' };
       }
       this.windowManager.createVentasWindow(this.mainWindow);
+      return { success: true };
+    });
+
+    // Abrir ventana de Créditos (IPC opcional para llamadas desde renderer)
+    ipcMain.handle('open-credito-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createCreditoWindow(this.mainWindow);
+      return { success: true };
+    });
+
+    // Abrir ventana de Reservaciones (IPC opcional para llamadas desde renderer)
+    ipcMain.handle('open-reservas-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createReservasWindow(this.mainWindow);
       return { success: true };
     });
 

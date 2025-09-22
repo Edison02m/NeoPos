@@ -12,6 +12,8 @@ import ProductosView from './views/Producto/index';
 import InventarioView from './views/Inventario/index';
 import VentasView from './views/Ventas/index';
 import ComprasView from './views/Compras';
+import CreditoView from './views/Credito';
+import ReservacionesView from './views/Reservaciones';
 console.log('[routes] typeof ComprasView =', typeof ComprasView, ComprasView);
 
 
@@ -84,6 +86,14 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/compras" 
         element={<ComprasView />} 
+      />
+      <Route
+        path="/credito"
+        element={<CreditoView />}
+      />
+      <Route
+        path="/reservaciones"
+        element={<ReservacionesView />}
       />
     </Routes>
   );
