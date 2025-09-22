@@ -772,16 +772,19 @@ class WindowManager {
                 label: 'Pago en efectivo',
                 type: 'radio',
                 checked: true,
+                id: 'compras-pago-efectivo',
                 click: () => comprasWindow.webContents.send('menu-pago-efectivo')
               },
               {
                 label: 'Pago con cheque',
                 type: 'radio',
+                id: 'compras-pago-cheque',
                 click: () => comprasWindow.webContents.send('menu-pago-cheque')
               },
               {
                 label: 'Pago a crédito',
                 type: 'radio',
+                id: 'compras-pago-credito',
                 click: () => comprasWindow.webContents.send('menu-pago-credito')
               }
             ]
@@ -795,7 +798,13 @@ class WindowManager {
           },
           {
             label: 'Aplicar Descuento',
-            click: () => comprasWindow.webContents.send('menu-aplicar-descuento')
+            type: 'checkbox',
+            checked: false,
+            id: 'compras-aplicar-descuento',
+            click: (menuItem) => {
+              // Alterna modo descuento en renderer
+              comprasWindow.webContents.send('menu-aplicar-descuento');
+            }
           }
         ]
       },
@@ -813,8 +822,10 @@ class WindowManager {
       }
     ];
 
-    const menu = Menu.buildFromTemplate(menuTemplate);
-    comprasWindow.setMenu(menu);
+  const menu = Menu.buildFromTemplate(menuTemplate);
+  // Guardar referencia para poder actualizar estado de checkboxes vía IPC
+  comprasWindow._menu = menu;
+  comprasWindow.setMenu(menu);
 
     comprasWindow.once('ready-to-show', () => {
       comprasWindow.show();

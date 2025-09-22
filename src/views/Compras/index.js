@@ -14,8 +14,10 @@ const ComprasView = () => {
 	const [productos, setProductos] = useState([]);
 	const [compraId, setCompraId] = useState(null);
 	const [proveedor, setProveedor] = useState(null);
-	const [compraData, setCompraData] = useState({ fecha: new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true });
-	const [totales, setTotales] = useState({ subtotal:0, iva:0, total:0 });
+  const [compraData, setCompraData] = useState({ fecha: new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0 });
+  const [totales, setTotales] = useState({ subtotal:0, subtotal0:0, descuento:0, iva:0, total:0 });
+  const [modoDescuento, setModoDescuento] = useState(false);
+  const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(false); // true = %, false = valor absoluto
 	const [openProdModal, setOpenProdModal] = useState(false);
 	const [openProvModal, setOpenProvModal] = useState(false);
 	const [habilitado, setHabilitado] = useState(false);
@@ -53,19 +55,94 @@ const ComprasView = () => {
 
   useEffect(()=>{ const handler=(e)=>{ if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); deshacerAccion(); } }; window.addEventListener('keydown', handler); return ()=> window.removeEventListener('keydown', handler); }, [deshacerAccion]);
 
-  useEffect(()=>{ const subtotal = productos.reduce((s,p)=> s + p.cantidad * p.precio, 0); const iva = compraData.considerar_iva ? subtotal * 0.15 : 0; setTotales({ subtotal, iva, total: subtotal + iva });}, [productos, compraData.considerar_iva]);
+  // Recalculo de totales considerando descuentos por producto
+  useEffect(()=>{
+    let subtotalGravado = 0, subtotalCero = 0, descGravado = 0, descCero = 0;
+    for(const p of productos){
+      const linea = p.cantidad * p.precio;
+      let desc;
+      if (descuentoPorcentaje) {
+        // Si está en modo porcentaje, p.descuento es un porcentaje
+        const porcentaje = Math.min(Math.max(p.descuento||0,0), 100);
+        desc = (linea * porcentaje) / 100;
+      } else {
+        // Si está en modo absoluto, p.descuento es un valor fijo
+        desc = Math.min(Math.max(p.descuento||0,0), linea);
+      }
+      if(p.gravaiva==='1') { subtotalGravado += linea; descGravado += desc; }
+      else { subtotalCero += linea; descCero += desc; }
+    }
+    const subtotal = subtotalGravado + subtotalCero; // antes de descuento
+    const descuento = descGravado + descCero;
+    const baseIva = subtotalGravado - descGravado; // descuento antes de IVA
+    const iva = compraData.considerar_iva ? baseIva * 0.15 : 0;
+    const total = subtotal - descuento + iva;
+    setTotales({ subtotal, subtotal0: subtotalCero, descuento, iva, total });
+  }, [productos, compraData.considerar_iva, descuentoPorcentaje]);
 
 	const obtenerProximoId = useCallback(async ()=>{ try { const res = await window.electronAPI?.dbGetSingle?.('SELECT MAX(id) as lastId FROM compra'); if(res?.success){ const last=parseInt(res.data?.lastId)||0; return last+1;} } catch(_){} return null; }, []);
-	const nuevaCompra = useCallback(async ()=>{ setHabilitado(true); setProductos([]); setProveedor(null); setCompraData(c=>({...c, numfactura:'', fecha:new Date().toISOString().split('T')[0]})); const next=await obtenerProximoId(); setCompraId(next); }, [obtenerProximoId]);
+  const nuevaCompra = useCallback(async ()=>{ setHabilitado(true); setProductos([]); setProveedor(null); setCompraData(c=>({...c, numfactura:'', fecha:new Date().toISOString().split('T')[0], considerar_iva:true, fpago:'CONTADO', plazodias:0 })); const next=await obtenerProximoId(); setCompraId(next); }, [obtenerProximoId]);
 	const editarCompra = ()=>{}; // Placeholder
 	const cerrarVentana = ()=> { try { window.close(); } catch(_){} };
 	const abrirImei = ()=>{ if(!habilitado) return; if(productos.length===0){ window.alert?.('Agregue productos primero'); return;} const prodPend = productos.find(p=> !(imeiMap[p.codigo]) || imeiMap[p.codigo].length < p.cantidad); setImeiProductoSel(prodPend || productos[0]); setImeiModalOpen(true); };
-	const eliminarCompra = ()=>{ if(!habilitado) return; if(window.confirm('¿Desea limpiar completamente el formulario de compra?')){ pushHistory(); setProductos([]); setProveedor(null); setCompraData({ fecha:new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true}); setTotales({subtotal:0, iva:0,total:0}); setCodigoBarras(''); setImeiMap({}); setImeiProductoSel(null); setImeiModalOpen(false); setDeteccionAutomaticaActiva(false); setDevolucionActiva(false); setCompraId(null); setHabilitado(false);} };
+  const eliminarCompra = ()=>{ if(!habilitado) return; if(window.confirm('¿Desea limpiar completamente el formulario de compra?')){ pushHistory(); setProductos([]); setProveedor(null); setCompraData({ fecha:new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0 }); setTotales({subtotal:0, subtotal0:0, descuento:0, iva:0,total:0}); setCodigoBarras(''); setImeiMap({}); setImeiProductoSel(null); setImeiModalOpen(false); setDeteccionAutomaticaActiva(false); setDevolucionActiva(false); setCompraId(null); setHabilitado(false); setModoDescuento(false); try{ window.electronAPI?.setComprasDescuentoMenu?.(false);}catch(_){} } };
 	const toggleDevolucion = ()=>{ pushHistory(); setDevolucionActiva(d=>!d); };
-	const agregarProducto = (p)=>{ if(!habilitado) return; pushHistory(); const precioBase=parseFloat(p.pcompra ?? p.precio_compra ?? p.precio ?? p.pvp ?? 0)||0; if(precioBase<=0){ window.alert?.('El producto no tiene precio de compra definido'); return;} setProductos(prev=>{ const existe=prev.find(x=>x.codigo===p.codigo); if(existe) return prev.map(x=> x.codigo===p.codigo?{...x, cantidad:x.cantidad+1}:x); return [...prev, { codigo:p.codigo, descripcion:p.descripcion||p.producto, cantidad:1, precio:precioBase, codbarra:p.codigobarra||p.codbarra||p.codigoaux||'', gravaiva:(p.grabaiva ?? p.gravaiva)==='0'? '0':'1' }]; }); setOpenProdModal(false); };
+  const agregarProducto = (p)=>{ if(!habilitado) return; pushHistory(); const precioBase=parseFloat(p.pcompra ?? p.precio_compra ?? p.precio ?? p.pvp ?? 0)||0; if(precioBase<=0){ window.alert?.('El producto no tiene precio de compra definido'); return;} setProductos(prev=>{ const existe=prev.find(x=>x.codigo===p.codigo); if(existe) return prev.map(x=> x.codigo===p.codigo?{...x, cantidad:x.cantidad+1}:x); return [...prev, { codigo:p.codigo, descripcion:p.descripcion||p.producto, cantidad:1, precio:precioBase, descuento:0, codbarra:p.codigobarra||p.codbarra||p.codigoaux||'', gravaiva:(p.grabaiva ?? p.gravaiva)==='0'? '0':'1' }]; }); setOpenProdModal(false); };
 	const eliminarProducto = useCallback(codigo=>{ pushHistory(); setProductos(prev=> prev.filter(p=> p.codigo!==codigo)); }, [pushHistory]);
-	const actualizarCantidad = useCallback((codigo,nueva)=>{ pushHistory(); setProductos(prev=> prev.map(p=> p.codigo===codigo?{...p, cantidad:Math.max(1,nueva)}:p)); }, [pushHistory]);
-	const actualizarPrecio = useCallback((codigo,nuevo)=>{ pushHistory(); setProductos(prev=> prev.map(p=> p.codigo===codigo?{...p, precio:nuevo}:p)); }, [pushHistory]);
+	const actualizarCantidad = useCallback((codigo,nueva)=>{ 
+    pushHistory(); 
+    setProductos(prev=> prev.map(p=> {
+      if (p.codigo === codigo) {
+        const nuevaCantidad = Math.max(1, nueva);
+        const nuevoTotalLinea = nuevaCantidad * p.precio;
+        let descuentoAjustado = p.descuento;
+        
+        // Si el descuento actual excede el nuevo total de línea (en modo absoluto)
+        if (!descuentoPorcentaje && p.descuento > nuevoTotalLinea) {
+          descuentoAjustado = nuevoTotalLinea;
+        }
+        
+        return {...p, cantidad: nuevaCantidad, descuento: descuentoAjustado};
+      }
+      return p;
+    })); 
+  }, [pushHistory, descuentoPorcentaje]);
+  const actualizarPrecio = useCallback((codigo,nuevo)=>{ 
+    pushHistory(); 
+    setProductos(prev=> prev.map(p=> {
+      if (p.codigo === codigo) {
+        const nuevoPrecio = Math.max(0, nuevo);
+        const nuevoTotalLinea = p.cantidad * nuevoPrecio;
+        let descuentoAjustado = p.descuento;
+        
+        // Si el descuento actual excede el nuevo total de línea (en modo absoluto)
+        if (!descuentoPorcentaje && p.descuento > nuevoTotalLinea) {
+          descuentoAjustado = nuevoTotalLinea;
+        }
+        
+        return {...p, precio: nuevoPrecio, descuento: descuentoAjustado};
+      }
+      return p;
+    })); 
+  }, [pushHistory, descuentoPorcentaje]);
+  const actualizarDescuento = useCallback((codigo,nuevo)=>{ 
+    pushHistory(); 
+    setProductos(prev=> prev.map(p=> {
+      if(p.codigo === codigo) {
+        let descuentoFinal = Math.max(0, nuevo);
+        // Si es porcentaje, limitar a 100%
+        if(descuentoPorcentaje) {
+          descuentoFinal = Math.min(descuentoFinal, 100);
+        } else {
+          // Si es valor absoluto, limitar al total de la línea
+          const totalLinea = p.cantidad * p.precio;
+          descuentoFinal = Math.min(descuentoFinal, totalLinea);
+        }
+        return {...p, descuento: descuentoFinal};
+      }
+      return p;
+    })); 
+  }, [pushHistory, descuentoPorcentaje]);
   const seleccionarProveedor = (prov)=> { 
     pushHistory(); 
     setProveedor(prov); 
@@ -75,13 +152,58 @@ const ComprasView = () => {
 	const handleCodigoBarrasChange = (v)=> setCodigoBarras(v);
 	const toggleDeteccionAutomatica = ()=>{ if(!habilitado) return; setDeteccionAutomaticaActiva(a=>!a); };
 
-  const guardarCompra = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ window.alert?.('No hay productos'); return;} if(!proveedor){ window.alert?.('Seleccione un proveedor'); return;} const productosConImeiPend=productos.filter(p=>{ const requiere=/imei/i.test(p.descripcion||'') || (p.codbarra && p.codbarra.length>=14 && p.codbarra.length<=17); if(!requiere) return false; const arr=imeiMap[p.codigo]||[]; return arr.length!==p.cantidad; }); if(productosConImeiPend.length>0){ if(!window.confirm('Faltan IMEIs. ¿Guardar de todas formas?')) return; } const subtotalGravado=productos.filter(p=>p.gravaiva==='1').reduce((s,p)=>s+p.cantidad*p.precio,0); const subtotalCero=productos.filter(p=>p.gravaiva!=='1').reduce((s,p)=>s+p.cantidad*p.precio,0); const subtotal=subtotalGravado+subtotalCero; const iva = compraData.considerar_iva ? subtotalGravado*0.15:0; const total=subtotal+iva; try { const numfact = compraData.numfactura?.trim() || ('CF-'+Date.now().toString().slice(-6)); const idprovReal = proveedor?.cod || proveedor?.codigo || ''; if(!idprovReal){ console.warn('Proveedor sin cod/codigo definido. Se usará id/ruc/cedula como fallback y esto afectará consultas agrupadas.'); } const idprovFallback = proveedor?.id || proveedor?.ruc || proveedor?.cedula || ''; const payload={ idprov: idprovReal || idprovFallback, fecha:compraData.fecha, subtotal, descuento:0, total, fpago:0, codempresa:1, iva, descripcion:`Compra proveedor ${proveedor?.empresa||proveedor?.nombre||''}`.slice(0,190), numfactura:numfact, autorizacion:'', subtotal0:subtotalCero, credito:'', anticipada:'', pagado:'S', plazodias:0, tipo:'', sustento:'', trial272:'' }; const resp=await compraController.saveCompra(payload); if(!resp.success){ window.alert?.('Error guardando compra: '+resp.message); return;} const saved=resp.data; if(window.electronAPI?.dbRun){ try { await window.electronAPI.dbRun('BEGIN'); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) + ?, pcompra = ? WHERE codigo = ?', [pr.cantidad, pr.precio, pr.codigo]); await window.electronAPI.dbRun('INSERT INTO compradet (item, codprod, cantidad, precio, gravaiva, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1','', saved.id]); const imeis=imeiMap[pr.codigo]||[]; for(const imei of imeis){ await window.electronAPI.dbRun('INSERT INTO compraimei (codprod, idcompra, imei) VALUES (?, ?, ?)', [pr.codigo, saved.id, imei]); } } await window.electronAPI.dbRun('COMMIT'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} } } setCompraId(saved.id); window.alert?.('Compra guardada'); } catch(e){ window.alert?.('Error guardando compra'); } }, [habilitado, productos, proveedor, compraData, imeiMap, compraController]);
+	const guardarCompra = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ window.alert?.('No hay productos'); return;} if(!proveedor){ window.alert?.('Seleccione un proveedor'); return;} const productosConImeiPend=productos.filter(p=>{ const requiere=/imei/i.test(p.descripcion||'') || (p.codbarra && p.codbarra.length>=14 && p.codbarra.length<=17); if(!requiere) return false; const arr=imeiMap[p.codigo]||[]; return arr.length!==p.cantidad; }); if(productosConImeiPend.length>0){ if(!window.confirm('Faltan IMEIs. ¿Guardar de todas formas?')) return; } // Calcular totales coherentes
+    let subtotalGravado=0, subtotalCero=0, descGrav=0, descCero=0; const lineas=[];
+    for(const p of productos){ const linea=p.cantidad*p.precio; const desc=Math.min(Math.max(p.descuento||0,0), linea); if(p.gravaiva==='1'){ subtotalGravado+=linea; descGrav+=desc; } else { subtotalCero+=linea; descCero+=desc; } lineas.push(p); }
+    const subtotal = subtotalGravado + subtotalCero; const descuento = descGrav + descCero; const baseIva = subtotalGravado - descGrav; const iva = compraData.considerar_iva ? baseIva * 0.15 : 0; const total = subtotal - descuento + iva; try { const numfact = compraData.numfactura?.trim() || ('CF-'+Date.now().toString().slice(-6)); const idprovReal = proveedor?.cod || proveedor?.codigo || ''; if(!idprovReal){ console.warn('Proveedor sin cod/codigo definido. Se usará id/ruc/cedula como fallback y esto afectará consultas agrupadas.'); } const idprovFallback = proveedor?.id || proveedor?.ruc || proveedor?.cedula || ''; // Descripción basada en productos
+      let descProductos = productos.map(p=>`${p.codigo}x${p.cantidad}`).join(', ');
+      if(descProductos.length>190) descProductos = descProductos.slice(0,187)+'...';
+      const esCredito = compraData.fpago==='CREDITO';
+      const payload={ idprov: idprovReal || idprovFallback, fecha:compraData.fecha, subtotal, descuento, total, fpago:compraData.fpago, codempresa:1, iva, descripcion:descProductos, numfactura:numfact, autorizacion:'', subtotal0:subtotalCero, credito: esCredito ? 'S':'', anticipada:'', pagado: esCredito ? 'N':'S', plazodias: esCredito ? (parseInt(compraData.plazodias)||0):0, tipo:'', sustento:'', trial272:'' };
+  const resp=await compraController.saveCompra(payload); if(!resp.success){ window.alert?.('Error guardando compra: '+resp.message); return;} const saved=resp.data; if(window.electronAPI?.dbRun){ try { await window.electronAPI.dbRun('BEGIN'); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) + ?, pcompra = ? WHERE codigo = ?', [pr.cantidad, pr.precio, pr.codigo]); // Intentar agregar columna descuento si no existe (una sola vez)
+    if(idx===0){ try { await window.electronAPI.dbRun('ALTER TABLE compradet ADD COLUMN descuento REAL(9,3)'); } catch(_ignored){} }
+    const lineaDesc = Math.min(Math.max(pr.descuento||0,0), pr.cantidad*pr.precio);
+    await window.electronAPI.dbRun('INSERT INTO compradet (item, codprod, cantidad, precio, gravaiva, descuento, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1', lineaDesc,'', saved.id]); const imeis=imeiMap[pr.codigo]||[]; for(const imei of imeis){ await window.electronAPI.dbRun('INSERT INTO compraimei (codprod, idcompra, imei) VALUES (?, ?, ?)', [pr.codigo, saved.id, imei]); } } await window.electronAPI.dbRun('COMMIT'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} } } setCompraId(saved.id); window.alert?.('Compra guardada'); } catch(e){ window.alert?.('Error guardando compra'); } }, [habilitado, productos, proveedor, compraData, imeiMap, compraController]);
 
   const guardarDevolucion = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ window.alert?.('No hay productos para devolver'); return;} if(!proveedor){ window.alert?.('Seleccione un proveedor'); return;} try { if(!window.confirm('Confirmar devolución?')) return; let subtotal = productos.reduce((s,p)=> s + p.cantidad*p.precio,0); await window.electronAPI.dbRun('BEGIN'); let nextId=Date.now(); try{ const r=await window.electronAPI.dbGetSingle('SELECT MAX(id) as lastId FROM devcompra'); if(r?.data?.lastId) nextId=(parseInt(r.data.lastId)||0)+1;}catch(_){ } await window.electronAPI.dbRun('INSERT INTO devcompra (id, fecha, subtotal, total, descripcion, idcompra, trial272) VALUES (?, ?, ?, ?, ?, ?, ?)', [nextId, new Date().toISOString().split('T')[0], subtotal, subtotal, 'Devolución compra', compraId||'', '']); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) - ? WHERE codigo = ?', [pr.cantidad, pr.codigo]); await window.electronAPI.dbRun('INSERT INTO devcompradet (item, codprod, cantidad, precio, gravaiva, trial272, iddevcompra) VALUES (?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1','', nextId]); } await window.electronAPI.dbRun('COMMIT'); window.alert?.('Devolución registrada'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} window.alert?.('Error devolución'); } }, [habilitado, productos, proveedor, compraId]);
 
   const cargarHistorial = useCallback(async ()=>{ setCargandoHistorial(true); try{ const resp=await compraController.getHistorialCompras(300); if(resp.success) setHistorial(resp.data); } catch(e){} finally{ setCargandoHistorial(false);} }, [compraController]);
 
-  useEffect(()=>{ if(!window.electronAPI?.onMenuAction) return; const off=window.electronAPI.onMenuAction((action)=>{ if(action==='menu-nueva-compra') nuevaCompra(); else if(action==='menu-guardar-compra'){ (devolucionActiva? guardarDevolucion: guardarCompra)(); } else if(action==='menu-buscar-producto'){ if(habilitado) setOpenProdModal(true);} else if(action==='menu-seleccionar-proveedor'){ if(habilitado) setOpenProvModal(true);} else if(action==='menu-aplicar-iva'){ setCompraData(c=>({...c, considerar_iva:!c.considerar_iva})); } else if(action==='menu-historial-compras'){ setMostrarHistorial(true); cargarHistorial(); } }); return ()=> { try { off?.(); } catch(_){} }; }, [nuevaCompra, guardarCompra, guardarDevolucion, habilitado, devolucionActiva, cargarHistorial]);
+  useEffect(()=>{ if(!window.electronAPI?.onMenuAction) return; const off=window.electronAPI.onMenuAction((action)=>{ 
+    if(action==='menu-nueva-compra') nuevaCompra(); 
+    else if(action==='menu-guardar-compra'){ (devolucionActiva? guardarDevolucion: guardarCompra)(); } 
+    else if(action==='menu-buscar-producto'){ if(habilitado) setOpenProdModal(true);} 
+    else if(action==='menu-seleccionar-proveedor'){ if(habilitado) setOpenProvModal(true);} 
+    else if(action==='menu-aplicar-iva'){ setCompraData(c=>({...c, considerar_iva:!c.considerar_iva})); } 
+    else if(action==='menu-historial-compras'){ setMostrarHistorial(true); cargarHistorial(); }
+    // Sincronizar formas de pago del menú con TotalesPanel
+    else if(action==='menu-pago-efectivo'){ setCompraData(c=>({...c, fpago:'CONTADO'})); }
+    else if(action==='menu-pago-cheque'){ setCompraData(c=>({...c, fpago:'TRANSFERENCIA'})); }
+    else if(action==='menu-pago-credito'){ setCompraData(c=>({...c, fpago:'CREDITO'})); }
+    // DESCUENTO: Alternar visibilidad de columna descuento
+    else if(action==='menu-aplicar-descuento'){ 
+      console.log('[COMPRAS] Toggle descuento, estado actual:', modoDescuento);
+      if(!habilitado){
+        setHabilitado(true);
+        setCompraData(c=>({...c, fecha:new Date().toISOString().split('T')[0], considerar_iva:true }));
+      }
+      setModoDescuento(prev => {
+        console.log('[COMPRAS] Cambiando modoDescuento de', prev, 'a', !prev);
+        return !prev;
+      });
+    }
+  }); return ()=> { try { off?.(); } catch(_){} }; }, [nuevaCompra, guardarCompra, guardarDevolucion, habilitado, devolucionActiva, cargarHistorial, modoDescuento]);
+
+  // REMOVER EL LISTENER DUPLICADO - Ahora está integrado arriba
+  // Sincronizar menú (checkbox) con estado local modoDescuento
+  useEffect(()=>{ 
+    console.log('[SYNC] modoDescuento cambió a:', modoDescuento);
+    try { window.electronAPI?.setComprasDescuentoMenu?.(modoDescuento); } catch(_){} 
+  }, [modoDescuento]);
+  // Sincronizar radio buttons forma de pago en menú con compraData.fpago
+  useEffect(()=>{ try { window.electronAPI?.setComprasFormaPagoMenu?.(compraData.fpago); } catch(_){} }, [compraData.fpago]);
+  // Enfocar primer input de descuento al habilitar modo
+  useEffect(()=>{ if(modoDescuento){ setTimeout(()=>{ try { const el=document.querySelector('input.input-descuento'); el?.focus(); el?.select(); } catch(_){} },50);} }, [modoDescuento]);
 
   // Placeholder para menú "Compras por Proveedor" (pendiente vista específica)
   // Manejo menú Compras por Proveedor
@@ -111,15 +233,42 @@ const ComprasView = () => {
 
   useEffect(()=>{ if(!window.electronAPI?.onMenuAction) return; const off2 = window.electronAPI.onMenuAction((action)=>{ if(action==='menu-compras-proveedor'){ setMostrarHistorial(false); setMostrarPorProveedor(true); if(proveedorFiltro){ cargarComprasProveedor(proveedorFiltro); } } }); return ()=> { try { off2?.(); } catch(_){} }; }, [proveedorFiltro, cargarComprasProveedor]);
 
-  useEffect(()=>{ const subtotal = productos.reduce((s,p)=> s + p.cantidad*p.precio,0); const iva = compraData.considerar_iva? subtotal*0.15:0; setTotales({ subtotal, iva, total: subtotal+iva }); }, [productos, compraData.considerar_iva]);
+  // (Recalculado arriba, se elimina duplicado)
 
   // Búsqueda rápida por código de barras (placeholder)
   const buscarPorCodigoBarras = async (codigo)=>{ if(!codigo) return; try { const resp = await productoController.getProductoByCodigo?.(codigo); if(resp?.success && resp.data){ agregarProducto(resp.data); setCodigoBarras(''); } else { window.alert?.('Producto no encontrado'); } } catch(_){} };
   // Limpieza simple (el escáner avanzado se re-implementará luego si es necesario)
   useEffect(()=>()=> { if(window.__comprasTimeout) clearTimeout(window.__comprasTimeout); }, []);
 
+  // Efecto para ajustar descuentos cuando se cambia entre modo porcentaje y absoluto
+  useEffect(() => {
+    if (!modoDescuento) return; // Solo si el modo descuento está activo
+    
+    setProductos(prev => prev.map(p => {
+      if (!p.descuento || p.descuento === 0) return p; // Sin descuento, no hace falta ajustar
+      
+      const totalLinea = p.cantidad * p.precio;
+      let nuevoDescuento = p.descuento;
+      
+      if (descuentoPorcentaje) {
+        // Cambio a modo porcentaje: si el descuento actual es muy alto, ajustar
+        if (p.descuento > 100) {
+          nuevoDescuento = 100; // Máximo 100%
+        }
+      } else {
+        // Cambio a modo absoluto: si el descuento excede el total de línea, ajustar
+        if (p.descuento > totalLinea) {
+          nuevoDescuento = totalLinea;
+        }
+      }
+      
+      return {...p, descuento: nuevoDescuento};
+    }));
+  }, [descuentoPorcentaje, modoDescuento]);
+
   return (
     <>
+      {/* DEBUG: {JSON.stringify({modoDescuento, habilitado})} */}
       {mostrarHistorial ? (
         <div className="min-h-screen bg-gray-100 flex flex-col">
           <div className="p-4 flex items-center justify-between">
@@ -222,8 +371,23 @@ const ComprasView = () => {
                 </div>
                 {/* Tabla productos */}
                 <div className="flex-1 min-h-0 bg-white rounded border border-gray-200 flex flex-col">
-                  <div className="p-3 border-b border-gray-200">
+                  <div className="p-3 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-gray-700">Productos {devolucionActiva && <span className="text-red-600 font-normal">(Devolución)</span>}</h3>
+                    {modoDescuento && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600">Tipo descuento:</span>
+                        <button
+                          onClick={() => setDescuentoPorcentaje(!descuentoPorcentaje)}
+                          className={`px-2 py-1 text-xs rounded transition-colors ${
+                            descuentoPorcentaje 
+                              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          {descuentoPorcentaje ? '% Porcentaje' : '$ Absoluto'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex-1 overflow-auto">
                     <table className="w-full text-sm">
@@ -235,15 +399,16 @@ const ComprasView = () => {
                           <th className="text-left py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">Cant.</th>
                           <th className="text-left py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">Descripción</th>
                           <th className="text-right py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">P. U.</th>
+                          {modoDescuento && <th className="text-right py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">Descuento</th>}
                           <th className="text-right py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">P. Total</th>
                           <th className="text-center py-2 px-3 text-xs font-medium text-gray-600 border-b border-gray-200">Eliminar</th>
                         </tr>
                       </thead>
                       <tbody>
                         {!habilitado ? (
-                          <tr><td colSpan="8" className="text-center py-8 text-gray-500 text-sm">Pulse "Nuevo" para iniciar.</td></tr>
+                          <tr><td colSpan={modoDescuento ? "9" : "8"} className="text-center py-8 text-gray-500 text-sm">Pulse "Nuevo" para iniciar.</td></tr>
                         ) : productos.length === 0 ? (
-                          <tr><td colSpan="8" className="text-center py-8 text-gray-500 text-sm">Sin productos.</td></tr>
+                          <tr><td colSpan={modoDescuento ? "9" : "8"} className="text-center py-8 text-gray-500 text-sm">Sin productos.</td></tr>
                         ) : productos.map((p,i)=>(
                           <tr key={p.codigo} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-2 px-3 text-gray-700">{i+1}</td>
@@ -260,7 +425,88 @@ const ComprasView = () => {
                             <td className="py-2 px-3 text-right">
                               <input type="number" min="0" step="0.01" disabled={!habilitado} value={p.precio} onChange={e=>{ const val=parseFloat(e.target.value)||0; actualizarPrecio(p.codigo,val); }} className="w-24 text-right text-sm border border-gray-300 rounded bg-white px-1 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:bg-gray-100" />
                             </td>
-                            <td className="py-2 px-3 text-right font-medium text-gray-900">{(p.cantidad * p.precio).toFixed(2)}</td>
+                            {modoDescuento && (
+                              <td className="py-2 px-3 text-right">
+                                <div className="relative">
+                                  <input 
+                                    type="number" 
+                                    min="0" 
+                                    step={descuentoPorcentaje ? "0.1" : "0.01"}
+                                    max={descuentoPorcentaje ? "100" : (p.cantidad * p.precio).toFixed(2)}
+                                    data-descuento="1" 
+                                    disabled={!habilitado} 
+                                    value={p.descuento||0} 
+                                    placeholder={descuentoPorcentaje ? "%" : "$"}
+                                    onChange={e=>{ 
+                                      const val = parseFloat(e.target.value) || 0;
+                                      const maxLinea = p.cantidad * p.precio;
+                                      
+                                      if (descuentoPorcentaje) {
+                                        // Modo porcentaje: máximo 100%
+                                        if (val > 100) {
+                                          e.target.value = 100;
+                                          actualizarDescuento(p.codigo, 100);
+                                          return;
+                                        }
+                                      } else {
+                                        // Modo absoluto: máximo el valor de la línea
+                                        if (val > maxLinea) {
+                                          e.target.value = maxLinea.toFixed(2);
+                                          actualizarDescuento(p.codigo, maxLinea);
+                                          return;
+                                        }
+                                      }
+                                      
+                                      actualizarDescuento(p.codigo, val); 
+                                    }}
+                                    onBlur={e => {
+                                      // Validación adicional al perder el foco
+                                      const val = parseFloat(e.target.value) || 0;
+                                      const maxLinea = p.cantidad * p.precio;
+                                      
+                                      if (descuentoPorcentaje && val > 100) {
+                                        e.target.value = 100;
+                                        actualizarDescuento(p.codigo, 100);
+                                      } else if (!descuentoPorcentaje && val > maxLinea) {
+                                        e.target.value = maxLinea.toFixed(2);
+                                        actualizarDescuento(p.codigo, maxLinea);
+                                      }
+                                    }}
+                                    className={`w-20 text-right text-xs border rounded bg-white px-1 py-1 focus:outline-none focus:ring-2 disabled:bg-gray-100 input-descuento ${
+                                      descuentoPorcentaje 
+                                        ? (p.descuento > 100 ? 'border-red-300 focus:ring-red-500/40' : 'border-gray-300 focus:ring-blue-500/40')
+                                        : (p.descuento > (p.cantidad * p.precio) ? 'border-red-300 focus:ring-red-500/40' : 'border-gray-300 focus:ring-blue-500/40')
+                                    }`}
+                                  />
+                                  {descuentoPorcentaje && (
+                                    <span className="absolute right-2 top-1 text-xs text-gray-500 pointer-events-none">%</span>
+                                  )}
+                                </div>
+                                {descuentoPorcentaje && p.descuento > 0 && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    ${((p.cantidad * p.precio * (p.descuento || 0)) / 100).toFixed(2)}
+                                  </div>
+                                )}
+                                {/* Indicador de error */}
+                                {((descuentoPorcentaje && p.descuento > 100) || (!descuentoPorcentaje && p.descuento > (p.cantidad * p.precio))) && (
+                                  <div className="text-xs text-red-500 mt-1">
+                                    Excede el máximo
+                                  </div>
+                                )}
+                              </td>
+                            )}
+                            <td className="py-2 px-3 text-right font-medium text-gray-900">
+                              {(() => {
+                                const linea = p.cantidad * p.precio;
+                                let descuento = 0;
+                                if (descuentoPorcentaje) {
+                                  descuento = (linea * (p.descuento || 0)) / 100;
+                                } else {
+                                  descuento = Math.min(p.descuento || 0, linea);
+                                }
+                                return (linea - descuento).toFixed(2);
+                              })()}
+                            </td>
                             <td className="py-2 px-3 text-center">
                               <button onClick={()=> eliminarProducto(p.codigo)} disabled={!habilitado} className="inline-flex items-center justify-center w-7 h-7 rounded bg-red-50 text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/40 disabled:opacity-40" title="Eliminar" type="button"><TrashIcon size={16} /></button>
                             </td>
@@ -271,7 +517,7 @@ const ComprasView = () => {
                   </div>
                 </div>
               </div>
-              <div className="w-72 p-4 bg-gray-50 border-l border-gray-200">
+              <div className="w-80 p-4 bg-gray-50 border-l border-gray-200">
                 <TotalesPanel compraData={compraData} setCompraData={setCompraData} totales={totales} />
               </div>
             </div>
@@ -312,6 +558,8 @@ const ComprasView = () => {
                 <div><span className="font-medium">Factura:</span> {detalleCompraSel.cabecera?.numfactura}</div>
                 <div><span className="font-medium">Proveedor:</span> {detalleCompraSel.cabecera?.idprov}</div>
                 <div><span className="font-medium">Total:</span> {Number(detalleCompraSel.cabecera?.total||0).toFixed(2)}</div>
+                <div><span className="font-medium">Descuento:</span> {Number(detalleCompraSel.cabecera?.descuento||0).toFixed(2)}</div>
+                <div><span className="font-medium">Forma Pago:</span> {detalleCompraSel.cabecera?.fpago || ''} {detalleCompraSel.cabecera?.credito==='S' && detalleCompraSel.cabecera?.plazodias? `(Plazo ${detalleCompraSel.cabecera.plazodias} días)`:''}</div>
               </div>
               <div className="border border-gray-200 rounded">
                 <table className="w-full text-xs">
@@ -321,6 +569,7 @@ const ComprasView = () => {
                       <th className="px-2 py-1 text-left font-medium text-gray-600 border-b">Código</th>
                       <th className="px-2 py-1 text-left font-medium text-gray-600 border-b">Cantidad</th>
                       <th className="px-2 py-1 text-right font-medium text-gray-600 border-b">Precio</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-600 border-b">Descuento</th>
                       <th className="px-2 py-1 text-right font-medium text-gray-600 border-b">Subtotal</th>
                       <th className="px-2 py-1 text-left font-medium text-gray-600 border-b">IMEIs</th>
                     </tr>
@@ -332,12 +581,13 @@ const ComprasView = () => {
                         <td className="px-2 py-1 font-mono">{d.codprod}</td>
                         <td className="px-2 py-1">{d.cantidad}</td>
                         <td className="px-2 py-1 text-right">{Number(d.precio||0).toFixed(2)}</td>
-                        <td className="px-2 py-1 text-right">{(d.cantidad * d.precio).toFixed(2)}</td>
+                        <td className="px-2 py-1 text-right text-red-600">{Number(d.descuento||0).toFixed(2)}</td>
+                        <td className="px-2 py-1 text-right">{(d.cantidad * d.precio - (d.descuento||0)).toFixed(2)}</td>
                         <td className="px-2 py-1 text-[10px] whitespace-pre-wrap max-w-[140px]">{(detalleCompraSel.imeis?.[d.codprod]||[]).join('\n')}</td>
                       </tr>
                     ))}
                     {(!detalleCompraSel.detalles || detalleCompraSel.detalles.length===0) && (
-                      <tr><td colSpan="6" className="text-center py-4 text-gray-500">Sin detalles</td></tr>
+                      <tr><td colSpan="7" className="text-center py-4 text-gray-500">Sin detalles</td></tr>
                     )}
                   </tbody>
                 </table>

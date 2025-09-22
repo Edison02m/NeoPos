@@ -187,7 +187,17 @@ class CompraController {
     try {
       const cab = await window.electronAPI.dbGetSingle('SELECT * FROM compra WHERE id = ?', [idcompra]);
       if(!cab.success) throw new Error(cab.error);
-      const det = await window.electronAPI.dbQuery('SELECT item, codprod, cantidad, precio, gravaiva FROM compradet WHERE idcompra = ? ORDER BY item', [idcompra]);
+      // Detectar si compradet tiene columna descuento
+      let selectDet = 'SELECT item, codprod, cantidad, precio, gravaiva';
+      try {
+        const pragma = await window.electronAPI.dbQuery('PRAGMA table_info(compradet)');
+        if(pragma?.success){
+          const cols = (pragma.data||[]).map(c=>c.name.toLowerCase());
+            if(cols.includes('descuento')) selectDet += ', descuento';
+        }
+      } catch(_){ }
+      selectDet += ' FROM compradet WHERE idcompra = ? ORDER BY item';
+      const det = await window.electronAPI.dbQuery(selectDet, [idcompra]);
       if(!det.success) throw new Error(det.error);
       // IMEIs opcional (puede no existir la tabla)
       let imeisMap = {};

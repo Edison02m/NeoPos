@@ -62,6 +62,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateExcelReport: (data, filename, sheetName) => ipcRenderer.invoke('generate-excel-report', data, filename, sheetName),
   generatePDFReport: (reportData, filename) => ipcRenderer.invoke('generate-pdf-report', reportData, filename),
   openPDF: (filePath) => ipcRenderer.invoke('open-pdf', filePath),
+  // Control del menú de Compras (checkbox Aplicar Descuento)
+  setComprasDescuentoMenu: (checked) => ipcRenderer.invoke('compras-set-descuento', checked),
+  // Control de radio buttons forma de pago en menú Compras
+  setComprasFormaPagoMenu: (fpago) => ipcRenderer.invoke('compras-set-forma-pago', fpago),
   
   // Diálogos de archivo
   showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),

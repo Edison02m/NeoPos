@@ -13,14 +13,16 @@ const HistorialCompras = ({ compras = [], onCerrar, onVerDetalle }) => {
               <th className="px-2 py-2 text-left font-medium text-gray-600 border-b">Proveedor</th>
               <th className="px-2 py-2 text-right font-medium text-gray-600 border-b">Subtotal</th>
               <th className="px-2 py-2 text-right font-medium text-gray-600 border-b">Subtotal 0%</th>
+              <th className="px-2 py-2 text-right font-medium text-gray-600 border-b">Desc.</th>
               <th className="px-2 py-2 text-right font-medium text-gray-600 border-b">IVA</th>
               <th className="px-2 py-2 text-right font-medium text-gray-600 border-b">Total</th>
+              <th className="px-2 py-2 text-center font-medium text-gray-600 border-b">F. Pago</th>
               <th className="px-2 py-2 text-center font-medium text-gray-600 border-b">Acción</th>
             </tr>
           </thead>
           <tbody>
             {compras.length === 0 ? (
-              <tr><td colSpan="9" className="text-center py-8 text-gray-500">Sin compras registradas</td></tr>
+              <tr><td colSpan="11" className="text-center py-8 text-gray-500">Sin compras registradas</td></tr>
             ) : compras.map(c => (
               <tr key={c.id} className="border-b hover:bg-gray-50">
                 <td className="px-2 py-1 font-mono text-gray-700">{c.id}</td>
@@ -29,8 +31,10 @@ const HistorialCompras = ({ compras = [], onCerrar, onVerDetalle }) => {
                 <td className="px-2 py-1 text-gray-700 truncate max-w-[140px]" title={c.proveedor_nombre || c.idprov}>{c.proveedor_nombre || c.idprov || '—'}</td>
                 <td className="px-2 py-1 text-right text-gray-700">{Number(c.subtotal||0).toFixed(2)}</td>
                 <td className="px-2 py-1 text-right text-gray-700">{Number(c.subtotal0||0).toFixed(2)}</td>
+                <td className="px-2 py-1 text-right text-gray-700">{Number(c.descuento||0).toFixed(2)}</td>
                 <td className="px-2 py-1 text-right text-gray-700">{Number(c.iva||0).toFixed(2)}</td>
                 <td className="px-2 py-1 text-right font-semibold text-gray-900">{Number(c.total||0).toFixed(2)}</td>
+                <td className="px-2 py-1 text-center text-gray-700">{c.fpago || ''}</td>
                 <td className="px-2 py-1 text-center">
                   <button onClick={()=> onVerDetalle?.(c)} className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px]">Detalle</button>
                 </td>

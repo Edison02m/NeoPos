@@ -316,6 +316,55 @@ class MainController {
       }
     });
 
+      // Actualizar checkbox 'Aplicar Descuento' en ventana Compras
+      ipcMain.handle('compras-set-descuento', (event, checked) => {
+        try {
+          const comprasWin = this.windowManager.getWindow('compras');
+          if (comprasWin && !comprasWin.isDestroyed() && comprasWin._menu) {
+            const menuItem = comprasWin._menu.getMenuItemById('compras-aplicar-descuento');
+              if (menuItem) {
+                menuItem.checked = !!checked;
+                // Forzar re-render del menú en algunas plataformas
+                comprasWin.setMenu(comprasWin._menu);
+                return { success: true };
+              }
+            return { success: false, error: 'Menu item not found' };
+          }
+          return { success: false, error: 'Compras window not available' };
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      });
+
+      // Actualizar radio buttons de forma de pago en ventana Compras
+      ipcMain.handle('compras-set-forma-pago', (event, fpago) => {
+        try {
+          const comprasWin = this.windowManager.getWindow('compras');
+          if (comprasWin && !comprasWin.isDestroyed() && comprasWin._menu) {
+            // Desmarcar todos los radio buttons de forma de pago
+            const efectivoItem = comprasWin._menu.getMenuItemById('compras-pago-efectivo');
+            const chequeItem = comprasWin._menu.getMenuItemById('compras-pago-cheque');
+            const creditoItem = comprasWin._menu.getMenuItemById('compras-pago-credito');
+            
+            if (efectivoItem) efectivoItem.checked = false;
+            if (chequeItem) chequeItem.checked = false;
+            if (creditoItem) creditoItem.checked = false;
+            
+            // Marcar el correcto según fpago
+            if (fpago === 'CONTADO' && efectivoItem) efectivoItem.checked = true;
+            else if ((fpago === 'TRANSFERENCIA' || fpago === 'OTRO') && chequeItem) chequeItem.checked = true;
+            else if (fpago === 'CREDITO' && creditoItem) creditoItem.checked = true;
+            
+            // Forzar re-render del menú
+            comprasWin.setMenu(comprasWin._menu);
+            return { success: true };
+          }
+          return { success: false, error: 'Compras window not available' };
+        } catch (err) {
+          return { success: false, error: err.message };
+        }
+      });
+
     ipcMain.handle('db-get-single', async (event, query, params = []) => {
       try {
         if (!this.isInitialized || !this.databaseController.isConnected()) {
