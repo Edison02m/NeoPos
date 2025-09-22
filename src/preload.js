@@ -113,6 +113,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-ultimo-registro',
   'menu-ir-registro',
   'menu-reporte-productos',
+  // Compras window specific
+  'menu-nueva-compra',
+  'menu-guardar-compra',
+  'menu-buscar-producto', // ya existe pero se reutiliza
+  'menu-seleccionar-proveedor',
+  'menu-historial-compras',
+  'menu-compras-proveedor',
+  'menu-pago-efectivo', // reutilizado
+  'menu-pago-cheque',
+  'menu-pago-credito',
+  'menu-aplicar-iva',
+  'menu-aplicar-descuento',
       // Eventos específicos del menú de inventario
       'menu-actualizar-inventario',
       'menu-filtrar-stock-bajo',
@@ -193,6 +205,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-ultimo-registro',
   'menu-ir-registro',
   'menu-reporte-productos'
+  , 'menu-nueva-compra','menu-guardar-compra','menu-seleccionar-proveedor','menu-historial-compras','menu-compras-proveedor','menu-aplicar-iva','menu-aplicar-descuento'
     ];
 
     console.log('[PRELOAD] Eventos válidos registrados:', validActions);

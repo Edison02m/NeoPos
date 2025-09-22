@@ -22,10 +22,12 @@ class DatabaseController {
     // Rutas candidatas del recurso de semilla (solo lectura)
     const installRoot = path.dirname(process.execPath); // e.g., C:\\Program Files\\NeoPOS
     this.seedCandidates = [
-      // Instalación (extraFiles coloca database/ aquí)
-      path.join(installRoot, 'database', 'neopos.db'),
-      // Recursos (si se usara extraResources)
+      // Extra resources (recommended location when packaged)
       path.join(process.resourcesPath || installRoot, 'database', 'neopos.db'),
+      // Unpacked asar (if database was unpacked inside asarUnpack)
+      path.join(process.resourcesPath || installRoot, 'app.asar.unpacked', 'database', 'neopos.db'),
+      // Install root fallback (legacy extraFiles placement)
+      path.join(installRoot, 'database', 'neopos.db'),
       // Dev fallback
       path.join(__dirname, '../../database/neopos.db')
     ];
@@ -59,14 +61,18 @@ class DatabaseController {
         console.log('🔄 Base de datos no existe, buscando archivo de semilla para copiar...');
         try {
           let copied = false;
+          let chosenSeed = null;
           for (const candidate of this.seedCandidates) {
             if (candidate && fs.existsSync(candidate)) {
-              console.log('📦 Semilla encontrada en:', candidate);
-              fs.copyFileSync(candidate, this.dbPath);
-              copied = true;
-              console.log('✅ Base de datos copiada desde semilla');
+              chosenSeed = candidate;
               break;
             }
+          }
+          if (chosenSeed) {
+            console.log('📦 Semilla encontrada en:', chosenSeed);
+            fs.copyFileSync(chosenSeed, this.dbPath);
+            copied = true;
+            console.log('✅ Base de datos copiada desde semilla');
           }
           if (!copied) {
             // Crear un archivo vacío si no hay recurso (permitirá crear tablas luego)

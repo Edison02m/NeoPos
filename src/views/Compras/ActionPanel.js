@@ -4,12 +4,13 @@ import { Plus, Save, Undo2, Redo2, Trash2, X, Edit, ScanBarcode, RotateCcw } fro
 const ActionPanel = ({
 	onNuevo,
 	onEditar,
-	onRehacer,
+	onRehacer, // ahora usado como Deshacer
 	onEliminar,
 	onGuardar,
 	onAbrirImei,
 	onDevolucion,
 	onCerrar,
+	undoAvailable = false,
 	loading = false,
 	disabled = false
 }) => {
@@ -21,8 +22,15 @@ const ActionPanel = ({
 				<button title="Nuevo" onClick={onNuevo} disabled={loading} className={`${base} bg-gray-900 text-white hover:bg-gray-800`}><Plus size={14} /></button>
 				{/* Editar */}
 				<button title="Editar" onClick={onEditar} disabled={loading || disabled} className={`${base} bg-gray-600 text-white hover:bg-gray-700`}><Edit size={14} /></button>
-				{/* Rehacer */}
-				<button title="Rehacer" onClick={onRehacer} disabled={loading || disabled} className={`${base} bg-gray-600 text-white hover:bg-gray-700`}><Redo2 size={14} /></button>
+				{/* Deshacer (Ctrl+Z) */}
+				<button
+					title={undoAvailable? 'Deshacer (Ctrl+Z)':'Nada que deshacer'}
+					onClick={onRehacer}
+					disabled={loading || disabled || !undoAvailable}
+					className={`${base} ${undoAvailable? 'bg-gray-600 text-white hover:bg-gray-700':'bg-gray-300 text-gray-500'} `}
+				>
+					<Undo2 size={14} />
+				</button>
 				{/* Guardar */}
 				<button title="Guardar" onClick={onGuardar} disabled={loading || disabled} className={`${base} bg-gray-900 text-white hover:bg-gray-800`}><Save size={14} /></button>
 				{/* IMEI */}

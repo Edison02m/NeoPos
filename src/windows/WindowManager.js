@@ -741,12 +741,6 @@ class WindowManager {
                 comprasWindow.webContents.send('menu-nuevo-proveedor');
               }
             }
-          },
-          {
-            label: 'Exportar Datos Proveedor',
-            click: () => {
-              comprasWindow.webContents.send('menu-exportar-proveedor');
-            }
           }
         ]
       },

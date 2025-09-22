@@ -7,19 +7,19 @@
   },
   "files": [
     "src/**/*",
-    "build/**/*", 
-    "database/**/*",
+    "build/**/*",
     "node_modules/**/*",
     "package.json"
   ],
-  "extraFiles": [
+  "extraResources": [
     {
       "from": "database/",
-      "to": "database/"
+      "to": "database"
     }
   ],
   "asarUnpack": [
-    "node_modules/sqlite3/**/*"
+    "node_modules/sqlite3/**/*",
+    "database/**/*"
   ],
   "win": {
     "target": "nsis",
