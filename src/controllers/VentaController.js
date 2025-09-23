@@ -111,40 +111,78 @@ class VentaController {
             }
           }
           const hasCuotasLegacy = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
-          if (hasCuotasLegacy) {
-            const fechapago = ventaData.fechapago || null;
-            // Calcular interés simple sobre saldo si se proporcionó porcentaje en ventaData.interes_porc
-            const interesPorc = Math.max(Number(ventaData.interes_porc)||0, 0);
-            const interesMonto = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
-            await db.run(
-              `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`,
-              [legacyId, 1, fechapago, abonoInicial, interesMonto, saldo, 0, null, 0]
-            );
-          }
+            if (hasCuotasLegacy) {
+              const fechapago = ventaData.fechapago || null;
+              const interesPorc = Math.max(Number(ventaData.interes_porc)||0, 0);
+              const numCuotas = Math.max(parseInt(ventaData.num_cuotas || ventaData.numCuotas || 0, 10) || 0, 1);
+              const interesTotal = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
+              const totalFinanciado = round2(saldo + interesTotal);
+              // === Distribución multi-cuotas (igual que hook) ===
+              // item=1  -> resumen (monto1=valor cuota promedio, interes=interés total, monto2=total financiado)
+              // item>=2 -> detalle (monto1=valor cuota individual, interes=porción plana, monto2=saldo restante tras pagar esa cuota)
+              // Redondeo: reparto de centavos para que la suma exacta de cuotas == totalFinanciado
+              // Interés: distribuido plano con mismo método de ajuste de centavos
+              // Fechas: lineales dentro del plazo (i/numCuotas * plazoDias)
 
-          // Legacy: registrar abono inicial en 'abono' si existe y > 0
-          if (abonoInicial > 0) {
-            const hasAbonoLegacy = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='abono'");
-            if (hasAbonoLegacy) {
-              try {
-                await db.run(
-                  `INSERT INTO abono (idventa, idcliente, fecha, monto, fpago, nrorecibo, formapago, idusuario, trial272) VALUES (?, ?, DATE('now'), ?, ?, ?, ?, ?, '0')`,
-                  [legacyId, (ventaData.idcliente || ventaData.cliente_ruc_ci || null), abonoInicial, 1, null, formapago, 1]
-                );
-              } catch (e) {
-                console.warn('[VentaController] No se pudo registrar abono inicial (legacy):', e.message);
+              // Insertar abono inicial primero (si corresponde) para obtener su ID y relacionar
+              let abonoInicialId = null;
+              if (abonoInicial > 0) {
+                try {
+                  const resAb = await db.run(`INSERT INTO abono (idventa, idcliente, fecha, monto, fpago, nrorecibo, formapago, idusuario, trial272) VALUES (?, ?, DATE('now'), ?, 1, NULL, ?, 1, '0')`, [legacyId, (ventaData.idcliente || ventaData.cliente_ruc_ci || null), abonoInicial, formapago]);
+                  abonoInicialId = resAb?.lastID || null;
+                } catch(e){ console.warn('[VentaController] No se pudo guardar abono inicial para cuota:', e.message); }
+              }
+
+              // Distribución cuotas
+              const baseCuota = Math.floor((totalFinanciado / numCuotas) * 100) / 100;
+              let restoCent = Math.round(totalFinanciado * 100) - Math.round(baseCuota * 100) * numCuotas;
+              const valoresCuota = Array.from({length:numCuotas}, ()=> baseCuota);
+              for(let i=0;i<valoresCuota.length && restoCent>0;i++){ valoresCuota[i] = round2(valoresCuota[i] + 0.01); restoCent--; }
+
+              const baseInt = numCuotas>0 ? Math.floor((interesTotal / numCuotas)*100)/100 : 0;
+              let restoInt = Math.round(interesTotal*100) - Math.round(baseInt*100)*numCuotas;
+              const interesesCuota = Array.from({length:numCuotas}, ()=> baseInt);
+              for(let i=0;i<interesesCuota.length && restoInt>0;i++){ interesesCuota[i] = round2(interesesCuota[i] + 0.01); restoInt--; }
+
+              const valorCuotaProm = round2(totalFinanciado / numCuotas);
+              await db.run(`INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, 1, ?, ?, ?, ?, 0, ?, 0, ?)` , [legacyId, fechapago, valorCuotaProm, interesTotal, totalFinanciado, abonoInicialId, String(numCuotas)]);
+
+              // Fechas intermedias
+              const hoy = new Date();
+              const fechaLimite = fechapago ? new Date(fechapago) : new Date(hoy.getTime());
+              const plazoTotalDias = Number(ventaData.plazo_dias)||0; 
+              const valoresDias = [];
+              for(let i=1;i<=numCuotas;i++){
+                const frac = i/numCuotas;
+                const diasOffset = Math.round(plazoTotalDias * frac);
+                valoresDias.push(diasOffset);
+              }
+              let saldoRest = totalFinanciado;
+              for(let i=0;i<numCuotas;i++){
+                const cuotaVal = valoresCuota[i];
+                const intVal = interesesCuota[i];
+                saldoRest = round2(saldoRest - cuotaVal);
+                let fechaCuota;
+                try {
+                  if(fechaLimite && !isNaN(fechaLimite.getTime())){
+                    const tmp = new Date(hoy.getTime());
+                    tmp.setDate(tmp.getDate() + valoresDias[i]);
+                    fechaCuota = tmp.toISOString();
+                  } else { fechaCuota = new Date(hoy.getTime() + (i+1)*86400000).toISOString(); }
+                } catch (e) { fechaCuota = new Date().toISOString(); }
+                await db.run(`INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 0, NULL)`, [legacyId, i+2, fechaCuota, cuotaVal, intVal, saldoRest]);
               }
             }
+            // No volvemos a insertar abono inicial nuevamente (ya se insertó para capturar id)
+            // Si se requiere duplicado legacy, agregar aquí; se omite para evitar inconsistencias
           }
-        }
 
-        await db.run('COMMIT');
-        
-        return {
-          success: true,
-          data: { id: legacyId, ...ventaData },
-          message: 'Venta registrada exitosamente (legacy)'
-        };
+          await db.run('COMMIT');
+          return {
+            success: true,
+            data: { id: legacyId, ...ventaData },
+            message: 'Venta registrada exitosamente (legacy)'
+          };
 
       } catch (error) {
         await db.run('ROLLBACK');

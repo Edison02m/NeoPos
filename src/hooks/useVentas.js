@@ -898,40 +898,100 @@ export function useVentas() {
         }
 
         // 2) Tabla legacy 'cuotas' (compatibilidad: una fila resumen)
-        try {
-          const hasCuotasLegacy = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
-          if (hasCuotasLegacy?.data?.name === 'cuotas') {
-            // Calcular interés total simple sobre el saldo (total financiado después del abono)
-            const interesPorc = round2(Math.max(parseFloat(creditoConfig?.interesPorc || 0) || 0, 0));
-            const interesMonto = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
-            await window.electronAPI.dbRun(
-              `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`,
-              [legacyId, 1, fechaPagoStr, round2(abonoInicial), interesMonto, round2(saldo), 0, null, 0]
-            );
-          }
-        } catch (e) {
-          console.warn('No se pudo registrar en cuotas (legacy):', e.message);
-        }
-
-        // 3) Registrar abono inicial en 'abono' si abonoInicial > 0 y tabla existe
+        let abonoInicialId = null;
+        // Registrar abono inicial primero (para obtener su ID y enlazar en cuota)
         try {
           if (abonoInicial > 0) {
             const existsAbono = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='abono'");
             if (existsAbono?.data?.name === 'abono') {
-              await AbonoLegacy.create({
-                idventa: legacyId,
-                idcliente: cliente.ruc || null,
-                fecha: new Date().toISOString(),
-                monto: round2(abonoInicial),
-                fpago: 1,
-                nrorecibo: null,
-                formapago: formaPagoCode(formaPago),
-                idusuario: 1
-              });
+              const resAbono = await window.electronAPI.dbRun(
+                `INSERT INTO abono (idventa, idcliente, fecha, monto, fpago, nrorecibo, formapago, idusuario, trial272) VALUES (?, ?, DATE('now'), ?, 1, NULL, ?, 1, '0')`,
+                [legacyId, (cliente.ruc || null), round2(abonoInicial), formaPagoCode(formaPago)]
+              );
+              if (resAbono?.success) abonoInicialId = resAbono.data?.id || null;
             }
           }
         } catch (e) {
-          console.warn('No se pudo registrar abono inicial (legacy):', e.message);
+          console.warn('No se pudo registrar abono inicial (legacy) para enlazar cuota:', e.message);
+        }
+
+        // Insertar cuota resumen + detalle (multi-cuotas)
+        try {
+          const hasCuotasLegacy = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
+          if (hasCuotasLegacy?.data?.name === 'cuotas') {
+            // === Distribución de CUOTAS (nuevo modelo) ===
+            // item=1 => fila RESUMEN: monto1=valor promedio cuota, interes=interés total, monto2=total financiado, idabono=abono inicial.
+            // item>=2 => filas detalle de cada cuota: monto1=valor cuota individual (puede variar unos centavos), interes=porción plano, monto2=saldo restante después de aplicar esa cuota.
+            // Redondeo: se trunca cada base y se reparten los centavos sobrantes empezando por la primera cuota para garantizar suma exacta.
+            // Interés total se distribuye plano (por igual) con mismo criterio de reparto de centavos.
+            // Fechas: se generan numCuotas fechas lineales dentro del plazo total (fracción i/numCuotas * plazoDias) redondeadas al día.
+            const interesPorc = round2(Math.max(parseFloat(creditoConfig?.interesPorc || 0) || 0, 0));
+            const numCuotas = Math.max(parseInt(creditoConfig?.numCuotas || 0, 10) || 0, 1);
+            const interesTotal = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
+            const totalFinanciado = round2(saldo + interesTotal);
+
+            // Distribución de cuotas: valorCuota se recalcula con redondeo centrado
+            const baseCuota = Math.floor((totalFinanciado / numCuotas) * 100) / 100; // trunc a 2 dec
+            let restoCentavos = Math.round(totalFinanciado * 100) - Math.round(baseCuota * 100) * numCuotas; // centavos a repartir
+            const valoresCuota = Array.from({ length: numCuotas }, () => baseCuota);
+            for (let i = 0; i < valoresCuota.length && restoCentavos > 0; i++) {
+              valoresCuota[i] = round2(valoresCuota[i] + 0.01);
+              restoCentavos--;
+            }
+
+            // Distribución simple de interés (plano) por cuota
+            const baseInt = numCuotas > 0 ? Math.floor((interesTotal / numCuotas) * 100) / 100 : 0;
+            let restoInt = Math.round(interesTotal * 100) - Math.round(baseInt * 100) * numCuotas;
+            const interesesCuota = Array.from({ length: numCuotas }, () => baseInt);
+            for (let i = 0; i < interesesCuota.length && restoInt > 0; i++) {
+              interesesCuota[i] = round2(interesesCuota[i] + 0.01);
+              restoInt--;
+            }
+
+            // Insertar fila resumen (item=1)
+            const valorCuotaProm = round2(totalFinanciado / numCuotas);
+            await window.electronAPI.dbRun(
+              `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, 1, ?, ?, ?, ?, 0, ?, 0, ?)` ,
+              [legacyId, fechaPagoStr, valorCuotaProm, interesTotal, totalFinanciado, abonoInicialId, String(numCuotas)]
+            );
+
+            // Generar fechas distribuidas: última coincide con fechaPagoStr
+            const hoy = new Date();
+            const fechaLimite = fechaPagoStr ? new Date(fechaPagoStr) : new Date(hoy.getTime());
+            const plazoTotalDias = plazoDias > 0 ? plazoDias : Math.max(numCuotas - 1, 0); // fallback 1 día entre cuotas si plazo=0
+            const valoresDias = [];
+            for (let i = 1; i <= numCuotas; i++) {
+              const frac = i / numCuotas; // 0<frac<=1
+              const diasOffset = Math.round(plazoTotalDias * frac);
+              valoresDias.push(diasOffset);
+            }
+
+            let saldoRestante = totalFinanciado;
+            for (let i = 0; i < numCuotas; i++) {
+              const cuotaValor = valoresCuota[i];
+              const interesParte = interesesCuota[i];
+              saldoRestante = round2(saldoRestante - cuotaValor);
+              // Fecha calculada
+              let fechaCuota;
+              try {
+                if (fechaLimite && !isNaN(fechaLimite.getTime())) {
+                  const fechaTmp = new Date(hoy.getTime());
+                  const diasAdd = valoresDias[i];
+                  fechaTmp.setDate(fechaTmp.getDate() + diasAdd);
+                  fechaCuota = fechaTmp.toISOString();
+                } else {
+                  fechaCuota = new Date(hoy.getTime() + (i+1) * 86400000).toISOString();
+                }
+              } catch { fechaCuota = new Date().toISOString(); }
+              // item comienza en 2 (porque 1 es resumen)
+              await window.electronAPI.dbRun(
+                `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 0, NULL)` ,
+                [legacyId, i + 2, fechaCuota, cuotaValor, interesParte, saldoRestante]
+              );
+            }
+          }
+        } catch (e) {
+          console.warn('No se pudo registrar cuotas (multi) legacy:', e.message);
         }
 
   // 4) No usar tabla venta_cuotas (no existe en este esquema). Compatibilidad mantenida con credito/cuotas/abono.

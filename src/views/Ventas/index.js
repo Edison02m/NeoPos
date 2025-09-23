@@ -147,7 +147,7 @@ const VentasView = () => {
                 if (venta.fpago !== 0) { // Si no es contado
                   // Tomar info base de la tabla credito si existe
                   const creditoRes = await window.electronAPI.dbQuery(
-                    `SELECT plazo_dias, abono_inicial, saldo FROM credito WHERE idventa = ? LIMIT 1`,
+                    `SELECT plazo as plazo_dias, 0 as abono_inicial, saldo FROM credito WHERE idventa = ? LIMIT 1`,
                     [venta.id]
                   );
 
