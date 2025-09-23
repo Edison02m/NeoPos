@@ -133,8 +133,13 @@ class CreditoController {
   const totalAbonos = abonos.reduce((s,a)=> s + Number(a.monto||a.valor||0), 0);
       const totalVenta = venta?.total ? Number(venta.total) : undefined;
       const saldoCalculado = (totalVenta !== undefined) ? Math.max(totalVenta - totalAbonos, 0) : undefined;
-
-      return { success:true, data:{ credito, venta, cliente, abonos, cuotas, productos, meta:{ totalAbonos, saldoCalculado } } };
+  const clienteNombre = cliente ? `${cliente.apellidos||''} ${cliente.nombres||''}`.trim() : '';
+      // Coherencia: si el saldo guardado difiere > 0.01 del saldoCalculado, exponer bandera
+      let saldoDesfase = false;
+      if(saldoCalculado !== undefined && credito && Math.abs((Number(credito.saldo)||0) - saldoCalculado) > 0.01){
+        saldoDesfase = true;
+      }
+  return { success:true, data:{ credito, venta, cliente, abonos, cuotas, productos, meta:{ totalAbonos, saldoCalculado, clienteNombre, saldoDesfase } } };
     } catch(e){ return { success:false, error:e.message }; }
   }
 }

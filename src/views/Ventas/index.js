@@ -8,6 +8,7 @@ import ComprobanteVenta from '../../components/ComprobanteVenta';
 import Modal from '../../components/Modal';
 import { useEffect, useState } from 'react';
 import { TrashIcon } from '../../components/Icons';
+import EditarComprobantesModal from './EditarComprobantesModal';
 
 const VentasView = () => {
   const {
@@ -20,6 +21,7 @@ const VentasView = () => {
     ventaActiva,
   tipoVenta,
   formaPago,
+  creditoConfig,
     searchModalOpen,
     resultadosBusqueda,
     comprobanteModalOpen,
@@ -74,6 +76,7 @@ const VentasView = () => {
   const [historialOpen, setHistorialOpen] = useState(false);
   const [ventasHistorial, setVentasHistorial] = useState([]);
   const [tipoPagoModalOpen, setTipoPagoModalOpen] = useState(false);
+  const [editarComprobantesOpen, setEditarComprobantesOpen] = useState(false);
 
   // Pause auto-scan while any modal is open to avoid input blocking
   useEffect(() => {
@@ -220,6 +223,9 @@ const VentasView = () => {
           setFormaPago({ tipo: 'tarjeta', tarjeta: 'American Express' });
           setTipoPagoModalOpen(true);
           break;
+        case 'menu-editar-comprobante':
+          setEditarComprobantesOpen(true);
+          break;
         default:
           break;
       }
@@ -315,6 +321,13 @@ const VentasView = () => {
                 <>
                   Tipo de venta: <span className="font-semibold">{tipoVenta}</span> · Forma de pago: <span className="font-semibold">{formaPago?.tipo}{formaPago?.tarjeta ? ` (${formaPago.tarjeta})` : ''}</span>
                   <button className="ml-3 px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300" onClick={() => setTipoPagoModalOpen(true)}>Cambiar…</button>
+                  {(tipoVenta === 'credito' || tipoVenta === 'plan') && (
+                    <span className="ml-3 text-gray-700">
+                      Abono inicial: <span className="font-semibold">${Number(creditoConfig?.abonoInicial||0).toFixed(2)}</span>
+                      {` · Plazo: `}<span className="font-semibold">{Number(creditoConfig?.plazoDias||0)} días</span>
+                      {tipoVenta === 'plan' && <span className="ml-2 italic text-indigo-600">(Plan: productos reservados, no se entregan aún)</span>}
+                    </span>
+                  )}
                 </>
               ) : <span className="italic text-gray-500">Presione "Nuevo" para iniciar una venta</span>}
             </div>
@@ -601,7 +614,7 @@ const VentasView = () => {
 
         {/* Panel derecho - Totales */}
         <div className="w-64 p-2 flex-shrink-0">
-          <TotalesPanel totales={totales} />
+          <TotalesPanel totales={totales} tipoVenta={tipoVenta} creditoConfig={creditoConfig} />
         </div>
       </div>
 
@@ -677,7 +690,7 @@ const VentasView = () => {
         setTipoVenta={setTipoVenta}
         formaPago={formaPago}
         setFormaPago={setFormaPago}
-        creditoConfig={{}}
+        creditoConfig={creditoConfig}
         setCreditoConfig={setCreditoConfig}
         total={totales.total}
       />
@@ -695,13 +708,11 @@ const VentasView = () => {
       {/* Modal del comprobante */}
       {comprobanteModalOpen && comprobanteData && (
         <>
-          {console.log('Renderizando modal comprobante', { comprobanteModalOpen, comprobanteData })}
           <div 
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
             onClick={(e) => {
               // Cerrar modal si se hace clic fuera del contenido
               if (e.target === e.currentTarget) {
-                console.log('Cerrando modal por click fuera');
                 cerrarComprobante();
               }
             }}
@@ -724,7 +735,6 @@ const VentasView = () => {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('Cerrando modal comprobante');
                   cerrarComprobante();
                 }}
                 className="text-gray-600 hover:text-gray-900 text-xl font-bold w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
@@ -750,6 +760,7 @@ const VentasView = () => {
         </div>
         </>
       )}
+      <EditarComprobantesModal open={editarComprobantesOpen} onClose={() => setEditarComprobantesOpen(false)} />
   </>
   );
 };

@@ -69,12 +69,34 @@ const DetalleCreditoModal = ({ idventa, open, onClose }) => {
             {/* Content */}
             <div className="p-4 space-y-4 max-h-[60vh] overflow-auto">
               {tab==='resumen' && (
-                <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
-                  <div><span className="font-medium">Venta:</span> {data.credito.idventa}</div>
-                  <div><span className="font-medium">Plazo:</span> {data.credito.plazo} días</div>
-                  <div><span className="font-medium">Saldo:</span> {Number(data.credito.saldo).toFixed(2)}</div>
-                  <div><span className="font-medium">Cliente:</span> {(data.credito.idcliente)||'—'}</div>
-                </div>
+                (()=>{
+                  // Construir nombre de cliente priorizando data.cliente (controller) y luego venta, luego crédito
+                  let nombreCliente = '—';
+                  if(data.cliente){
+                    const ap = data.cliente.apellidos || '';
+                    const no = data.cliente.nombres || '';
+                    const full = `${ap} ${no}`.trim();
+                    if(full) nombreCliente = full;
+                  } else if(data.venta){
+                    const ap = data.venta.apellidos || '';
+                    const no = data.venta.nombres || '';
+                    const full = `${ap} ${no}`.trim();
+                    if(full) nombreCliente = full;
+                  }
+                  // Fallback a idcliente / cedula
+                  if(nombreCliente==='—' && data.meta?.clienteNombre){
+                    nombreCliente = data.meta.clienteNombre;
+                  }
+                  if(nombreCliente==='—' && (data.venta?.idcliente || data.venta?.cedula)) nombreCliente = data.venta.idcliente || data.venta.cedula;
+                  return (
+                    <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+                      <div><span className="font-medium">Venta:</span> {data.credito.idventa}</div>
+                      <div><span className="font-medium">Plazo:</span> {data.credito.plazo} días</div>
+                      <div><span className="font-medium">Saldo:</span> {Number(data.credito.saldo).toFixed(2)}</div>
+                      <div><span className="font-medium">Cliente:</span> {nombreCliente}</div>
+                    </div>
+                  );
+                })()
               )}
               {tab==='productos' && (
                 <div className="border rounded">

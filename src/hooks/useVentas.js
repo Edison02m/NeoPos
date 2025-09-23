@@ -1,4 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+// Logger control: habilitar logs detallados solo si window.__NEOPOS_DEBUG === true
+const debugLog = (...args) => {
+  try {
+    if (window && window.__NEOPOS_DEBUG) console.log('[VENTAS]', ...args);
+  } catch (_) { /* noop en preload/server */ }
+};
 import ProductoController from '../controllers/ProductoController';
 import ClienteController from '../controllers/ClienteController';
 import EmpresaController from '../controllers/EmpresaController';
@@ -33,8 +39,8 @@ export function useVentas() {
   const [tipoVenta, setTipoVenta] = useState('contado'); // contado | credito | plan
   // Forma de pago y detalle de tarjeta (cuando aplique)
   const [formaPago, setFormaPago] = useState({ tipo: 'efectivo', tarjeta: null });
-  // Configuración de crédito/plan: plazo y abono inicial
-  const [creditoConfig, setCreditoConfig] = useState({ plazoDias: 30, abonoInicial: 0 });
+  // Configuración de crédito/plan: plazo, abono inicial, interés % y número de cuotas sugeridas
+  const [creditoConfig, setCreditoConfig] = useState({ plazoDias: 30, abonoInicial: 0, interesPorc: 0, numCuotas: 1 });
   const [deteccionAutomaticaActiva, setDeteccionAutomaticaActiva] = useState(false); // Estado para controlar detección automática
   const [cliente, setCliente] = useState({
     nombres: '',
@@ -88,83 +94,28 @@ export function useVentas() {
     generarNumeroComprobante('nota');
   }, []);
 
-  // Generar el siguiente número de comprobante consultando BD; fallback con timestamp
+  // Generar el siguiente número de comprobante via IPC centralizado
   const generarNumeroComprobante = useCallback(async (tipo = 'nota') => {
     try {
-      if (!window?.electronAPI?.dbGetSingle) {
-        // Fallback si no hay acceso a BD
-        const ts = Date.now().toString().slice(-6);
-        const base = tipo === 'factura' ? '002-001' : '001-001';
-        setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: `${base}-${ts}` }));
-        return;
-      }
-
-      // Obtener el último número de comprobante para el tipo específico
-      let ultimoNumero = 0;
-      
-      if (tipo === 'factura') {
-        // Para facturas, buscar números que empiecen con 002 en numfactura
-        const result = await window.electronAPI.dbGetSingle(
-          "SELECT numfactura FROM venta WHERE numfactura LIKE '002-%' ORDER BY id DESC LIMIT 1"
-        );
-        if (result?.success && result.data?.numfactura) {
-          // Extraer el número secuencial del formato 002-001-000001
-          const parts = result.data.numfactura.split('-');
-          if (parts.length === 3) {
-            ultimoNumero = parseInt(parts[2]) || 0;
-          }
-        }
-      } else {
-        // Para notas de venta, buscar números que empiecen con 001 en numfactura
-        const result = await window.electronAPI.dbGetSingle(
-          "SELECT numfactura FROM venta WHERE numfactura LIKE '001-%' ORDER BY id DESC LIMIT 1"
-        );
-        
-        if (result?.success && result.data?.numfactura) {
-          // Extraer el número secuencial del formato 001-001-000001
-          const parts = result.data.numfactura.split('-');
-          if (parts.length === 3) {
-            ultimoNumero = parseInt(parts[2]) || 0;
-          }
+      if(window?.electronAPI?.invoke){
+        const resp = await window.electronAPI.invoke('comprobante-next', { tipo });
+        if(resp?.success && resp.data){
+          setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: resp.data }));
+          return;
         }
       }
-
-      // Incrementar el número
-      const siguienteNumero = ultimoNumero + 1;
-      
-      // Formatear según el tipo de comprobante
-      let numeroCompleto;
-      if (tipo === 'factura') {
-        // Formato: 002-001-000001 (para facturas)
-        numeroCompleto = `002-001-${siguienteNumero.toString().padStart(6, '0')}`;
-      } else {
-        // Formato: 001-001-000001 (para notas de venta)
-        numeroCompleto = `001-001-${siguienteNumero.toString().padStart(6, '0')}`;
-      }
-
-      setVentaData(prev => ({ 
-        ...prev, 
-        tipo_comprobante: tipo, 
-        numero_comprobante: numeroCompleto 
-      }));
-      
-    } catch (e) {
-      console.error('Error generando número de comprobante:', e);
-      // Fallback en caso de error
-      const ts = Date.now().toString().slice(-6);
-      const base = tipo === 'factura' ? '002-001' : '001-001';
-      setVentaData(prev => ({ 
-        ...prev, 
-        tipo_comprobante: tipo, 
-        numero_comprobante: `${base}-${ts}` 
-      }));
+    } catch(e){
+      console.error('Error solicitando comprobante centralizado:', e);
     }
+    // Fallback
+    const ts = Date.now().toString().slice(-6);
+    const base = tipo === 'factura' ? '002-001' : '001-001';
+    setVentaData(prev => ({ ...prev, tipo_comprobante: tipo, numero_comprobante: `${base}-${ts}` }));
   }, []);
 
   // Función para agregar producto a la lista
   const agregarProducto = useCallback((producto) => {
-    console.log('=== AGREGAR PRODUCTO ===');
-    console.log('Producto recibido:', JSON.stringify(producto, null, 2));
+    debugLog('Agregar producto', producto?.codigo, producto?.producto);
     
     setProductos(prev => {
       // Para ventas solo se considera el stock del almacén
@@ -173,18 +124,13 @@ export function useVentas() {
       const bodega2 = parseInt(producto.bodega2 ?? 0, 10) || 0;
       const stockBodegas = bodega1 + bodega2;
       
-      console.log('Stock en agregarProducto:');
-      console.log('- almacén (disponible para venta):', almacen);
-      console.log('- bodega1:', bodega1);
-      console.log('- bodega2:', bodega2);
-      console.log('- stock en bodegas:', stockBodegas);
+  debugLog('Stock', { almacen, bodega1, bodega2, stockBodegas });
       
       const existente = prev.find(p => p.codigo === producto.codigo);
 
       // No permitir venta si no hay stock en almacén
       if (!existente && almacen <= 0) {
-        console.log('=== RECHAZADO EN AGREGAR PRODUCTO ===');
-        console.log('Stock almacén:', almacen);
+  debugLog('Rechazado agregar producto por falta stock almacén', producto?.codigo, 'almacén', almacen);
         if (window.barcodeDetectorInstance) {
           window.barcodeDetectorInstance.playErrorSound?.();
           window.barcodeDetectorInstance.vibrate?.('error');
@@ -235,8 +181,7 @@ export function useVentas() {
         subtotal: precio
       };
       
-      console.log('=== PRODUCTO AGREGADO EXITOSAMENTE ===');
-      console.log('Nuevo producto:', nuevoProducto);
+      debugLog('Producto agregado', nuevoProducto.codigo, 'cantidad', nuevoProducto.cantidad);
       
       return [...prev, nuevoProducto];
     });
@@ -247,7 +192,7 @@ export function useVentas() {
     if (!codigo.trim()) return;
     
     setLoading(true);
-    console.log('Buscando producto con código:', codigo);
+  debugLog('Buscar por código', codigo);
     
     try {
       // Primero buscar por código de barras
@@ -727,11 +672,28 @@ export function useVentas() {
     setProductos(productos.filter(p => p.codigo !== codigo));
   };
 
-  // Calcular totales
+  // Calcular totales con IVA por producto (cada producto puede tener porcentaje distinto: 0, 12, 15, etc.)
+  // Se espera que cada producto tenga un campo "iva" (porcentaje numérico, ej: 12, 15, 0). Si no existe, se asume 12 como compatibilidad previa.
+  const calculoTotales = productos.reduce((acc, p) => {
+    const cantidad = Number(p.cantidad) || 0;
+    const precio = Number(p.precio) || 0;
+    const base = round2(cantidad * precio);
+    // porcentaje IVA del producto: puede venir como 0, 12, 15 etc. Acepta cadena
+    let ivaPorc = (p.iva_porcentaje ?? p.iva ?? 12); // soportar distintos nombres de campo
+    ivaPorc = Number(ivaPorc);
+    if (isNaN(ivaPorc)) ivaPorc = 12;
+    if (ivaPorc < 0) ivaPorc = 0;
+    // IVA del producto
+    const ivaValor = round2(base * (ivaPorc / 100));
+    acc.subtotal += base; // subtotal sin IVA
+    acc.iva += ivaValor;
+    return acc;
+  }, { subtotal: 0, iva: 0 });
+  calculoTotales.subtotal = round2(calculoTotales.subtotal);
+  calculoTotales.iva = round2(calculoTotales.iva);
   const totales = {
-    subtotal: productos.reduce((sum, p) => sum + p.subtotal, 0),
-    get iva() { return this.subtotal * 0.12; },
-    get total() { return this.subtotal + this.iva; }
+    ...calculoTotales,
+    total: round2(calculoTotales.subtotal + calculoTotales.iva)
   };
 
   // Función para limpiar venta
@@ -868,6 +830,28 @@ export function useVentas() {
         fechaPagoStr = f.toISOString();
       }
 
+      // Persistir datos de crédito/plan en ventaData para disponibilidad global (impresión, controladores, etc.)
+      if (tipoVenta === 'credito' || tipoVenta === 'plan') {
+        // Capturar interés % actual para también persistirlo (compatibilidad / reportes)
+        const interesPorcPersist = round2(Math.max(parseFloat(creditoConfig?.interesPorc || 0) || 0, 0));
+        setVentaData(prev => ({
+          ...prev,
+          abono_inicial: abonoInicial,
+          plazo_dias: plazoDias,
+          saldo_pendiente: saldo,
+          interes_porc: interesPorcPersist
+        }));
+      } else {
+        // Asegurar limpieza en ventas de contado
+        setVentaData(prev => ({
+          ...prev,
+          abono_inicial: 0,
+            plazo_dias: 0,
+            saldo_pendiente: 0,
+            interes_porc: 0
+        }));
+      }
+
       // Insertar fila legacy - usar ordencompra para números de nota de venta
       const legacyInsert = await window.electronAPI.dbRun(
         `INSERT INTO venta (
@@ -917,9 +901,12 @@ export function useVentas() {
         try {
           const hasCuotasLegacy = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
           if (hasCuotasLegacy?.data?.name === 'cuotas') {
+            // Calcular interés total simple sobre el saldo (total financiado después del abono)
+            const interesPorc = round2(Math.max(parseFloat(creditoConfig?.interesPorc || 0) || 0, 0));
+            const interesMonto = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
             await window.electronAPI.dbRun(
               `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`,
-              [legacyId, 1, fechaPagoStr, round2(abonoInicial), 0, round2(saldo), 0, null, 0]
+              [legacyId, 1, fechaPagoStr, round2(abonoInicial), interesMonto, round2(saldo), 0, null, 0]
             );
           }
         } catch (e) {
@@ -961,16 +948,42 @@ export function useVentas() {
     [itemSeq++, legacyId, item.codigo, Number(item.cantidad)||0, Number(item.precio)||0, item.descripcion || '']
           );
         }
-        // Actualizar stock por código
-        const stockUpdate = await window.electronAPI.dbRun(
-          'UPDATE producto SET almacen = almacen - ? WHERE codigo = ?',
-          [Number(item.cantidad) || 0, item.codigo]
-        );
-        if (!stockUpdate || stockUpdate.success === false) {
-          try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-          showAlert('No se pudo actualizar el stock. La operación fue revertida.', 'Error');
-          setLoading(false);
-          return;
+        // Actualizar stock solo si no es plan (en plan los productos se reservan, no se entregan aún)
+        if (tipoVenta !== 'plan') {
+          const stockUpdate = await window.electronAPI.dbRun(
+            'UPDATE producto SET almacen = almacen - ? WHERE codigo = ?',
+            [Number(item.cantidad) || 0, item.codigo]
+          );
+          if (!stockUpdate || stockUpdate.success === false) {
+            try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+            showAlert('No se pudo actualizar el stock. La operación fue revertida.', 'Error');
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // Si es plan, crear registro de reservación (si existe tabla reservacion)
+      if (tipoVenta === 'plan') {
+        try {
+          const hasReservacion = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='reservacion'");
+          if (hasReservacion?.data?.name === 'reservacion') {
+            // Tomar abono inicial y plazo
+            const abonoInicialPlan = round2(Math.max(parseFloat(creditoConfig?.abonoInicial || 0) || 0, 0));
+            const plazoDiasPlan = Math.max(parseInt(creditoConfig?.plazoDias || 0, 10) || 0, 0);
+            const fechaReserva = new Date();
+            const fechaEvento = new Date();
+            if (plazoDiasPlan > 0) fechaEvento.setDate(fechaEvento.getDate() + plazoDiasPlan);
+            const fecha_reservacion = fechaReserva.toISOString().split('T')[0];
+            const fecha_evento = fechaEvento.toISOString().split('T')[0];
+            const descripcion = `Reserva plan venta ${legacyId} (${productos.length} items)`;
+            await window.electronAPI.dbRun(
+              'INSERT INTO reservacion (cliente_id, fecha_reservacion, fecha_evento, descripcion, monto_reserva, estado, created_at) VALUES (?,?,?,?,?,?,datetime("now"))',
+              [cliente.ruc || null, fecha_reservacion, fecha_evento, descripcion, abonoInicialPlan, 'ACTIVA']
+            );
+          }
+        } catch (e) {
+          console.warn('No se pudo registrar reservación de plan:', e.message);
         }
       }
 

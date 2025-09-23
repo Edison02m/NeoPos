@@ -608,6 +608,12 @@ class WindowManager {
           },
           { type: 'separator' },
           {
+            label: 'Editar comprobantes',
+            accelerator: 'Ctrl+Shift+E',
+            click: () => ventasWindow.webContents.send('menu-editar-comprobante')
+          },
+          { type: 'separator' },
+          {
             label: 'Pago en efectivo',
             click: () => ventasWindow.webContents.send('menu-pago-efectivo')
           },

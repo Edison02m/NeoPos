@@ -37,6 +37,20 @@ const DetalleCreditoModal = ({ idventa, open, onClose, initialTab = 'resumen' })
       if(monto<=0) throw new Error('Monto inválido');
       const res = await window.electronAPI.dbRun('INSERT INTO abono (idventa, fecha, monto, fpago, formapago, idusuario, trial272) VALUES (?,?,?,1,1,1,\'0\')',[idventa, new Date().toISOString().split('T')[0], monto]);
       if(!res.success) throw new Error(res.error||'No se pudo registrar abono');
+      // Recalcular saldo restante: saldo actual - monto (no permitir negativo)
+      try {
+        const nuevoSaldo = Math.max((Number(data.credito.saldo)||0) - monto, 0);
+        await window.electronAPI.dbRun('UPDATE credito SET saldo = ? WHERE idventa = ?', [nuevoSaldo, idventa]);
+      } catch(e){ console.warn('No se pudo actualizar saldo crédito:', e); }
+      // Opcional: actualizar una cuota resumen (item 1) si existe para reflejar saldo (monto2)
+      try {
+        const cuota1 = data.cuotas?.find(c=> Number(c.item)===1);
+        if(cuota1){
+          const totalAbonos = (data.abonos||[]).reduce((s,a)=> s + Number(a.monto||0), 0) + monto;
+          const nuevoMonto2 = Math.max(((data.venta?.total)||0) - totalAbonos, 0);
+          await window.electronAPI.dbRun('UPDATE cuotas SET monto2 = ?, idabono = ? WHERE idventa = ? AND item = 1', [nuevoMonto2, totalAbonos, idventa]);
+        }
+      } catch(e){ console.warn('No se pudo actualizar cuota resumen:', e); }
       const refreshed = await controller.detalleCredito(idventa);
       if(refreshed.success) setData(refreshed.data);
       setAbonoMonto('');
@@ -66,12 +80,34 @@ const DetalleCreditoModal = ({ idventa, open, onClose, initialTab = 'resumen' })
             </div>
             <div className="p-4 space-y-4 max-h-[60vh] overflow-auto">
               {tab==='resumen' && (
-                <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
-                  <div><span className="font-medium">Venta:</span> {data.credito.idventa}</div>
-                  <div><span className="font-medium">Plazo:</span> {data.credito.plazo} días</div>
-                  <div><span className="font-medium">Saldo:</span> {Number(data.credito.saldo).toFixed(2)}</div>
-                  <div><span className="font-medium">Cliente:</span> {(data.credito.idcliente)||'—'}</div>
-                </div>
+                (() => {
+                  let nombreCliente = '—';
+                  if(data.cliente){
+                    const ap = data.cliente.apellidos || '';
+                    const no = data.cliente.nombres || '';
+                    const full = `${ap} ${no}`.trim();
+                    if(full) nombreCliente = full;
+                  } else if(data.venta){
+                    const ap = data.venta.apellidos || '';
+                    const no = data.venta.nombres || '';
+                    const full = `${ap} ${no}`.trim();
+                    if(full) nombreCliente = full;
+                  }
+                  if(nombreCliente==='—' && data.meta?.clienteNombre){
+                    nombreCliente = data.meta.clienteNombre;
+                  }
+                  if(nombreCliente==='—' && (data.venta?.idcliente || data.venta?.cedula)){
+                    nombreCliente = data.venta.idcliente || data.venta.cedula;
+                  }
+                  return (
+                    <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+                      <div><span className="font-medium">Venta:</span> {data.credito.idventa}</div>
+                      <div><span className="font-medium">Plazo:</span> {data.credito.plazo} días</div>
+                      <div><span className="font-medium">Saldo:</span> {Number(data.credito.saldo).toFixed(2)}</div>
+                      <div><span className="font-medium">Cliente:</span> {nombreCliente}</div>
+                    </div>
+                  );
+                })()
               )}
               {tab==='productos' && (
                 <div className="border rounded">

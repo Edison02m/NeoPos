@@ -756,6 +756,57 @@ class MainController {
       }
     });
 
+    // Reservar (generar) siguiente comprobante y devolverlo (para crear venta)
+    ipcMain.handle('comprobante-next', async (event, { tipo }) => {
+      try {
+        const ComprobanteService = require('./controllers/ComprobanteService');
+        const service = new ComprobanteService();
+        const sigla = (tipo === 'factura') ? 'F' : 'N';
+        const resp = await service.obtenerSiguiente(sigla);
+        if(resp.success) return { success:true, data: resp.data.numero };
+        return { success:false, error: resp.error };
+      } catch (error) {
+        console.error('Error al generar comprobante:', error);
+        return { success:false, error: error.message };
+      }
+    });
+
+    // Listar comprobantes existentes (prefijos y contador)
+    ipcMain.handle('comprobante-listar', async (event, { codempresa = 1 } = {}) => {
+      try {
+        const ComprobanteService = require('./controllers/ComprobanteService');
+        const service = new ComprobanteService();
+        return await service.listar(codempresa);
+      } catch (error) {
+        console.error('Error al listar comprobantes:', error);
+        return { success:false, error: error.message };
+      }
+    });
+
+    // Actualizar prefijos de un comprobante
+    ipcMain.handle('comprobante-actualizar-prefijos', async (event, { sigla, prefijo1, prefijo2, codempresa = 1 }) => {
+      try {
+        const ComprobanteService = require('./controllers/ComprobanteService');
+        const service = new ComprobanteService();
+        return await service.actualizarPrefijos(sigla, prefijo1, prefijo2, codempresa);
+      } catch (error) {
+        console.error('Error al actualizar prefijos:', error);
+        return { success:false, error: error.message };
+      }
+    });
+
+    // Actualizar contador de un comprobante (reset o ajuste manual)
+    ipcMain.handle('comprobante-actualizar-contador', async (event, { sigla, contador, codempresa = 1 }) => {
+      try {
+        const ComprobanteService = require('./controllers/ComprobanteService');
+        const service = new ComprobanteService();
+        return await service.actualizarContador(sigla, contador, codempresa);
+      } catch (error) {
+        console.error('Error al actualizar contador:', error);
+        return { success:false, error: error.message };
+      }
+    });
+
     // Handler de autenticación
     ipcMain.handle('authenticate-user', async (event, usuario, contrasena) => {
       try {

@@ -14,7 +14,6 @@ import VentasView from './views/Ventas/index';
 import ComprasView from './views/Compras';
 import CreditoView from './views/Credito';
 import ReservacionesView from './views/Reservaciones';
-console.log('[routes] typeof ComprasView =', typeof ComprasView, ComprasView);
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, setFormaPago, creditoConfig, setCreditoConfig, total }) => {
   const [localTipo, setLocalTipo] = useState(tipoVenta || 'contado');
@@ -6,19 +6,44 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
   // Keep as strings while typing to avoid leading zero/decimal glitches
   const [plazo, setPlazo] = useState(String(creditoConfig?.plazoDias ?? '30'));
   const [abono, setAbono] = useState(String(creditoConfig?.abonoInicial ?? '0'));
+  const [interes, setInteres] = useState(String(creditoConfig?.interesPorc ?? '0'));
+  const [cuotas, setCuotas] = useState(String(creditoConfig?.numCuotas ?? '1'));
+
+  const userEditedCuotas = useRef(false);
+  const userEditedInteres = useRef(false);
+  const userEditedAbono = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
       setLocalTipo(tipoVenta || 'contado');
       setLocalForma(formaPago || { tipo: 'efectivo', tarjeta: null });
-  setPlazo(String(creditoConfig?.plazoDias ?? '30'));
-  setAbono(String(creditoConfig?.abonoInicial ?? '0'));
+      setPlazo(String(creditoConfig?.plazoDias ?? '30'));
+      setAbono(String(creditoConfig?.abonoInicial ?? '0'));
+      setInteres(String(creditoConfig?.interesPorc ?? '0'));
+      // Sugerir cuotas según total si el usuario aún no definió manualmente (o está vacío)
+      let sugeridas = creditoConfig?.numCuotas || 1;
+      const totalNum = Number(total)||0;
+      if(!userEditedCuotas.current){
+        if(totalNum >= 1000) sugeridas = 6;
+        else if(totalNum >= 600) sugeridas = 5;
+        else if(totalNum >= 400) sugeridas = 4;
+        else if(totalNum >= 250) sugeridas = 3;
+        else if(totalNum >= 150) sugeridas = 2;
+        else sugeridas = 1;
+      }
+      setCuotas(String(sugeridas));
     }
-  }, [isOpen]);
+  }, [isOpen, total, tipoVenta, formaPago, creditoConfig]);
 
   if (!isOpen) return null;
 
-  const saldo = Math.max((Number(total) || 0) - (parseFloat(abono || '0') || 0), 0);
+  const saldoBase = Math.max((Number(total) || 0) - (parseFloat(abono || '0') || 0), 0);
+  const interesNum = Math.max(parseFloat(interes.replace(',', '.')) || 0, 0);
+  const cuotasNum = Math.max(parseInt(cuotas||'0',10)||0, 0) || 1;
+  // Interés simple aplicado sobre saldo base (puede ajustarse a interés compuesto si se requiere)
+  const interesValor = saldoBase * (interesNum/100);
+  const saldoConInteres = saldoBase + interesValor;
+  const valorCuota = saldoConInteres / cuotasNum;
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -93,11 +118,41 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
                         v = String(parseInt(v, 10));
                       }
                       setAbono(v);
+                      userEditedAbono.current = true;
+                    }}
+                    className="border rounded px-2 py-1" />
+                </label>
+                <label className="flex flex-col">
+                  <span className="text-xs text-gray-600">Interés (%)</span>
+                  <input type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" value={interes}
+                    onChange={(e)=>{
+                      let v = e.target.value.replace(/[^0-9.,]/g,'');
+                      const parts = v.split(/[.,]/);
+                      if(parts.length>2) v = parts[0]+'.'+parts.slice(1).join('');
+                      else if(parts.length===2) v = parts[0]+'.'+parts[1];
+                      if(/^0+[0-9]+/.test(v)) v = String(parseInt(v,10));
+                      setInteres(v);
+                      userEditedInteres.current = true;
+                    }}
+                    className="border rounded px-2 py-1" />
+                </label>
+                <label className="flex flex-col">
+                  <span className="text-xs text-gray-600">Nº Cuotas</span>
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={cuotas}
+                    onChange={(e)=>{
+                      const v = e.target.value.replace(/[^0-9]/g,'');
+                      setCuotas(v);
+                      userEditedCuotas.current = true;
                     }}
                     className="border rounded px-2 py-1" />
                 </label>
               </div>
-              <div className="text-xs text-gray-700 mt-2">Saldo estimado: <span className="font-semibold">${saldo.toFixed(2)}</span></div>
+              <div className="mt-3 space-y-1 text-xs text-gray-700">
+                <div>Saldo base: <span className="font-semibold">${saldoBase.toFixed(2)}</span></div>
+                <div>Interés: <span className="font-semibold">${interesValor.toFixed(2)}</span> ({interesNum.toFixed(2)}%)</div>
+                <div>Saldo + interés: <span className="font-semibold">${saldoConInteres.toFixed(2)}</span></div>
+                <div>Cuotas ({cuotasNum}): <span className="font-semibold">${valorCuota.toFixed(2)}</span> c/u</div>
+              </div>
             </div>
           )}
 
@@ -110,9 +165,14 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
                 const plazoNum = Math.max(parseInt(plazo || '0', 10) || 0, 0);
                 const abonoNum = Math.max(parseFloat(String(abono).replace(',', '.')) || 0, 0);
                 if (localTipo==='credito' || localTipo==='plan') {
-                  setCreditoConfig({ plazoDias: plazoNum, abonoInicial: Math.min(abonoNum, Number(total)||0) });
+                  setCreditoConfig({
+                    plazoDias: plazoNum,
+                    abonoInicial: Math.min(abonoNum, Number(total)||0),
+                    interesPorc: interesNum,
+                    numCuotas: cuotasNum
+                  });
                 } else {
-                  setCreditoConfig({ plazoDias: 0, abonoInicial: 0 });
+                  setCreditoConfig({ plazoDias: 0, abonoInicial: 0, interesPorc:0, numCuotas:1 });
                 }
                 onClose();
               }}

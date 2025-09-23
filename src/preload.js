@@ -89,6 +89,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   'menu-pago-tarjeta-diners',
   'menu-pago-tarjeta-cuota-facil',
   'menu-pago-tarjeta-amex',
+  'menu-editar-comprobante',
       'menu-new-sale',
       'menu-search-product',
       'menu-sales-history',
@@ -199,6 +200,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   'menu-pago-tarjeta-diners',
   'menu-pago-tarjeta-cuota-facil',
   'menu-pago-tarjeta-amex',
+  'menu-editar-comprobante',
       'menu-new-sale',
       'menu-search-product',
       'menu-sales-history',
@@ -274,6 +276,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStockBajo: (minimo) => ipcRenderer.invoke('inventario-stock-bajo', minimo),
     getPorRangoPrecio: (precioMin, precioMax) => ipcRenderer.invoke('inventario-por-rango-precio', precioMin, precioMax),
     generarReporte: () => ipcRenderer.invoke('inventario-generar-reporte')
+  },
+  // Comprobantes APIs
+  comprobantes: {
+    listar: (codempresa = 1) => ipcRenderer.invoke('comprobante-listar', { codempresa }),
+    actualizarPrefijos: (sigla, prefijo1, prefijo2, codempresa = 1) => ipcRenderer.invoke('comprobante-actualizar-prefijos', { sigla, prefijo1, prefijo2, codempresa }),
+    actualizarContador: (sigla, contador, codempresa = 1) => ipcRenderer.invoke('comprobante-actualizar-contador', { sigla, contador, codempresa })
   }
 });
 

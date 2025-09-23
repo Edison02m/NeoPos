@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TotalesPanel = ({ totales }) => {
+const TotalesPanel = ({ totales, tipoVenta, creditoConfig }) => {
   // Valores por defecto si totales no está definido
   const {
     subtotal = 0,
@@ -29,10 +29,10 @@ const TotalesPanel = ({ totales }) => {
           </span>
         </div>
 
-        {/* IVA */}
+        {/* IVA total (puede incluir múltiples porcentajes) */}
         <div className="flex justify-between items-center">
-          <span className="text-sm font-medium text-gray-600">IVA (15%):</span>
-          <span className="text-lg font-semibold text-gray-800">
+          <span className="text-sm font-medium text-gray-600">IVA total:</span>
+          <span className="text-lg font-semibold text-gray-800" title="Suma del IVA de cada producto según su porcentaje individual">
             {formatMoney(iva)}
           </span>
         </div>
@@ -47,13 +47,37 @@ const TotalesPanel = ({ totales }) => {
             {formatMoney(total)}
           </span>
         </div>
+
+        {(tipoVenta === 'credito' || tipoVenta === 'plan') && (
+          <>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-600">Abono inicial:</span>
+              <span className="text-sm font-semibold text-gray-800">
+                {formatMoney(Number(creditoConfig?.abonoInicial||0))}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-600">Saldo:</span>
+              <span className="text-sm font-semibold text-gray-800">
+                {formatMoney(Math.max(total - Number(creditoConfig?.abonoInicial||0),0))}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-600">Plazo:</span>
+              <span className="text-sm font-semibold text-gray-800">
+                {Number(creditoConfig?.plazoDias||0)} días
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Información adicional */}
       <div className="mt-4 pt-3 border-t border-gray-200">
         <div className="text-xs text-gray-500 space-y-1">
-          <div>• Precios incluyen IVA</div>
+          <div>• IVA calculado por producto (tasas variables)</div>
           <div>• Valores expresados en USD</div>
+          {tipoVenta === 'plan' && <div>• Plan: productos reservados, no se entregan todavía</div>}
         </div>
       </div>
     </div>

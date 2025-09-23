@@ -1,8 +1,10 @@
 const DatabaseController = require('./DatabaseController');
+const ComprobanteService = require('./ComprobanteService');
 
 class VentaController {
   constructor() {
     this.dbController = new DatabaseController();
+    this.comprobanteService = new ComprobanteService();
   }
 
   // Crear nueva venta (compatibilidad con tablas legacy: venta, ventadet)
@@ -28,8 +30,18 @@ class VentaController {
 
         // Mapear campos mínimos a tabla 'venta'
         const comprob = ventaData.tipo_comprobante === 'factura' ? 'F' : 'N';
-        // Todos los números van a numfactura, diferenciados por prefijo
-        const numfactura = ventaData.numero_comprobante || null;
+        // Obtener número centralizado si no viene ya
+        let numfactura = ventaData.numero_comprobante || null;
+        if(!numfactura){
+          const next = await this.comprobanteService.obtenerSiguiente(comprob);
+          if(next.success){
+            numfactura = next.data.numero;
+          } else {
+            // Fallback timestamp
+            const ts = Date.now().toString().slice(-6);
+            numfactura = (comprob==='F'?'002-001':'001-001')+`-${ts}`;
+          }
+        }
         const fpago = Number(ventaData.fpago ?? 0); // 0 contado, 1 credito, 2 plan
         const formapago = Number(ventaData.formapago ?? 1); // 1 efectivo, 2 cheque, 3 tarjeta
         const fecha = ventaData.fecha || new Date().toISOString();
@@ -101,9 +113,12 @@ class VentaController {
           const hasCuotasLegacy = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
           if (hasCuotasLegacy) {
             const fechapago = ventaData.fechapago || null;
+            // Calcular interés simple sobre saldo si se proporcionó porcentaje en ventaData.interes_porc
+            const interesPorc = Math.max(Number(ventaData.interes_porc)||0, 0);
+            const interesMonto = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
             await db.run(
               `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '0')`,
-              [legacyId, 1, fechapago, abonoInicial, 0, saldo, 0, null, 0]
+              [legacyId, 1, fechapago, abonoInicial, interesMonto, saldo, 0, null, 0]
             );
           }
 
@@ -192,16 +207,16 @@ class VentaController {
   // Obtener último número de comprobante (desde tabla legacy 'venta')
   async obtenerUltimoNumeroComprobante(tipo = 'nota') {
     try {
-      const db = await this.dbController.getDatabase();
-      // En legacy no existe un correlativo único estándar; devolvemos un timestamp-like fallback
-      const ts = Date.now().toString().slice(-5);
-  return { success: true, data: (tipo === 'factura' ? `002-001-${ts}` : `001-001-${ts}`) };
-
-    } catch (error) {
+      const sigla = (tipo === 'factura') ? 'F' : 'N';
+      const next = await this.comprobanteService.preview(sigla);
+      if(next.success) return { success:true, data: next.data.siguiente };
+      // fallback
+      const ts = Date.now().toString().slice(-6);
+      return { success:true, data: (sigla==='F'?`002-001-${ts}`:`001-001-${ts}`) };
+    } catch(error){
       console.error('Error al obtener último número de comprobante:', error);
-      // Fallback a número generado automáticamente
-  const timestamp = Date.now().toString().slice(-5);
-  return { success: true, data: (tipo === 'factura' ? `002-001-${timestamp}` : `001-001-${timestamp}`) };
+      const ts = Date.now().toString().slice(-6);
+      return { success:true, data: (tipo==='factura'?`002-001-${ts}`:`001-001-${ts}`) };
     }
   }
 
