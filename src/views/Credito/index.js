@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import CreditoController from '../../controllers/CreditoController';
 import DetalleCreditoModal from '../../components/DetalleCreditoModal';
+import CreditoPrintModal from '../../components/CreditoPrintModal';
 
 const creditoController = new CreditoController();
 
@@ -8,10 +9,12 @@ const CreditoView = () => {
   const [creditos, setCreditos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
+  const selectedRef = useRef(null);
   const [openDetalle, setOpenDetalle] = useState(false);
   const [detalleInitialTab, setDetalleInitialTab] = useState('resumen');
   const [filtroFecha, setFiltroFecha] = useState(null); // 'hoy' | '30'
   const [filtroSaldo, setFiltroSaldo] = useState(null); // 'pendiente' | 'cancelado'
+  const [openPrint, setOpenPrint] = useState(false);
 
   const cargar = async () => {
     setLoading(true);
@@ -21,6 +24,7 @@ const CreditoView = () => {
   };
 
   useEffect(()=>{ cargar(); },[]);
+  useEffect(()=>{ selectedRef.current = selected; }, [selected]);
 
   const hoyStr = useMemo(()=> new Date().toISOString().split('T')[0], []);
 
@@ -43,31 +47,26 @@ const CreditoView = () => {
 
   useEffect(()=>{
     if(!window.electronAPI?.onMenuAction) return;
+    const requireSelected = (fn) => {
+      if(!selectedRef.current){
+        alert('Seleccione un crédito primero.');
+        return;
+      }
+      fn();
+    };
     const off = window.electronAPI.onMenuAction(action => {
       switch(action){
         case 'menu-credito-registrar-abono':
-          if(selected){
-            setDetalleInitialTab('abonos');
-            setOpenDetalle(true);
-          }
+          requireSelected(()=> { setDetalleInitialTab('abonos'); setOpenDetalle(true); });
           break;
         case 'menu-credito-ver-datos-cliente':
-          if(selected){
-            setDetalleInitialTab('resumen');
-            setOpenDetalle(true);
-          }
+          requireSelected(()=> { setDetalleInitialTab('resumen'); setOpenDetalle(true); });
           break;
         case 'menu-credito-ver-detalle':
-          if(selected){
-            setDetalleInitialTab('productos');
-            setOpenDetalle(true);
-          }
+          requireSelected(()=> { setDetalleInitialTab('productos'); setOpenDetalle(true); });
           break;
         case 'menu-credito-ver-abonos':
-          if(selected){
-            setDetalleInitialTab('abonos');
-            setOpenDetalle(true);
-          }
+          requireSelected(()=> { setDetalleInitialTab('abonos'); setOpenDetalle(true); });
           break;
         case 'menu-credito-filtrar-fecha-hoy':
           setFiltroFecha(prev => prev==='hoy'? null : 'hoy');
@@ -82,12 +81,7 @@ const CreditoView = () => {
           setFiltroSaldo(prev => prev==='cancelado'? null : 'cancelado');
           break;
         case 'menu-credito-imprimir':
-          if(selected){
-            // Por ahora impresión simple del detalle seleccionado
-            try {
-              window.print();
-            } catch(e){ console.error('Error al imprimir', e); }
-          }
+          requireSelected(()=> { setOpenPrint(true); });
           break;
         default:
           break;
@@ -107,6 +101,7 @@ const CreditoView = () => {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-2 py-2 text-center"><input type="checkbox" disabled className="opacity-40" /></th>
                 <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Num.</th>
                 <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Cliente</th>
                 <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Fecha</th>
@@ -116,10 +111,15 @@ const CreditoView = () => {
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan="6" className="text-center py-6 text-gray-500">Cargando...</td></tr>}
-              {!loading && creditosFiltrados.length===0 && <tr><td colSpan="6" className="text-center py-6 text-gray-500">Sin créditos.</td></tr>}
-              {creditosFiltrados.map(c => (
-                <tr key={c.idventa} className={`border-t hover:bg-gray-50 cursor-pointer ${selected===c.idventa?'bg-blue-50':''}`} onClick={()=> setSelected(c.idventa)} onDoubleClick={()=> { setSelected(c.idventa); setOpenDetalle(true); }}>
+              {loading && <tr><td colSpan="7" className="text-center py-6 text-gray-500">Cargando...</td></tr>}
+              {!loading && creditosFiltrados.length===0 && <tr><td colSpan="7" className="text-center py-6 text-gray-500">Sin créditos.</td></tr>}
+              {creditosFiltrados.map(c => {
+                const checked = selected===c.idventa;
+                return (
+                <tr key={c.idventa} className={`border-t hover:bg-gray-50 ${checked?'bg-blue-50':''}`}> 
+                  <td className="px-2 py-2 text-center align-middle">
+                    <input type="checkbox" checked={checked} onChange={()=> setSelected(checked? null : c.idventa)} />
+                  </td>
                   <td className="px-3 py-2 text-gray-700">{c.num}</td>
                   <td className="px-3 py-2 text-gray-700 truncate max-w-[160px]" title={c.cliente}>{c.cliente || '—'}</td>
                   <td className="px-3 py-2 text-gray-700">{c.fecha || '—'}</td>
@@ -127,12 +127,14 @@ const CreditoView = () => {
                   <td className="px-3 py-2 text-right text-gray-900 font-medium">{Number(c.saldo).toFixed(2)}</td>
                   <td className="px-3 py-2 text-gray-700">{c.empresa || '—'}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
       <DetalleCreditoModal idventa={selected} open={openDetalle && !!selected} initialTab={detalleInitialTab} onClose={()=> setOpenDetalle(false)} />
+      <CreditoPrintModal idventa={selected} open={openPrint && !!selected} onClose={()=> setOpenPrint(false)} />
     </div>
   );
 };
