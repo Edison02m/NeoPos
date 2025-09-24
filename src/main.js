@@ -174,7 +174,7 @@ class MainController {
             {
               label: 'Reporte de Ventas',
               click: () => {
-                this.mainWindow.webContents.send('menu-reports-sales');
+                this.windowManager.createReporteVentasWindow(this.mainWindow);
               }
             },
             {
@@ -549,6 +549,15 @@ class MainController {
         return { success: false, error: 'Ventana principal no disponible' };
       }
       this.windowManager.createVentasWindow(this.mainWindow);
+      return { success: true };
+    });
+
+    // Abrir ventana de Reporte de Ventas (IPC opcional para llamadas desde renderer)
+    ipcMain.handle('open-reporte-ventas-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createReporteVentasWindow(this.mainWindow);
       return { success: true };
     });
 

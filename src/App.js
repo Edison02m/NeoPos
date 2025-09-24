@@ -126,6 +126,8 @@ function AppContent() {
                 } else if (action === 'menu-inventory-suppliers') {
             
                     handleMenuSupplierConfig();
+                } else if (action === 'menu-reports-sales') {
+                    navigate('/reportes/ventas');
                 } else {
               
                 }

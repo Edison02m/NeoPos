@@ -14,6 +14,7 @@ import VentasView from './views/Ventas/index';
 import ComprasView from './views/Compras';
 import CreditoView from './views/Credito';
 import ReservacionesView from './views/Reservaciones';
+import VentasReporteView from './views/Reportes/VentasReporte';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -93,6 +94,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route
         path="/reservaciones"
         element={<ReservacionesView />}
+      />
+      <Route
+        path="/reportes/ventas"
+        element={<VentasReporteView />}
       />
     </Routes>
   );

@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openProductoWindow: () => ipcRenderer.invoke('open-producto-window'),
     openInventarioWindow: () => ipcRenderer.invoke('open-inventario-window'),
     openVentasWindow: () => ipcRenderer.invoke('open-ventas-window'),
+  // Reportes windows
+  openReporteVentasWindow: () => ipcRenderer.invoke('open-reporte-ventas-window'),
   openCreditoWindow: () => ipcRenderer.invoke('open-credito-window'),
   openReservasWindow: () => ipcRenderer.invoke('open-reservas-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
@@ -93,7 +95,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-new-sale',
       'menu-search-product',
       'menu-sales-history',
-      'menu-reports',
+  'menu-reports',
+  'menu-reports-sales',
+  'menu-reports-purchases',
+  'menu-reports-top-products',
+  'menu-reports-sri-declarations',
       'menu-products',
       'menu-categories',
       'menu-suppliers',
@@ -120,6 +126,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-ultimo-registro',
   'menu-ir-registro',
   'menu-reporte-productos',
+  // Reporte de Ventas window specific
+  'reporte-ventas-detalle-transaccion',
+  'reporte-ventas-eliminar-transaccion',
+  'reporte-ventas-crear-comprobante',
+  'reporte-ventas-detalle-productos',
+  'reporte-ventas-filtrar-fecha-todas',
+  'reporte-ventas-filtrar-fecha-hoy',
+  'reporte-ventas-filtrar-fecha-una',
+  'reporte-ventas-filtrar-fecha-periodo',
+  'reporte-ventas-filtrar-forma-todas',
+  'reporte-ventas-filtrar-forma-efectivo',
+  'reporte-ventas-filtrar-forma-cheque',
+  'reporte-ventas-filtrar-forma-tarjeta',
+  'reporte-ventas-totales-por-forma',
   // Crédito window specific
   'menu-credito-registrar-abono',
   'menu-credito-imprimir',
@@ -183,7 +203,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMenuEvent: (callback) => {
     console.log('[PRELOAD] Registrando listeners de menú...');
     
-    const validActions = [
+  const validActions = [
   // Ventas window specific
   'menu-nueva-venta',
   'menu-buscar-producto',
@@ -206,7 +226,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-new-sale',
       'menu-search-product',
       'menu-sales-history',
-      'menu-reports',
+  'menu-reports',
+  'menu-reports-sales',
+  'menu-reports-purchases',
+  'menu-reports-top-products',
+  'menu-reports-sri-declarations',
       'menu-products',
       'menu-categories',
       'menu-suppliers',
@@ -232,7 +256,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-anterior-registro',
       'menu-ultimo-registro',
   'menu-ir-registro',
-  'menu-reporte-productos'
+  'menu-reporte-productos',
+  // Reporte de Ventas window specific
+  'reporte-ventas-detalle-transaccion',
+  'reporte-ventas-eliminar-transaccion',
+  'reporte-ventas-crear-comprobante',
+  'reporte-ventas-detalle-productos',
+  'reporte-ventas-filtrar-fecha-todas',
+  'reporte-ventas-filtrar-fecha-hoy',
+  'reporte-ventas-filtrar-fecha-una',
+  'reporte-ventas-filtrar-fecha-periodo',
+  'reporte-ventas-filtrar-forma-todas',
+  'reporte-ventas-filtrar-forma-efectivo',
+  'reporte-ventas-filtrar-forma-cheque',
+  'reporte-ventas-filtrar-forma-tarjeta',
+  'reporte-ventas-totales-por-forma'
   , 'menu-nueva-compra','menu-guardar-compra','menu-seleccionar-proveedor','menu-historial-compras','menu-compras-proveedor','menu-aplicar-iva','menu-aplicar-descuento'
   // Crédito window specific
   ,'menu-credito-registrar-abono','menu-credito-imprimir','menu-credito-ver-datos-cliente','menu-credito-ver-detalle','menu-credito-ver-abonos','menu-credito-filtrar-fecha-hoy','menu-credito-filtrar-fecha-30','menu-credito-filtrar-saldo-pendiente','menu-credito-filtrar-saldo-cancelado'

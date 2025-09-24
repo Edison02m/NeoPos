@@ -487,6 +487,92 @@ class WindowManager {
     return inventarioWindow;
   }
 
+  createReporteVentasWindow(parentWindow) {
+    const reporteWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Reporte de Ventas',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    // Cargar contenido a la ruta del reporte
+    this.loadContent(reporteWindow, '/reportes/ventas');
+
+    // Menú completo para Reporte de Ventas (similar al legacy)
+    const menuTemplate = [
+      {
+        label: 'Transacción',
+        submenu: [
+          { label: 'Detalle de transacción', click: () => reporteWindow.webContents.send('reporte-ventas-detalle-transaccion') },
+          { label: 'Eliminar transacción', click: () => reporteWindow.webContents.send('reporte-ventas-eliminar-transaccion') },
+          { type: 'separator' },
+          { label: 'Crear comprobante', click: () => reporteWindow.webContents.send('reporte-ventas-crear-comprobante') },
+          { type: 'separator' },
+          { label: 'Detalle de productos vendidos', click: () => reporteWindow.webContents.send('reporte-ventas-detalle-productos') }
+        ]
+      },
+      {
+        label: 'Edición',
+        submenu: [
+          {
+            label: 'Filtrar por fecha',
+            submenu: [
+              { label: 'Todas las transacciones', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-fecha-todas') },
+              { label: 'Transacciones del día de hoy', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-fecha-hoy') },
+              { label: 'Transacciones de una fecha…', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-fecha-una') },
+              { label: 'Transacciones de un periodo…', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-fecha-periodo') }
+            ]
+          },
+          {
+            label: 'Filtrar por total',
+            submenu: [
+              { label: 'Mayor a…', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-total-mayor') },
+              { label: 'Menor a…', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-total-menor') },
+              { label: 'Igual a…', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-total-igual') },
+              { label: 'Entre…', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-total-entre') }
+            ]
+          },
+          {
+            label: 'Filtrar por forma de pago',
+            submenu: [
+              { label: 'Todas', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-forma-todas') },
+              { label: 'Efectivo', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-forma-efectivo') },
+              { label: 'Cheque', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-forma-cheque') },
+              { label: 'Tarjeta', click: () => reporteWindow.webContents.send('reporte-ventas-filtrar-forma-tarjeta') }
+            ]
+          },
+          { type: 'separator' },
+          { label: 'Totales por forma de pago', click: () => reporteWindow.webContents.send('reporte-ventas-totales-por-forma') }
+        ]
+      },
+      {
+        label: 'Cerrar ventana reportes',
+        click: () => reporteWindow.close()
+      }
+    ];
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    reporteWindow.setMenu(menu);
+
+    reporteWindow.once('ready-to-show', () => reporteWindow.show());
+    reporteWindow.on('closed', () => this.windows.delete('reporte-ventas'));
+
+    this.windows.set('reporte-ventas', reporteWindow);
+    return reporteWindow;
+  }
+
   createVentasWindow(parentWindow) {
     const ventasWindow = new BrowserWindow({
       width: 1400,
