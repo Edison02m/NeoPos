@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TotalesPanel = ({ totales, tipoVenta, creditoConfig }) => {
+const TotalesPanel = ({ totales, tipoVenta, creditoConfig, anticipoReserva = 0 }) => {
   // Valores por defecto si totales no está definido
   const {
     subtotal = 0,
@@ -40,13 +40,33 @@ const TotalesPanel = ({ totales, tipoVenta, creditoConfig }) => {
         {/* Línea separadora */}
         <hr className="border-gray-200" />
 
-        {/* Total */}
+        {/* Total bruto */}
         <div className="flex justify-between items-center pt-2">
           <span className="text-base font-bold text-gray-800">TOTAL:</span>
-          <span className="text-xl font-bold text-blue-600">
+          <span className="text-xl font-bold text-blue-600" title="Total antes de restar anticipo de la reserva">
             {formatMoney(total)}
           </span>
         </div>
+
+        {/* Anticipo de reserva */}
+        {tipoVenta === 'contado' && anticipoReserva > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium text-gray-600">Anticipo (Reserva):</span>
+            <span className="text-sm font-semibold text-green-600" title="Monto ya pagado al generar la reserva que se descuenta ahora">
+              - {formatMoney(Math.min(anticipoReserva, total))}
+            </span>
+          </div>
+        )}
+
+        {/* Total a pagar neto */}
+        {tipoVenta === 'contado' && anticipoReserva > 0 && (
+          <div className="flex justify-between items-center pt-1">
+            <span className="text-base font-bold text-gray-800">A PAGAR:</span>
+            <span className="text-xl font-bold text-blue-700" title="Total menos anticipo de la reserva">
+              {formatMoney(Math.max(total - anticipoReserva, 0))}
+            </span>
+          </div>
+        )}
 
         {(tipoVenta === 'credito' || tipoVenta === 'plan') && (
           <>
@@ -78,6 +98,7 @@ const TotalesPanel = ({ totales, tipoVenta, creditoConfig }) => {
           <div>• IVA calculado por producto (tasas variables)</div>
           <div>• Valores expresados en USD</div>
           {tipoVenta === 'plan' && <div>• Plan: productos reservados, no se entregan todavía</div>}
+          {tipoVenta === 'contado' && anticipoReserva > 0 && <div>• Anticipo aplicado automáticamente desde la reserva</div>}
         </div>
       </div>
     </div>

@@ -16,10 +16,8 @@ class VentaController {
       await db.run('BEGIN TRANSACTION');
       
       try {
-        const round2 = (n) => {
-          const x = Math.round((Number(n) || 0) * 100) / 100;
-          return x === 0 ? 0 : x;
-        };
+  // Import dinámico ESM compatible (evita mezcla CJS/ESM en bundler de React/Electron)
+  const { round2, distribuirCuotas } = await import('../utils/finanzas.js');
         // Generar ID legacy de 14 chars (YYYYMMDDHHmmss)
         const buildLegacyId = () => {
           const d = new Date();
@@ -115,15 +113,7 @@ class VentaController {
               const fechapago = ventaData.fechapago || null;
               const interesPorc = Math.max(Number(ventaData.interes_porc)||0, 0);
               const numCuotas = Math.max(parseInt(ventaData.num_cuotas || ventaData.numCuotas || 0, 10) || 0, 1);
-              const interesTotal = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
-              const totalFinanciado = round2(saldo + interesTotal);
-              // === Distribución multi-cuotas (igual que hook) ===
-              // item=1  -> resumen (monto1=valor cuota promedio, interes=interés total, monto2=total financiado)
-              // item>=2 -> detalle (monto1=valor cuota individual, interes=porción plana, monto2=saldo restante tras pagar esa cuota)
-              // Redondeo: reparto de centavos para que la suma exacta de cuotas == totalFinanciado
-              // Interés: distribuido plano con mismo método de ajuste de centavos
-              // Fechas: lineales dentro del plazo (i/numCuotas * plazoDias)
-
+              const { interesTotal, totalFinanciado, valoresCuota, interesesCuota, valorCuotaProm } = distribuirCuotas({ saldoBase: saldo, interesPorc, numCuotas });
               // Insertar abono inicial primero (si corresponde) para obtener su ID y relacionar
               let abonoInicialId = null;
               if (abonoInicial > 0) {
@@ -132,19 +122,6 @@ class VentaController {
                   abonoInicialId = resAb?.lastID || null;
                 } catch(e){ console.warn('[VentaController] No se pudo guardar abono inicial para cuota:', e.message); }
               }
-
-              // Distribución cuotas
-              const baseCuota = Math.floor((totalFinanciado / numCuotas) * 100) / 100;
-              let restoCent = Math.round(totalFinanciado * 100) - Math.round(baseCuota * 100) * numCuotas;
-              const valoresCuota = Array.from({length:numCuotas}, ()=> baseCuota);
-              for(let i=0;i<valoresCuota.length && restoCent>0;i++){ valoresCuota[i] = round2(valoresCuota[i] + 0.01); restoCent--; }
-
-              const baseInt = numCuotas>0 ? Math.floor((interesTotal / numCuotas)*100)/100 : 0;
-              let restoInt = Math.round(interesTotal*100) - Math.round(baseInt*100)*numCuotas;
-              const interesesCuota = Array.from({length:numCuotas}, ()=> baseInt);
-              for(let i=0;i<interesesCuota.length && restoInt>0;i++){ interesesCuota[i] = round2(interesesCuota[i] + 0.01); restoInt--; }
-
-              const valorCuotaProm = round2(totalFinanciado / numCuotas);
               await db.run(`INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, 1, ?, ?, ?, ?, 0, ?, 0, ?)` , [legacyId, fechapago, valorCuotaProm, interesTotal, totalFinanciado, abonoInicialId, String(numCuotas)]);
 
               // Fechas intermedias

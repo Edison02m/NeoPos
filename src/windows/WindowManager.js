@@ -984,10 +984,16 @@ class WindowManager {
       {
         label: 'Reservaciones',
         submenu: [
+          // Opción de registrar abono removida
           {
-            label: 'Registrar abono',
-            accelerator: 'Ctrl+N',
-            click: () => reservasWindow.webContents.send('menu-reserva-registrar-abono')
+            label: 'Convertir a Venta',
+            accelerator: 'Ctrl+Shift+V',
+            click: () => reservasWindow.webContents.send('menu-reserva-convertir')
+          },
+          {
+            label: 'Cancelar Reserva',
+            accelerator: 'Ctrl+Shift+X',
+            click: () => reservasWindow.webContents.send('menu-reserva-cancelar')
           },
           { type: 'separator' },
           {
@@ -1007,22 +1013,14 @@ class WindowManager {
             label: 'Ver detalle de Reservación',
             click: () => reservasWindow.webContents.send('menu-reserva-ver-detalle')
           },
-          {
-            label: 'Ver abonos realizados',
-            click: () => reservasWindow.webContents.send('menu-reserva-ver-abonos')
-          },
-          { type: 'separator' },
+          // Opción ver abonos removida
           {
             label: 'Filtrar por Estado',
             submenu: [
-              {
-                label: 'Activas',
-                click: () => reservasWindow.webContents.send('menu-reserva-filtrar-activas')
-              },
-              {
-                label: 'Completadas',
-                click: () => reservasWindow.webContents.send('menu-reserva-filtrar-completadas')
-              }
+              { label: 'Todas', click: () => reservasWindow.webContents.send('menu-reserva-filtrar-todas') },
+              { label: 'Activas', click: () => reservasWindow.webContents.send('menu-reserva-filtrar-activas') },
+              { label: 'Completadas', click: () => reservasWindow.webContents.send('menu-reserva-filtrar-completadas') },
+              { label: 'Canceladas', click: () => reservasWindow.webContents.send('menu-reserva-filtrar-canceladas') }
             ]
           }
         ]

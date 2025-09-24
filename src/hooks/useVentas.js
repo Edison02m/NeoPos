@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { round2, distribuirCuotas } from '../utils/finanzas';
 // Logger control: habilitar logs detallados solo si window.__NEOPOS_DEBUG === true
 const debugLog = (...args) => {
   try {
@@ -22,12 +23,7 @@ const BarcodeDetectorCtor = __resolveBarcodeCtor();
 
 // Exportar como función nombrada (no arrow) para evitar cualquier rareza de interop
 export function useVentas() {
-  // Utilidad para redondear a 2 decimales de forma consistente (evitar 0.16128, etc.)
-  const round2 = (n) => {
-    const x = Math.round((Number(n) || 0) * 100) / 100;
-    // Evitar -0
-    return x === 0 ? 0 : x;
-  };
+  // round2 ahora proviene de util financiero compartido
 
   // Hook para mostrar modales
   const { modalState, showAlert, showConfirm } = useModal();
@@ -53,6 +49,12 @@ export function useVentas() {
     tipo_comprobante: 'nota', // 'nota' | 'factura'
     numero_comprobante: ''
   });
+  // Estado para prefill desde reserva (trazabilidad/conversión)
+  const [prefillLegacyId, setPrefillLegacyId] = useState(null); // ID legado de venta (si ya existía en plan anterior)
+  const [editingLegacyVenta, setEditingLegacyVenta] = useState(false); // true si estamos modificando una venta existente en lugar de insertar
+  const [legacyOriginalProductos, setLegacyOriginalProductos] = useState([]); // snapshot ventadet original para futuros ajustes de stock (por ahora informativo)
+  const [prefillReservaId, setPrefillReservaId] = useState(null); // ID de la reservación origen (para actualizar estado/idventa)
+  const [anticipoReserva, setAnticipoReserva] = useState(0); // Monto de anticipo proveniente de la reserva (se descuenta del total a pagar)
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
   
@@ -209,12 +211,6 @@ export function useVentas() {
       }
       
       if (response.success && response.data) {
-        console.log('=== PRODUCTO ENCONTRADO ===');
-        console.log('Datos completos del producto:', JSON.stringify(response.data, null, 2));
-        console.log('Campo almacen:', response.data.almacen);
-        console.log('Tipo de almacen:', typeof response.data.almacen);
-        console.log('Campo bodega1:', response.data.bodega1);
-        console.log('Campo bodega2:', response.data.bodega2);
         
         // Validar stock antes de agregar - probemos diferentes campos
         const almacen = response.data.almacen;
@@ -625,6 +621,7 @@ export function useVentas() {
   // Función para seleccionar cliente del autocompletado
   const seleccionarCliente = (clienteSeleccionado) => {
     setCliente({
+      cod: clienteSeleccionado.cod || clienteSeleccionado.id || '',
       nombres: clienteSeleccionado.nombres || '',
       apellidos: clienteSeleccionado.apellidos || '',
       ruc: clienteSeleccionado.cedula || '',
@@ -700,6 +697,7 @@ export function useVentas() {
   const limpiarVenta = () => {
     setProductos([]);
     setCliente({
+      cod: '',
       nombres: '',
       apellidos: '',
       ruc: '',
@@ -721,6 +719,177 @@ export function useVentas() {
     setVentaActiva(true);
   generarNumeroComprobante(ventaData.tipo_comprobante || 'nota');
   };
+
+  // Prefill desde una reserva (localStorage handshake)
+  useEffect(()=>{
+    const tryPrefill = async () => {
+      try {
+        const raw = localStorage.getItem('__VENTA_PREFILL_RESERVA');
+        if(!raw) return;
+        localStorage.removeItem('__VENTA_PREFILL_RESERVA');
+        const data = JSON.parse(raw);
+        if(!data || !Array.isArray(data.productos) || data.productos.length===0){ return; }
+        // Salvaguarda: confirmar que la reserva sigue activa antes de continuar
+        if(data.reservaId){
+          try {
+            const rEstado = await window.electronAPI.dbGetSingle('SELECT estado FROM reservacion WHERE id = ?', [data.reservaId]);
+            const estado = (rEstado?.data?.estado||'').toLowerCase();
+            if(estado && estado !== 'activa'){
+              console.warn('Prefill cancelado: reserva no activa (estado='+estado+')');
+              alert('La reservación ya no está activa (estado: '+ rEstado?.data?.estado + '). No se puede convertir.');
+              return;
+            }
+          } catch(e){ console.warn('No se pudo validar estado de reservación antes de prefill', e); }
+        }
+        // Iniciar nueva venta
+        nuevaVenta();
+        setPrefillReservaId(data.reservaId || null);
+        // Recuperar siempre el monto_reserva real desde la BD si hay reservaId
+        let anticipo = 0;
+        if(data.reservaId){
+          try {
+            const r = await window.electronAPI.dbGetSingle('SELECT monto_reserva FROM reservacion WHERE id = ?', [data.reservaId]);
+            if(r.success && r.data && r.data.monto_reserva != null){
+              anticipo = Number(r.data.monto_reserva)||0;
+            }
+          } catch(e){ console.warn('No se pudo recuperar monto_reserva directo de BD', e); }
+        }
+        // Fallback si por alguna razón no vino reservaId (caso raro) usar payload
+        if(anticipo === 0){
+          anticipo = Number(data.monto_reserva || data.montoReserva || data.anticipo || data.abono || 0)||0;
+        }
+        setAnticipoReserva(anticipo>0?anticipo:0);
+        // Forzar conversión inmediata a venta contado (requisito A)
+        setTipoVenta('contado');
+        setFormaPago({ tipo:'efectivo', tarjeta:null });
+        // Guardar badge origen en ventaData para UI / comprobante si se desea
+        if(data.reservaId){
+          setVentaData(prev => ({ ...prev, origen_reserva_id: data.reservaId }));
+        }
+        // Cargar cliente si existe cod
+        if(data.clienteCod){
+          try {
+            const cli = await window.electronAPI.dbGetSingle('SELECT * FROM cliente WHERE cod = ?', [data.clienteCod]);
+            if(cli.success && cli.data){
+              setCliente(prev => ({
+                ...prev,
+                cod: data.clienteCod,
+                nombres: cli.data.nombres || prev.nombres,
+                apellidos: cli.data.apellidos || prev.apellidos,
+                ruc: cli.data.cedula || cli.data.ruc || prev.ruc,
+                telefono: cli.data.telefono || prev.telefono,
+                direccion: cli.data.direccion || prev.direccion
+              }));
+            }
+          } catch(_){ }
+        }
+        // Detectar si la descripción de la reserva trae un ID legado (#YYYYMMDDHHmmss)
+        let legacyIdFromDesc = null;
+        try {
+          const m = (data.descripcion||'').match(/#(\d{8,14})/); // 8-14 digitos
+          if(m) legacyIdFromDesc = m[1];
+        } catch(_){ }
+        if(legacyIdFromDesc){
+          // Verificar si existe la venta y su detalle
+          try {
+            const ventaRow = await window.electronAPI.dbGetSingle('SELECT * FROM venta WHERE id = ?', [legacyIdFromDesc]);
+            if(ventaRow.success && ventaRow.data){
+              const detRes = await window.electronAPI.dbQuery('SELECT codprod, cantidad, precio, producto FROM ventadet WHERE idventa = ? ORDER BY item', [legacyIdFromDesc]);
+              const detalle = (detRes.success && Array.isArray(detRes.data)) ? detRes.data : [];
+              // Mapear productos obteniendo stock actual
+              const nuevos = [];
+              for(const d of detalle){
+                try {
+                  if(!window.__PRODUCT_COLUMNS_CACHE){
+                    try {
+                      const info = await window.electronAPI.dbQuery("PRAGMA table_info('producto')");
+                      if(info.success) window.__PRODUCT_COLUMNS_CACHE = (info.data||[]).map(c=>c.name.toLowerCase());
+                    } catch { window.__PRODUCT_COLUMNS_CACHE = []; }
+                  }
+                  const hasIva = window.__PRODUCT_COLUMNS_CACHE.includes('iva');
+                  const pr = await window.electronAPI.dbGetSingle(`SELECT codigo, pvp, almacen, bodega1, bodega2, producto ${hasIva?', iva':''} FROM producto WHERE codigo = ?`, [d.codprod]);
+                  if(pr.success && pr.data){ if(!hasIva) pr.data.iva = 12;
+                    const almacen = parseInt(pr.data.almacen??0,10)||0;
+                    const b1 = parseInt(pr.data.bodega1??0,10)||0;
+                    const b2 = parseInt(pr.data.bodega2??0,10)||0;
+                    const precio = Number(d.precio ?? pr.data.pvp)||0;
+                    const cantidad = Number(d.cantidad)||0;
+                    if(cantidad<=0) continue;
+                    nuevos.push({
+                      codigo: pr.data.codigo,
+                      codbarra: pr.data.codigo,
+                      descripcion: pr.data.producto || d.producto || '',
+                      precio,
+                      cantidad,
+                      iva_porcentaje: Number(pr.data.iva ?? 12) || 0,
+                      stock: almacen,
+                      stockBodegas: b1 + b2,
+                      subtotal: round2(precio * cantidad)
+                    });
+                  }
+                } catch(_){ }
+              }
+              if(nuevos.length>0){
+                setProductos(nuevos);
+                setPrefillLegacyId(legacyIdFromDesc);
+                setEditingLegacyVenta(true);
+                setLegacyOriginalProductos(detalle.map(d=>({ codigo:d.codprod, cantidad:Number(d.cantidad)||0 })));
+                // Ajustar tipo comprobante y número si existe
+                setVentaData(prev => ({
+                  ...prev,
+                  numero_comprobante: ventaRow.data.numfactura || prev.numero_comprobante,
+                  tipo_comprobante: (ventaRow.data.comprob==='F'?'factura':'nota')
+                }));
+                // Mapear fpago
+                const fpago = Number(ventaRow.data.fpago||0);
+                // Conversión fuerza a contado sin importar fpago previo
+                setTipoVenta('contado');
+                // Mantener anticipo ya calculado (si era >0); si era 0 queda igual
+                showAlert(`Venta existente #${legacyIdFromDesc} cargada desde reserva. Al guardar se actualizará el registro.`, 'Conversión de Reserva');
+                return; // ya prellenamos
+              }
+            }
+          } catch(e){ console.warn('Prefill legacy venta fallo:', e.message); }
+        }
+        // Fallback: construir productos consultando info actual desde snapshot de reserva (nueva modalidad sin venta previa)
+        const nuevos = [];
+        for(const it of data.productos){
+          if(!it.codigo) continue;
+          try {
+            if(!window.__PRODUCT_COLUMNS_CACHE){
+              try { const info = await window.electronAPI.dbQuery("PRAGMA table_info('producto')"); if(info.success) window.__PRODUCT_COLUMNS_CACHE = (info.data||[]).map(c=>c.name.toLowerCase()); } catch { window.__PRODUCT_COLUMNS_CACHE=[]; }
+            }
+            const hasIva2 = window.__PRODUCT_COLUMNS_CACHE.includes('iva');
+            const pr = await window.electronAPI.dbGetSingle(`SELECT codigo, producto, pvp, almacen, bodega1, bodega2 ${hasIva2?', iva':''} FROM producto WHERE codigo = ?`, [it.codigo]);
+            if(pr.success && pr.data){ if(!hasIva2) pr.data.iva = 12;
+              const almacen = parseInt(pr.data.almacen??0,10)||0;
+              const b1 = parseInt(pr.data.bodega1??0,10)||0;
+              const b2 = parseInt(pr.data.bodega2??0,10)||0;
+              const precio = Number(pr.data.pvp)||0;
+              const cantidad = Math.min(Number(it.cantidad)||0, Math.max(almacen,0));
+              if(cantidad<=0) continue;
+              nuevos.push({
+                codigo: pr.data.codigo,
+                codbarra: pr.data.codigo,
+                descripcion: pr.data.producto,
+                precio,
+                cantidad,
+                iva_porcentaje: Number(pr.data.iva ?? 12) || 0,
+                stock: almacen,
+                stockBodegas: b1 + b2,
+                subtotal: round2(precio * cantidad)
+              });
+            }
+          } catch(_){ }
+        }
+        if(nuevos.length>0){
+          setProductos(nuevos);
+          showAlert(`Venta pre-cargada desde reserva #${data.reservaId}. Revise precios y cantidades antes de guardar.`, 'Conversión de Reserva');
+        }
+      } catch(e){ console.error('Error prefilling reserva->venta', e); }
+    };
+    tryPrefill();
+  }, []); // solo al montar
 
   // Deshacer venta
   const deshacerVenta = () => {
@@ -783,6 +952,109 @@ export function useVentas() {
         }
       }
 
+      // === MODO PLAN (solo crear reservación, sin crear venta) ===
+      if (tipoVenta === 'plan') {
+        // Iniciar transacción manual
+        await window.electronAPI.dbRun('BEGIN TRANSACTION');
+        // Descontar stock ahora (como antes se hacía tras venta)
+        for (const item of productos) {
+          const stockUpdate = await window.electronAPI.dbRun(
+            'UPDATE producto SET almacen = almacen - ? WHERE codigo = ?',[Number(item.cantidad)||0, item.codigo]
+          );
+          if(!stockUpdate || stockUpdate.success === false){
+            try { await window.electronAPI.dbRun('ROLLBACK'); } catch(_){ }
+            showAlert('No se pudo actualizar el stock. Operación revertida.', 'Error');
+            setLoading(false);
+            return;
+          }
+        }
+        // Crear reservación
+        try {
+          const hasReservacion = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='reservacion'");
+          if (hasReservacion?.data?.name === 'reservacion') {
+            const abonoInicialPlan = round2(Math.max(parseFloat(creditoConfig?.abonoInicial || 0) || 0, 0));
+            const plazoDiasPlan = Math.max(parseInt(creditoConfig?.plazoDias || 0, 10) || 0, 0);
+            const fechaReserva = new Date();
+            const fechaEvento = new Date();
+            if (plazoDiasPlan > 0) fechaEvento.setDate(fechaEvento.getDate() + plazoDiasPlan);
+            const fecha_reservacion = fechaReserva.toISOString().split('T')[0];
+            const fecha_evento = fechaEvento.toISOString().split('T')[0];
+            // Obtener nombres actuales de la BD para asegurar consistencia
+            const productosReservados = [];
+            for(const p of productos){
+              let nombreBD = p.descripcion || '';
+              try {
+                const prodRow = await window.electronAPI.dbGetSingle('SELECT producto FROM producto WHERE codigo = ?', [p.codigo]);
+                if(prodRow?.success && prodRow.data && prodRow.data.producto) nombreBD = prodRow.data.producto;
+              } catch(_){ }
+              productosReservados.push({ codigo: p.codigo, nombre: nombreBD, cantidad: Number(p.cantidad)||0, precio: Number(p.precio)||0 });
+            }
+            const detalleProductos = productosReservados.slice(0,6).map(p => `${p.codigo}-${(p.nombre||'').replace(/[,]+/g,' ')}x${p.cantidad}`).join(', ');
+            const mas = productosReservados.length > 6 ? ` ...(+${productosReservados.length-6})` : '';
+            const descripcion = `Reserva plan Productos: ${detalleProductos}${mas}`;
+            let hasIdVentaCol = false;
+            let hasProductosJsonCol = false;
+            try {
+              const info = await window.electronAPI.dbQuery("PRAGMA table_info('reservacion')");
+              if(info.success){
+                hasIdVentaCol = (info.data||[]).some(c=> c.name==='idventa');
+                hasProductosJsonCol = (info.data||[]).some(c=> c.name==='productos_json');
+              }
+            } catch(_){ }
+            const estadoInicial = 'activa';
+            // FK: cliente_id referencia a cliente.cod (NO cedula). Asegurarnos de tener cod.
+            let clienteIdValue = cliente?.cod || '';
+            if(!clienteIdValue && cliente?.ruc){
+              try {
+                const lookup = await window.electronAPI.dbGetSingle('SELECT cod FROM cliente WHERE cedula = ?', [cliente.ruc]);
+                if(lookup?.success && lookup.data) clienteIdValue = lookup.data.cod;
+              } catch(_){ }
+            }
+            if(!clienteIdValue){
+              showAlert('Debe seleccionar un cliente existente (autocompletado) antes de registrar un PLAN. Guarde el cliente primero si es nuevo.', 'Error');
+              try { await window.electronAPI.dbRun('ROLLBACK'); } catch(_){ }
+              setLoading(false);
+              return;
+            }
+            const productosJsonStr = JSON.stringify(productosReservados);
+            if(hasIdVentaCol && hasProductosJsonCol){
+              await window.electronAPI.dbRun(
+                'INSERT INTO reservacion (cliente_id, fecha_reservacion, fecha_evento, descripcion, monto_reserva, estado, idventa, productos_json, created_at) VALUES (?,?,?,?,?,?,?,?,datetime("now"))',
+                [clienteIdValue, fecha_reservacion, fecha_evento, descripcion, abonoInicialPlan, estadoInicial, null, productosJsonStr]
+              );
+            } else if(hasProductosJsonCol){
+              await window.electronAPI.dbRun(
+                'INSERT INTO reservacion (cliente_id, fecha_reservacion, fecha_evento, descripcion, monto_reserva, estado, productos_json, created_at) VALUES (?,?,?,?,?,?,?,datetime("now"))',
+                [clienteIdValue, fecha_reservacion, fecha_evento, descripcion, abonoInicialPlan, estadoInicial, productosJsonStr]
+              );
+            } else if(hasIdVentaCol){
+              await window.electronAPI.dbRun(
+                'INSERT INTO reservacion (cliente_id, fecha_reservacion, fecha_evento, descripcion, monto_reserva, estado, idventa, created_at) VALUES (?,?,?,?,?,?,?,datetime("now"))',
+                [clienteIdValue, fecha_reservacion, fecha_evento, descripcion, abonoInicialPlan, estadoInicial, null]
+              );
+            } else {
+              await window.electronAPI.dbRun(
+                'INSERT INTO reservacion (cliente_id, fecha_reservacion, fecha_evento, descripcion, monto_reserva, estado, created_at) VALUES (?,?,?,?,?,?,datetime("now"))',
+                [clienteIdValue, fecha_reservacion, fecha_evento, descripcion, abonoInicialPlan, estadoInicial]
+              );
+            }
+          }
+          await window.electronAPI.dbRun('COMMIT');
+          showAlert('Reservación creada exitosamente', 'Éxito');
+          limpiarVenta();
+          setVentaActiva(false);
+          await generarNumeroComprobante(ventaData.tipo_comprobante || 'nota');
+          setLoading(false);
+          return; // Importante: no continuar con flujo de venta
+        } catch(e){
+          console.warn('Error registrando reservación plan:', e.message);
+          try { await window.electronAPI.dbRun('ROLLBACK'); } catch(_){ }
+          showAlert('Error al registrar la reservación', 'Error');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Preparar datos de la venta
   const tipoTexto = (ventaData.tipo_comprobante === 'factura') ? 'Factura' : 'Nota de venta';
   const fechaIso = new Date().toISOString();
@@ -797,7 +1069,7 @@ export function useVentas() {
         const p = (n) => String(n).padStart(2, '0');
         return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`.slice(0, 14);
       };
-      const legacyId = buildLegacyId();
+  const legacyId = editingLegacyVenta && prefillLegacyId ? prefillLegacyId : buildLegacyId();
 
       // Mapear forma de venta y forma de pago a códigos numéricos sencillos
       const tipoVentaCode = tipoVenta === 'contado' ? 0 : (tipoVenta === 'credito' ? 1 : 2);
@@ -820,7 +1092,7 @@ export function useVentas() {
       let ivaVenta = round2(totales.iva);
       let saldo = totalVenta;
       let fechaPagoStr = null;
-      if (tipoVenta === 'credito' || tipoVenta === 'plan') {
+      if (tipoVenta === 'credito') {
         plazoDias = Math.max(parseInt(creditoConfig?.plazoDias ?? 0, 10) || 0, 0);
         abonoInicial = round2(Math.max(parseFloat(creditoConfig?.abonoInicial ?? 0) || 0, 0));
         if (abonoInicial > saldo) abonoInicial = saldo;
@@ -831,7 +1103,7 @@ export function useVentas() {
       }
 
       // Persistir datos de crédito/plan en ventaData para disponibilidad global (impresión, controladores, etc.)
-      if (tipoVenta === 'credito' || tipoVenta === 'plan') {
+      if (tipoVenta === 'credito') {
         // Capturar interés % actual para también persistirlo (compatibilidad / reportes)
         const interesPorcPersist = round2(Math.max(parseFloat(creditoConfig?.interesPorc || 0) || 0, 0));
         setVentaData(prev => ({
@@ -852,44 +1124,81 @@ export function useVentas() {
         }));
       }
 
-      // Insertar fila legacy - usar ordencompra para números de nota de venta
-      const legacyInsert = await window.electronAPI.dbRun(
-        `INSERT INTO venta (
-          id, idcliente, fecha, subtotal, descuento, total,
-          fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
-          fechapago, usuario, ordencompra, ispagos, transporte, trial279
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          legacyId,
-          cliente.ruc || null,
-          fechaIso,
-          subtotalVenta,
-          0,
-          totalVenta,
-          tipoVentaCode,
-          comprobSigla,
-          numeroComprobante, // Todos los números van a numfactura
-          formaPagoCode(formaPago),
-          'N',
-          1,
-          ivaVenta,
-          fechaPagoStr,
-          'admin',
-          null, // ordencompra se deja en null
-          (tipoVenta === 'contado') ? 'S' : 'N',
-          0,
-          '0'
-        ]
-      );
-      if (!legacyInsert || legacyInsert.success === false) {
-        try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-        showAlert('No se pudo registrar en la tabla "venta" (compatibilidad). La operación fue revertida.', 'Error');
-        setLoading(false);
-        return;
+      // Aplicar anticipoReserva (solo si proviene de una reserva y es venta contado final)
+      let descuentoAnticipo = 0;
+      if (prefillReservaId && tipoVenta === 'contado' && anticipoReserva > 0) {
+        // Descuento no puede exceder totalVenta
+        descuentoAnticipo = Math.min(anticipoReserva, totalVenta);
+      }
+      const totalNetoVenta = round2(Math.max(totalVenta - descuentoAnticipo, 0));
+
+      let legacyInsertOk = true;
+      if(editingLegacyVenta){
+        // Actualizar venta existente
+        const upd = await window.electronAPI.dbRun(
+          `UPDATE venta SET idcliente=?, fecha=?, subtotal=?, descuento=?, total=?, fpago=?, comprob=?, numfactura=?, formapago=?, iva=?, fechapago=?, usuario=?, ispagos=? WHERE id=?`,
+          [
+            cliente.ruc || null,
+            fechaIso,
+            subtotalVenta,
+            descuentoAnticipo,
+            totalNetoVenta,
+            tipoVentaCode,
+            comprobSigla,
+            numeroComprobante,
+            formaPagoCode(formaPago),
+            ivaVenta,
+            fechaPagoStr,
+            'admin',
+            (tipoVenta === 'contado') ? 'S' : 'N',
+            legacyId
+          ]
+        );
+        if(!upd || upd.success===false){ legacyInsertOk=false; }
+        // Limpiar detalle anterior para reinsertar (mantener integridad con cantidades nuevas)
+        if(legacyInsertOk){
+          await window.electronAPI.dbRun('DELETE FROM ventadet WHERE idventa = ?', [legacyId]);
+        }
+      } else {
+        // Insertar nueva venta
+        const legacyInsert = await window.electronAPI.dbRun(
+          `INSERT INTO venta (
+            id, idcliente, fecha, subtotal, descuento, total,
+            fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
+            fechapago, usuario, ordencompra, ispagos, transporte, trial279
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            legacyId,
+            cliente.ruc || null,
+            fechaIso,
+            subtotalVenta,
+            descuentoAnticipo,
+            totalNetoVenta,
+            tipoVentaCode,
+            comprobSigla,
+            numeroComprobante, // Todos los números van a numfactura
+            formaPagoCode(formaPago),
+            'N',
+            1,
+            ivaVenta,
+            fechaPagoStr,
+            'admin',
+            null, // ordencompra se deja en null
+            (tipoVenta === 'contado') ? 'S' : 'N',
+            0,
+            '0'
+          ]
+        );
+        if (!legacyInsert || legacyInsert.success === false) legacyInsertOk=false;
+      }
+      if(!legacyInsertOk){
+        try { await window.electronAPI.dbRun('ROLLBACK'); } catch(_){}
+        showAlert('No se pudo registrar/actualizar la venta (legacy). Operación revertida.', 'Error');
+        setLoading(false); return;
       }
 
       // Si tiene plazo/abono, registrar en tablas de crédito legacy si existen
-      if (tipoVenta === 'credito' || tipoVenta === 'plan') {
+      if (tipoVenta === 'credito') {
         // 1) Tabla legacy 'credito' (idventa, plazo, saldo)
         try {
           await CreditoLegacy.create({ idventa: legacyId, plazo: plazoDias, saldo });
@@ -897,7 +1206,7 @@ export function useVentas() {
           console.warn('No se pudo registrar en credito (legacy):', e.message);
         }
 
-        // 2) Tabla legacy 'cuotas' (compatibilidad: una fila resumen)
+  // 2) Tabla legacy 'cuotas' (compatibilidad: una fila resumen)
         let abonoInicialId = null;
         // Registrar abono inicial primero (para obtener su ID y enlazar en cuota)
         try {
@@ -915,7 +1224,7 @@ export function useVentas() {
           console.warn('No se pudo registrar abono inicial (legacy) para enlazar cuota:', e.message);
         }
 
-        // Insertar cuota resumen + detalle (multi-cuotas)
+  // Insertar cuota resumen + detalle (multi-cuotas)
         try {
           const hasCuotasLegacy = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='cuotas'");
           if (hasCuotasLegacy?.data?.name === 'cuotas') {
@@ -927,29 +1236,7 @@ export function useVentas() {
             // Fechas: se generan numCuotas fechas lineales dentro del plazo total (fracción i/numCuotas * plazoDias) redondeadas al día.
             const interesPorc = round2(Math.max(parseFloat(creditoConfig?.interesPorc || 0) || 0, 0));
             const numCuotas = Math.max(parseInt(creditoConfig?.numCuotas || 0, 10) || 0, 1);
-            const interesTotal = interesPorc > 0 ? round2(saldo * (interesPorc / 100)) : 0;
-            const totalFinanciado = round2(saldo + interesTotal);
-
-            // Distribución de cuotas: valorCuota se recalcula con redondeo centrado
-            const baseCuota = Math.floor((totalFinanciado / numCuotas) * 100) / 100; // trunc a 2 dec
-            let restoCentavos = Math.round(totalFinanciado * 100) - Math.round(baseCuota * 100) * numCuotas; // centavos a repartir
-            const valoresCuota = Array.from({ length: numCuotas }, () => baseCuota);
-            for (let i = 0; i < valoresCuota.length && restoCentavos > 0; i++) {
-              valoresCuota[i] = round2(valoresCuota[i] + 0.01);
-              restoCentavos--;
-            }
-
-            // Distribución simple de interés (plano) por cuota
-            const baseInt = numCuotas > 0 ? Math.floor((interesTotal / numCuotas) * 100) / 100 : 0;
-            let restoInt = Math.round(interesTotal * 100) - Math.round(baseInt * 100) * numCuotas;
-            const interesesCuota = Array.from({ length: numCuotas }, () => baseInt);
-            for (let i = 0; i < interesesCuota.length && restoInt > 0; i++) {
-              interesesCuota[i] = round2(interesesCuota[i] + 0.01);
-              restoInt--;
-            }
-
-            // Insertar fila resumen (item=1)
-            const valorCuotaProm = round2(totalFinanciado / numCuotas);
+            const { interesTotal, totalFinanciado, valoresCuota, interesesCuota, valorCuotaProm } = distribuirCuotas({ saldoBase: saldo, interesPorc, numCuotas });
             await window.electronAPI.dbRun(
               `INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, 1, ?, ?, ?, ?, 0, ?, 0, ?)` ,
               [legacyId, fechaPagoStr, valorCuotaProm, interesTotal, totalFinanciado, abonoInicialId, String(numCuotas)]
@@ -1008,55 +1295,64 @@ export function useVentas() {
     [itemSeq++, legacyId, item.codigo, Number(item.cantidad)||0, Number(item.precio)||0, item.descripcion || '']
           );
         }
-        // Actualizar stock solo si no es plan (en plan los productos se reservan, no se entregan aún)
-        if (tipoVenta !== 'plan') {
-          const stockUpdate = await window.electronAPI.dbRun(
+        // Actualizar stock solo si es nueva venta o cambia cantidad respecto a legacy original (simple: restar siempre si no estamos editando? -> Ajuste delta)
+        let stockUpdate = { success:true };
+        if(editingLegacyVenta){
+          const orig = legacyOriginalProductos.find(p=>p.codigo===item.codigo);
+          const origCant = orig ? Number(orig.cantidad)||0 : 0;
+          const diff = (Number(item.cantidad)||0) - origCant;
+          if(diff !== 0){
+            if(diff>0){
+              stockUpdate = await window.electronAPI.dbRun('UPDATE producto SET almacen = almacen - ? WHERE codigo = ?', [diff, item.codigo]);
+            } else {
+              stockUpdate = await window.electronAPI.dbRun('UPDATE producto SET almacen = almacen + ? WHERE codigo = ?', [Math.abs(diff), item.codigo]);
+            }
+          }
+        } else {
+          stockUpdate = await window.electronAPI.dbRun(
             'UPDATE producto SET almacen = almacen - ? WHERE codigo = ?',
             [Number(item.cantidad) || 0, item.codigo]
           );
-          if (!stockUpdate || stockUpdate.success === false) {
-            try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
-            showAlert('No se pudo actualizar el stock. La operación fue revertida.', 'Error');
-            setLoading(false);
-            return;
-          }
+        }
+        if (!stockUpdate || stockUpdate.success === false) {
+          try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
+          showAlert('No se pudo actualizar el stock. La operación fue revertida.', 'Error');
+          setLoading(false);
+          return;
         }
       }
 
-      // Si es plan, crear registro de reservación (si existe tabla reservacion)
-      if (tipoVenta === 'plan') {
-        try {
-          const hasReservacion = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='reservacion'");
-          if (hasReservacion?.data?.name === 'reservacion') {
-            // Tomar abono inicial y plazo
-            const abonoInicialPlan = round2(Math.max(parseFloat(creditoConfig?.abonoInicial || 0) || 0, 0));
-            const plazoDiasPlan = Math.max(parseInt(creditoConfig?.plazoDias || 0, 10) || 0, 0);
-            const fechaReserva = new Date();
-            const fechaEvento = new Date();
-            if (plazoDiasPlan > 0) fechaEvento.setDate(fechaEvento.getDate() + plazoDiasPlan);
-            const fecha_reservacion = fechaReserva.toISOString().split('T')[0];
-            const fecha_evento = fechaEvento.toISOString().split('T')[0];
-            const descripcion = `Reserva plan venta ${legacyId} (${productos.length} items)`;
-            await window.electronAPI.dbRun(
-              'INSERT INTO reservacion (cliente_id, fecha_reservacion, fecha_evento, descripcion, monto_reserva, estado, created_at) VALUES (?,?,?,?,?,?,datetime("now"))',
-              [cliente.ruc || null, fecha_reservacion, fecha_evento, descripcion, abonoInicialPlan, 'ACTIVA']
-            );
-          }
-        } catch (e) {
-          console.warn('No se pudo registrar reservación de plan:', e.message);
-        }
-      }
 
       // Confirmar transacción
   await window.electronAPI.dbRun('COMMIT');
 
-  showAlert('Venta guardada exitosamente', 'Éxito');
+  // Si proviene de una reserva, actualizar reservacion (estado completada + idventa si existe columna)
+      if(prefillReservaId){
+        try {
+          const info = await window.electronAPI.dbQuery("PRAGMA table_info('reservacion')");
+          const cols = info?.success ? (info.data||[]).map(c=>c.name) : [];
+          if(cols.includes('idventa')){
+            await window.electronAPI.dbRun('UPDATE reservacion SET idventa = ? WHERE id = ?', [legacyId, prefillReservaId]);
+          }
+          await window.electronAPI.dbRun('UPDATE reservacion SET estado = ? WHERE id = ?', ['completada', prefillReservaId]);
+          // Verificación y reintento defensivo: asegurar que quedó completada
+          try {
+            const check = await window.electronAPI.dbGetSingle('SELECT estado FROM reservacion WHERE id = ?', [prefillReservaId]);
+            if(!(check?.success) || (check?.data?.estado !== 'completada')){
+              await window.electronAPI.dbRun('UPDATE reservacion SET estado = "completada" WHERE id = ?', [prefillReservaId]);
+            }
+          } catch(_e){ /* ignore */ }
+          try { window.electronAPI?.reservas?.triggerRefresh?.(); } catch(_){ }
+        } catch(e){ console.warn('No se pudo actualizar reservacion tras conversión:', e.message); }
+      }
+      showAlert(editingLegacyVenta ? 'Venta actualizada exitosamente' : 'Venta guardada exitosamente', 'Éxito');
   // After blocking alert closes, ensure guard is not paused so inputs work
   delete window.__barcodeAutoScanPaused;
       limpiarVenta();
       setVentaActiva(false);
       // Preparar siguiente número para la próxima venta
       await generarNumeroComprobante(ventaData.tipo_comprobante || 'nota');
+      setEditingLegacyVenta(false); setPrefillLegacyId(null); setLegacyOriginalProductos([]); setPrefillReservaId(null);
     } catch (error) {
       console.error('Error al guardar venta:', error);
       try { await window.electronAPI.dbRun('ROLLBACK'); } catch (_) {}
@@ -1155,6 +1451,7 @@ export function useVentas() {
     deteccionAutomaticaActiva,
   formaPago,
   creditoConfig,
+  anticipoReserva,
     
     // Setters
     setCodigoBarras,
@@ -1164,6 +1461,7 @@ export function useVentas() {
   setTipoVenta,
   setFormaPago,
   setCreditoConfig,
+  setAnticipoReserva,
   setSearchModalOpen,
   setComprobanteModalOpen,
   cerrarComprobante,

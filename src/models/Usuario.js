@@ -85,7 +85,17 @@ class Usuario {
   static async authenticate(usuario, contrasena) {
     const result = await window.electronAPI.authenticateUser(usuario, contrasena);
     if (!result.success) {
-      throw new Error(result.error);
+      // Normalizar mensajes de credenciales inválidas devolviendo null
+      if(result.error && (
+        result.error.toLowerCase().includes('no encontrado') ||
+        result.error.toLowerCase().includes('incorrect') ||
+        result.error.toLowerCase().includes('usuario') ||
+        result.error.toLowerCase().includes('contraseña')
+      )){
+        return null;
+      }
+      // Errores reales (DB, sistema) sí lanzan
+      throw new Error(result.error || 'Error autenticando usuario');
     }
     return result.data;
   }

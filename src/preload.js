@@ -131,13 +131,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   'menu-credito-filtrar-saldo-pendiente',
   'menu-credito-filtrar-saldo-cancelado',
   // Reservas window specific
-  'menu-reserva-registrar-abono',
   'menu-reserva-imprimir',
   'menu-reserva-ver-datos-cliente',
   'menu-reserva-ver-detalle',
-  'menu-reserva-ver-abonos',
+  'menu-reserva-convertir',
+  'menu-reserva-cancelar',
+  'menu-reserva-filtrar-todas',
   'menu-reserva-filtrar-activas',
   'menu-reserva-filtrar-completadas',
+  'menu-reserva-filtrar-canceladas',
   // Compras window specific
   'menu-nueva-compra',
   'menu-guardar-compra',
@@ -236,6 +238,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ,'menu-credito-registrar-abono','menu-credito-imprimir','menu-credito-ver-datos-cliente','menu-credito-ver-detalle','menu-credito-ver-abonos','menu-credito-filtrar-fecha-hoy','menu-credito-filtrar-fecha-30','menu-credito-filtrar-saldo-pendiente','menu-credito-filtrar-saldo-cancelado'
   // Reservas window specific
   ,'menu-reserva-registrar-abono','menu-reserva-imprimir','menu-reserva-ver-datos-cliente','menu-reserva-ver-detalle','menu-reserva-ver-abonos','menu-reserva-filtrar-activas','menu-reserva-filtrar-completadas'
+  ,'menu-reserva-convertir','menu-reserva-cancelar'
     ];
 
     console.log('[PRELOAD] Eventos válidos registrados:', validActions);
@@ -267,6 +270,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Remover listeners
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel);
+  },
+
+  // Canal simple para refrescar reservas
+  reservas: {
+    onRefresh: (callback) => {
+      ipcRenderer.on('reservas:refresh', (_e, payload) => callback(payload));
+      return () => ipcRenderer.removeAllListeners('reservas:refresh');
+    },
+    triggerRefresh: () => ipcRenderer.send('reservas:refresh', { ts: Date.now() })
   },
 
   // Inventario APIs

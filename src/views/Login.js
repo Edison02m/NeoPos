@@ -7,6 +7,7 @@ const Login = ({ onLogin }) => {
   const [usuario, setUsuario] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [error, setError] = useState('');
+  const [intentos, setIntentos] = useState(0);
   const [loading, setLoading] = useState(false);
   const [empresaLogo, setEmpresaLogo] = useState('/logo.png'); // Logo por defecto
   const [empresaNombre, setEmpresaNombre] = useState('NeoPOS'); // Nombre por defecto
@@ -69,8 +70,9 @@ const Login = ({ onLogin }) => {
     setError('');
 
     try {
-      const user = await Usuario.authenticate(usuario, contrasena);
-      
+      // Pequeño delay para mitigar brute force rápido
+      await new Promise(res => setTimeout(res, 250));
+      const user = await Usuario.authenticate(usuario.trim(), contrasena);
       if (user) {
         // Update menu to show authenticated options
         if (window.electronAPI?.updateMenuAuthenticated) {
@@ -79,11 +81,12 @@ const Login = ({ onLogin }) => {
         onLogin(user);
         navigate('/dashboard');
       } else {
-        setError('Usuario o contraseña incorrectos');
+        setIntentos(prev => prev + 1);
+        setError('Credenciales inválidas');
       }
     } catch (err) {
-      setError('Error al conectar con la base de datos');
-      console.error('Error de autenticación:', err);
+      console.error('Error técnico de autenticación:', err);
+      setError('Error interno de autenticación. Intente nuevamente.');
     } finally {
       setLoading(false);
     }
@@ -147,8 +150,14 @@ const Login = ({ onLogin }) => {
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center">
-              {error}
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center space-y-1">
+              <div>{error}</div>
+              {intentos > 0 && intentos < 5 && (
+                <div className="text-xs text-gray-500">Intentos: {intentos}</div>
+              )}
+              {intentos >= 5 && (
+                <div className="text-xs text-gray-500">Demasiados intentos. Considere verificar mayúsculas/BloqMayús.</div>
+              )}
             </div>
           )}
 

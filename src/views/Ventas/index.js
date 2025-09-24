@@ -30,7 +30,9 @@ const VentasView = () => {
     showClienteSugerencias,
     loading,
     totales,
-    deteccionAutomaticaActiva,
+  deteccionAutomaticaActiva,
+  anticipoReserva,
+  setAnticipoReserva,
     
     // Setters
     setCodigoBarras,
@@ -321,11 +323,22 @@ const VentasView = () => {
                 <>
                   Tipo de venta: <span className="font-semibold">{tipoVenta}</span> · Forma de pago: <span className="font-semibold">{formaPago?.tipo}{formaPago?.tarjeta ? ` (${formaPago.tarjeta})` : ''}</span>
                   <button className="ml-3 px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300" onClick={() => setTipoPagoModalOpen(true)}>Cambiar…</button>
-                  {(tipoVenta === 'credito' || tipoVenta === 'plan') && (
-                    <span className="ml-3 text-gray-700">
-                      Abono inicial: <span className="font-semibold">${Number(creditoConfig?.abonoInicial||0).toFixed(2)}</span>
-                      {` · Plazo: `}<span className="font-semibold">{Number(creditoConfig?.plazoDias||0)} días</span>
-                      {tipoVenta === 'plan' && <span className="ml-2 italic text-indigo-600">(Plan: productos reservados, no se entregan aún)</span>}
+                  {( (tipoVenta === 'credito') || (anticipoReserva>0) ) && (
+                    <span className="ml-3 text-gray-700 flex items-center gap-2">
+                      {tipoVenta==='credito' && (
+                        <>
+                          Abono inicial: <span className="font-semibold">${Number(creditoConfig?.abonoInicial||0).toFixed(2)}</span>
+                          {` · Plazo: `}<span className="font-semibold">{Number(creditoConfig?.plazoDias||0)} días</span>
+                        </>
+                      )}
+                      {tipoVenta!=='credito' && anticipoReserva>0 && (
+                        <>
+                          Anticipo reserva: <span className="font-semibold text-green-700">${Number(anticipoReserva).toFixed(2)}</span>
+                        </>
+                      )}
+                      {ventaData?.origen_reserva_id && (
+                        <span className="px-2 py-0.5 text-[10px] uppercase tracking-wide bg-indigo-100 text-indigo-700 rounded">Reserva #{ventaData.origen_reserva_id}</span>
+                      )}
                     </span>
                   )}
                 </>
@@ -614,7 +627,7 @@ const VentasView = () => {
 
         {/* Panel derecho - Totales */}
         <div className="w-64 p-2 flex-shrink-0">
-          <TotalesPanel totales={totales} tipoVenta={tipoVenta} creditoConfig={creditoConfig} />
+          <TotalesPanel totales={totales} tipoVenta={tipoVenta} creditoConfig={creditoConfig} anticipoReserva={anticipoReserva} />
         </div>
       </div>
 
@@ -693,6 +706,7 @@ const VentasView = () => {
         creditoConfig={creditoConfig}
         setCreditoConfig={setCreditoConfig}
         total={totales.total}
+        setAnticipoReserva={setAnticipoReserva}
       />
 
       {/* Modal de alertas y confirmaciones */}
