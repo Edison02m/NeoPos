@@ -189,12 +189,6 @@ class MainController {
               click: () => {
                 this.windowManager.createReporteTopProductosWindow(this.mainWindow);
               }
-            },
-            {
-              label: 'Declaraciones SRI',
-              click: () => {
-                this.mainWindow.webContents.send('menu-reports-sri-declarations');
-              }
             }
           ]
         },
