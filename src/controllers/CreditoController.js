@@ -24,6 +24,52 @@ class CreditoController {
     try { await Credito.delete(idventa); return { success:true }; } catch(e){ return { success:false, error:e.message }; }
   }
 
+  // Obtener créditos por cédula de cliente
+  async listarPorCliente(cedula){
+    try {
+      if(!cedula) return { success:false, error:'Cédula de cliente requerida' };
+      
+      // Buscar ventas con esa cédula que tengan crédito
+      const query = `
+        SELECT c.*, v.fecha, v.fpago, v.total, v.id as venta_id
+        FROM credito c
+        INNER JOIN venta v ON c.idventa = v.id
+        WHERE v.idcliente = ? OR v.cedula = ?
+        ORDER BY v.fecha DESC
+      `;
+      
+      const result = await window.electronAPI.dbQuery(query, [cedula, cedula]);
+      if(!result.success) throw new Error(result.error);
+      
+      const data = (result.data || []).map((c, idx) => {
+        // Normalizar fecha
+        let fechaNorm = '';
+        if(c.fecha){
+          if(c.fecha.includes('-')){
+            fechaNorm = c.fecha.split(' ')[0]; // Solo fecha, sin hora
+          } else if(c.fecha.includes('/')){
+            const [d,m,y] = c.fecha.split('/');
+            fechaNorm = `${y?.padStart(4,'20')}-${m?.padStart(2,'0')}-${d?.padStart(2,'0')}`;
+          }
+        }
+        
+        return {
+          num: idx+1,
+          idventa: c.idventa,
+          fecha: fechaNorm,
+          plazo: (c.plazo ?? '') || '',
+          saldo: Number(c.saldo)||0,
+          total: Number(c.total)||0,
+          fpago: c.fpago || ''
+        };
+      });
+      
+      return { success:true, data };
+    } catch(e){ 
+      return { success:false, error:e.message }; 
+    }
+  }
+
   // Lista extendida relacionando credito -> venta -> cliente
   async listarExtendido(){
     try {
@@ -76,8 +122,8 @@ class CreditoController {
             }
           } catch(_){ fechaNorm=''; }
         }
-  const cli = venta.cedula_cliente ? (clienteMap.get(venta.cedula_cliente) || null) : null;
-  const nombresCli = cli ? `${cli.apellidos||''} ${cli.nombres||''}`.trim() : (c.cliente || '');
+        const cli = venta.cedula_cliente ? (clienteMap.get(venta.cedula_cliente) || null) : null;
+        const nombresCli = cli ? `${cli.apellidos||''} ${cli.nombres||''}`.trim() : (c.cliente || '');
         return {
           num: idx+1,
           idventa: c.idventa,
@@ -85,6 +131,7 @@ class CreditoController {
           plazo: (c.plazo ?? '') || '',
           saldo: Number(c.saldo)||0,
           cliente: nombresCli || '',
+          cedula: venta.cedula_cliente || cli?.cedula || '',
           empresa: '', // placeholder: agregar join a empresa si existe relación futura
         };
       });

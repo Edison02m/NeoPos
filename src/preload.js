@@ -210,7 +210,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     validActions.forEach(action => {
       const handler = () => {
         console.log(`[PRELOAD] Evento recibido: ${action}`);
-        callback(action);
+        try {
+          callback(action);
+        } catch (e) {
+          console.warn('[PRELOAD] Error ejecutando callback onMenuAction:', e);
+        }
+        // Cola temprana y CustomEvent para renderers que aún no montan
+        try {
+          if (!window.__pendingMenuActions) window.__pendingMenuActions = [];
+          window.__pendingMenuActions.push({ action, ts: Date.now() });
+          window.dispatchEvent(new CustomEvent('menu-action', { detail: action }));
+        } catch (e) {
+          console.warn('[PRELOAD] No se pudo despachar CustomEvent menu-action:', e);
+        }
       };
       ipcRenderer.on(action, handler);
     });

@@ -16,12 +16,14 @@ const ReservacionesView = () => {
   const [openConvertir, setOpenConvertir] = useState(false);
   const [ultimaConversion, setUltimaConversion] = useState(null);
   const [filtroEstado, setFiltroEstado] = useState('todas'); // Estados: activa | completada | cancelada | (todas)
+  const [busqueda, setBusqueda] = useState('');
+  const [agrupar, setAgrupar] = useState(true);
   const [openPrint, setOpenPrint] = useState(false);
   useEffect(()=> { selectedRef.current = selected; }, [selected]);
 
   const cargar = async () => {
     setLoading(true);
-    const res = await reservaController.listar();
+    const res = await reservaController.listarExtendido();
     if(res.success) setReservas(res.data||[]);
     setLoading(false);
   };
@@ -124,50 +126,27 @@ const ReservacionesView = () => {
   return (
     <>
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      <div className="p-4 border-b bg-white flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-800">Reservaciones</h1>
-        <button onClick={cargar} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded disabled:opacity-50">Actualizar</button>
+      <div className="p-4 border-b bg-white flex items-center gap-4 flex-wrap">
+        <h1 className="text-lg font-semibold text-gray-800 flex-1">Reservaciones</h1>
+        <div className="flex items-center gap-2">
+          <input value={busqueda} onChange={e=> setBusqueda(e.target.value)} placeholder="Buscar por nombre o cédula..." className="border rounded px-2 py-1 text-sm" />
+          <label className="flex items-center gap-1 text-xs text-gray-600">
+            <input type="checkbox" checked={agrupar} onChange={e=> setAgrupar(e.target.checked)} /> Agrupar
+          </label>
+          <button onClick={cargar} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded disabled:opacity-50">Actualizar</button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto p-4">
         <div className="bg-white rounded border shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-2 py-2 text-center"><input type="checkbox" disabled className="opacity-40" /></th>
-                <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">ID</th>
-                <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Cliente</th>
-                <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Fecha Reservación</th>
-                <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Fecha Evento</th>
-                <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Descripción</th>
-                <th className="text-right px-3 py-2 text-xs font-medium text-gray-600">Monto</th>
-                <th className="text-left px-3 py-2 text-xs font-medium text-gray-600">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan="8" className="text-center py-6 text-gray-500">Cargando...</td></tr>}
-              {!loading && reservas.length===0 && <tr><td colSpan="8" className="text-center py-6 text-gray-500">Sin reservaciones.</td></tr>}
-              {reservas.filter(r => {
-                if(filtroEstado==='todas') return true;
-                return (r.estado||'').toLowerCase() === filtroEstado;
-              }).map(r => {
-                const checked = selected===r.id;
-                return (
-                <tr key={r.id} className={`border-t hover:bg-gray-50 ${checked?'bg-blue-50':''}`}>
-                  <td className="px-2 py-2 text-center align-middle">
-                    <input type="checkbox" checked={checked} onChange={()=> setSelected(checked? null : r.id)} />
-                  </td>
-                  <td className="px-3 py-2 font-mono text-gray-800">{r.id}</td>
-                  <td className="px-3 py-2 text-gray-700">{r.cliente_id}</td>
-                  <td className="px-3 py-2 text-gray-700">{r.fecha_reservacion}</td>
-                  <td className="px-3 py-2 text-gray-700">{r.fecha_evento}</td>
-                  <td className="px-3 py-2 text-gray-700 truncate max-w-xs" title={r.descripcion}>{r.descripcion}</td>
-                  <td className="px-3 py-2 text-right text-gray-900 font-medium">{Number(r.monto_reserva).toFixed(2)}</td>
-                  <td className="px-3 py-2 text-gray-700">{r.estado}</td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <ReservasTable 
+            reservas={reservas}
+            loading={loading}
+            filtroEstado={filtroEstado}
+            busqueda={busqueda}
+            agrupar={agrupar}
+            selected={selected}
+            setSelected={setSelected}
+          />
         </div>
       </div>
     </div>
@@ -179,3 +158,83 @@ const ReservacionesView = () => {
 };
 
 export default ReservacionesView;
+
+// Subcomponente tabla con agrupación
+const ReservasTable = ({ reservas, loading, filtroEstado, busqueda, agrupar, selected, setSelected }) => {
+  const normalizadas = React.useMemo(()=> {
+    const texto = busqueda.trim().toLowerCase();
+    return reservas.filter(r => {
+      if(filtroEstado !== 'todas' && (r.estado||'').toLowerCase() !== filtroEstado) return false;
+      if(texto){
+        const ced = (r.cliente_cedula||'').toLowerCase();
+        const nom = (r.cliente_nombre||'').toLowerCase();
+        if(!(ced.includes(texto) || nom.includes(texto))) return false;
+      }
+      return true;
+    });
+  },[reservas, filtroEstado, busqueda]);
+
+  const agrupados = React.useMemo(()=> {
+    if(!agrupar) return [{ key:'__all', items: normalizadas }];
+    const map = new Map();
+    for(const r of normalizadas){
+      const key = r.cliente_cedula || r.cliente_nombre || 'SIN_CLIENTE';
+      if(!map.has(key)) map.set(key, { key, items:[], total:0, nombre: r.cliente_nombre, cedula: r.cliente_cedula });
+      const g = map.get(key);
+      g.items.push(r);
+      g.total += Number(r.monto_reserva)||0;
+    }
+    return Array.from(map.values()).sort((a,b)=> (a.nombre||'').localeCompare(b.nombre||''));
+  },[normalizadas, agrupar]);
+
+  if(loading) return <div className="py-6 text-center text-gray-500 text-sm">Cargando...</div>;
+  if(!loading && normalizadas.length===0) return <div className="py-6 text-center text-gray-500 text-sm">Sin reservaciones.</div>;
+
+  return (
+    <div className="divide-y">
+          {agrupados.map(group => (
+        <div key={group.key}>
+          {agrupar && (
+            <div className="flex items-center justify-between px-4 py-2 bg-gray-50">
+                  <div className="font-medium text-gray-700 text-sm">Cliente: {group.nombre || 'Sin Nombre'} {group.cedula && <span className="text-gray-500 font-normal ml-1">({group.cedula})</span>}</div>
+              <div className="text-xs text-gray-600">Reservas: {group.items.length} | Total Monto: {group.total.toFixed(2)}</div>
+            </div>
+          )}
+          <table className="w-full text-xs">
+            <thead className="bg-white">
+              <tr className="text-gray-600">
+                <th className="px-2 py-1 text-center"><input type="checkbox" disabled className="opacity-40" /></th>
+                    {!agrupar && <th className="px-2 py-1 text-left">Cliente</th>}
+                <th className="px-2 py-1 text-left">ID</th>
+                <th className="px-2 py-1 text-left">Fecha Reservación</th>
+                <th className="px-2 py-1 text-left">Fecha Evento</th>
+                <th className="px-2 py-1 text-left">Descripción</th>
+                <th className="px-2 py-1 text-right">Monto</th>
+                <th className="px-2 py-1 text-left">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.items.map(r => {
+                const checked = selected === r.id;
+                return (
+                  <tr key={r.id} className={`border-t hover:bg-gray-50 ${checked?'bg-blue-50':''}`}>
+                    <td className="px-2 py-1 text-center align-middle">
+                      <input type="checkbox" checked={checked} onChange={()=> setSelected(checked? null : r.id)} />
+                    </td>
+                        {!agrupar && <td className="px-2 py-1 truncate max-w-[160px]" title={r.cliente_nombre}>{r.cliente_nombre || '—'} {r.cliente_cedula && <span className="text-gray-500 ml-1">({r.cliente_cedula})</span>}</td>}
+                    <td className="px-2 py-1 font-mono">{r.id}</td>
+                    <td className="px-2 py-1">{r.fecha_reservacion}</td>
+                    <td className="px-2 py-1">{r.fecha_evento}</td>
+                    <td className="px-2 py-1 truncate max-w-[160px]" title={r.descripcion}>{r.descripcion}</td>
+                    <td className="px-2 py-1 text-right font-medium">{Number(r.monto_reserva).toFixed(2)}</td>
+                    <td className="px-2 py-1">{r.estado}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+};

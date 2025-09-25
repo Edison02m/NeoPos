@@ -224,13 +224,41 @@ class WindowManager {
           {
             label: 'Ver crédito otorgado al cliente',
             click: () => {
-              clienteWindow.webContents.send('menu-ver-credito');
+              // Abrir directamente la ventana de créditos (reutilizar si ya existe)
+              try {
+                let existing = this.windows.get('credito');
+                if (existing && !existing.isDestroyed()) {
+                  existing.focus();
+                } else if (this.createCreditoWindow) {
+                  this.createCreditoWindow(clienteWindow);
+                } else if (this.windowManager && this.windowManager.createCreditoWindow) {
+                  this.windowManager.createCreditoWindow(clienteWindow);
+                } else {
+                  console.warn('[ClienteMenu] No se encontró createCreditoWindow');
+                }
+              } catch (e) {
+                console.error('[ClienteMenu] Error abriendo ventana crédito', e);
+              }
             }
           },
           {
             label: 'Ver reservaciones del cliente',
             click: () => {
-              clienteWindow.webContents.send('menu-ver-reservaciones');
+              // Abrir directamente la ventana de reservas (reutilizar si ya existe)
+              try {
+                let existing = this.windows.get('reservas');
+                if (existing && !existing.isDestroyed()) {
+                  existing.focus();
+                } else if (this.createReservasWindow) {
+                  this.createReservasWindow(clienteWindow);
+                } else if (this.windowManager && this.windowManager.createReservasWindow) {
+                  this.windowManager.createReservasWindow(clienteWindow);
+                } else {
+                  console.warn('[ClienteMenu] No se encontró createReservasWindow');
+                }
+              } catch (e) {
+                console.error('[ClienteMenu] Error abriendo ventana reservas', e);
+              }
             }
           }
         ]
@@ -246,8 +274,13 @@ class WindowManager {
     const clienteMenu = Menu.buildFromTemplate(menuTemplate);
     clienteWindow.setMenu(clienteMenu);
 
+    // Asegurar que la ventana se muestra cuando el contenido está listo (sin auto DevTools)
     clienteWindow.once('ready-to-show', () => {
-      clienteWindow.show();
+      try {
+        clienteWindow.show();
+      } catch (e) {
+        console.error('[ClienteWindow] Error en ready-to-show', e);
+      }
     });
 
     clienteWindow.on('closed', () => {

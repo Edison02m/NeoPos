@@ -27,6 +27,30 @@ class ReservaController {
   async listar(){
     try { const data = await Reserva.findAll(); return { success:true, data }; } catch(e){ return { success:false, error:e.message }; }
   }
+  // Listar reservas con datos básicos del cliente (cedula, nombres/apellidos) usando join ligero
+  async listarExtendido(){
+    try {
+      const query = `SELECT r.*, c.cedula as cliente_cedula, c.nombres as cliente_nombres, c.apellidos as cliente_apellidos
+                     FROM reservacion r
+                     LEFT JOIN cliente c ON c.cod = r.cliente_id
+                     ORDER BY r.fecha_reservacion DESC`;
+      const res = await window.electronAPI.dbQuery(query, []);
+      if(!res.success) throw new Error(res.error);
+      const data = (res.data||[]).map((r, idx)=> ({
+        num: idx+1,
+        id: r.id,
+        cliente_id: r.cliente_id,
+        cliente_cedula: r.cliente_cedula || '',
+        cliente_nombre: `${(r.cliente_apellidos||'').trim()} ${(r.cliente_nombres||'').trim()}`.trim(),
+        fecha_reservacion: r.fecha_reservacion,
+        fecha_evento: r.fecha_evento,
+        descripcion: r.descripcion || '',
+        monto_reserva: Number(r.monto_reserva)||0,
+        estado: r.estado || 'activa'
+      }));
+      return { success:true, data };
+    } catch(e){ return { success:false, error:e.message }; }
+  }
   async obtener(id){
     try { const data = await Reserva.findById(id); return { success:true, data }; } catch(e){ return { success:false, error:e.message }; }
   }
@@ -44,6 +68,48 @@ class ReservaController {
   }
   async eliminar({ id }){
     try { await Reserva.delete(id); return { success:true }; } catch(e){ return { success:false, error:e.message }; }
+  }
+
+  // Obtener reservas por código de cliente (cedula)
+  async listarPorClienteCedula(cedula){
+    try {
+      if(!cedula) return { success:false, error:'Cédula de cliente requerida' };
+      
+      // Primero buscar el cliente_id por cédula
+      const clienteResult = await window.electronAPI.dbGetSingle(
+        'SELECT cod FROM cliente WHERE cedula = ?', 
+        [cedula]
+      );
+      
+      if(!clienteResult.success || !clienteResult.data) {
+        return { success:true, data:[] }; // No hay cliente con esa cédula
+      }
+      
+      const cliente_id = clienteResult.data.cod;
+      
+      // Obtener reservas del cliente
+      const reservasResult = await window.electronAPI.dbQuery(
+        'SELECT * FROM reservacion WHERE cliente_id = ? ORDER BY fecha_reservacion DESC', 
+        [cliente_id]
+      );
+      
+      if(!reservasResult.success) throw new Error(reservasResult.error);
+      
+      const data = (reservasResult.data || []).map((r, idx) => ({
+        num: idx + 1,
+        id: r.id,
+        fecha_reservacion: r.fecha_reservacion,
+        fecha_evento: r.fecha_evento,
+        descripcion: r.descripcion || '',
+        monto_reserva: Number(r.monto_reserva) || 0,
+        estado: r.estado || 'activa',
+        created_at: r.created_at
+      }));
+      
+      return { success:true, data };
+    } catch(e){ 
+      return { success:false, error:e.message }; 
+    }
   }
 
   // Obtener reserva extendida simplificada: cliente (por cod), venta (si idventa), total_venta y saldo = total - monto_reserva
