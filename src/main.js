@@ -187,7 +187,7 @@ class MainController {
             {
               label: 'Productos Más Vendidos',
               click: () => {
-                this.mainWindow.webContents.send('menu-reports-top-products');
+                this.windowManager.createReporteTopProductosWindow(this.mainWindow);
               }
             },
             {

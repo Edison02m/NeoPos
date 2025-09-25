@@ -646,6 +646,57 @@ class WindowManager {
     return reporteComprasWindow;
   }
 
+  createReporteTopProductosWindow(parentWindow){
+    const topWindow = new BrowserWindow({
+      width: 1000,
+      height: 760,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration:false,
+        contextIsolation:true,
+        enableRemoteModule:false,
+        preload: path.join(__dirname,'../preload.js')
+      },
+      title: 'Productos Más Vendidos',
+      resizable:true,
+      minimizable:true,
+      maximizable:true,
+      frame:true,
+      skipTaskbar:false
+    });
+
+    this.loadContent(topWindow, '/reportes/productos-mas-vendidos');
+
+    const menuTemplate = [
+      {
+        label: 'Opciones',
+        submenu: [
+          { label: 'Filtrar todas las fechas', click: () => topWindow.webContents.send('reporte-top-fecha-todas') },
+          { label: 'De hoy', click: () => topWindow.webContents.send('reporte-top-fecha-hoy') },
+          { label: 'De una fecha…', click: () => topWindow.webContents.send('reporte-top-fecha-una') },
+          { label: 'De un periodo…', click: () => topWindow.webContents.send('reporte-top-fecha-periodo') }
+        ]
+      },
+      {
+        label: 'Límites',
+        submenu: [
+          { label: 'Top 50', click: () => topWindow.webContents.send('reporte-top-limit-50') },
+          { label: 'Top 100', click: () => topWindow.webContents.send('reporte-top-limit-100') }
+        ]
+      },
+      { label: 'Cerrar ventana', click: ()=> topWindow.close() }
+    ];
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    topWindow.setMenu(menu);
+
+    topWindow.once('ready-to-show', ()=> topWindow.show());
+    topWindow.on('closed', ()=> this.windows.delete('reporte-top-productos'));
+    this.windows.set('reporte-top-productos', topWindow);
+    return topWindow;
+  }
+
   createVentasWindow(parentWindow) {
     const ventasWindow = new BrowserWindow({
       width: 1400,

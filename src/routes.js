@@ -16,6 +16,7 @@ import CreditoView from './views/Credito';
 import ReservacionesView from './views/Reservaciones';
 import VentasReporteView from './views/Reportes/VentasReporte';
 import ComprasReporteView from './views/Reportes/ComprasReporte';
+import ProductosMasVendidosView from './views/Reportes/ProductosMasVendidos';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -103,6 +104,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route
         path="/reportes/compras"
         element={<ComprasReporteView />}
+      />
+      <Route 
+        path="/reportes/productos-mas-vendidos" 
+        element={<ProductosMasVendidosView />} 
       />
     </Routes>
   );

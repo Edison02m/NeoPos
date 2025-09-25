@@ -308,6 +308,32 @@ class Producto {
     return result;
   }
 
+  // Top productos más vendidos (agrega cantidades de ventadet)
+  // params: { desde?: 'YYYY-MM-DD', hasta?: 'YYYY-MM-DD', limit?: number }
+  static async getTopVendidos(params = {}){
+    const { desde, hasta, limit = 500 } = params;
+    const where = [];
+    const sqlParams = [];
+    if(desde){ where.push('date(v.fecha) >= date(?)'); sqlParams.push(desde); }
+    if(hasta){ where.push('date(v.fecha) <= date(?)'); sqlParams.push(hasta); }
+    const whereSql = where.length? ('WHERE '+ where.join(' AND ')) : '';
+    const sql = `SELECT d.codprod AS codigo, SUM(d.cantidad) AS cantidad,
+      MAX(p.producto) AS descripcion,
+      MAX(p.pvp) AS pvp
+      FROM ventadet d
+      LEFT JOIN venta v ON v.id = d.idventa
+      LEFT JOIN producto p ON p.codigo = d.codprod
+      ${whereSql}
+      GROUP BY d.codprod
+      ORDER BY SUM(d.cantidad) DESC, d.codprod ASC
+      LIMIT ${parseInt(limit)||500}`;
+    const result = await window.electronAPI.dbQuery(sql, sqlParams);
+    if(!result.success){
+      throw new Error(result.error);
+    }
+    return result.data || [];
+  }
+
   // Obtener el primer registro por código
   static async getFirstRecord() {
     const result = await window.electronAPI.dbGetSingle(

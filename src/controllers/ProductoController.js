@@ -369,6 +369,16 @@ class ProductoController {
       };
     }
   }
+
+  // Obtener ranking de productos más vendidos
+  async getTopVendidos({ desde = null, hasta = null, limit = 500 } = {}) {
+    try {
+      const data = await Producto.getTopVendidos({ desde, hasta, limit });
+      return { success:true, data, message: data.length? null : 'No hay ventas en el rango' };
+    } catch(error){
+      return { success:false, message:'Error al obtener ranking', error:error.message };
+    }
+  }
 }
 
 export default ProductoController;

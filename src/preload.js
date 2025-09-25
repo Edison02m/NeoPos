@@ -154,6 +154,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   'reporte-compras-filtrar-total-igual',
   'reporte-compras-filtrar-total-entre',
   'reporte-compras-totales-por-proveedor',
+  // Reporte Productos Más Vendidos
+  'reporte-top-fecha-todas',
+  'reporte-top-fecha-hoy',
+  'reporte-top-fecha-una',
+  'reporte-top-fecha-periodo',
+  'reporte-top-exportar-excel',
+  'reporte-top-exportar-pdf',
+  'reporte-top-limit-50',
+  'reporte-top-limit-100',
   // Crédito window specific
   'menu-credito-registrar-abono',
   'menu-credito-imprimir',
