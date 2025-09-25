@@ -180,7 +180,8 @@ class MainController {
             {
               label: 'Reportes de Compras',
               click: () => {
-                this.mainWindow.webContents.send('menu-reports-purchases');
+                // Abrir directamente la ventana de Reporte de Compras (igual que ventas)
+                this.windowManager.createReporteComprasWindow(this.mainWindow);
               }
             },
             {
@@ -558,6 +559,15 @@ class MainController {
         return { success: false, error: 'Ventana principal no disponible' };
       }
       this.windowManager.createReporteVentasWindow(this.mainWindow);
+      return { success: true };
+    });
+
+    // Abrir ventana de Reporte de Compras (IPC opcional para llamadas desde renderer)
+    ipcMain.handle('open-reporte-compras-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createReporteComprasWindow(this.mainWindow);
       return { success: true };
     });
 

@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openVentasWindow: () => ipcRenderer.invoke('open-ventas-window'),
   // Reportes windows
   openReporteVentasWindow: () => ipcRenderer.invoke('open-reporte-ventas-window'),
+  openReporteComprasWindow: () => ipcRenderer.invoke('open-reporte-compras-window'),
   openCreditoWindow: () => ipcRenderer.invoke('open-credito-window'),
   openReservasWindow: () => ipcRenderer.invoke('open-reservas-window'),
     closeWindow: (windowName) => ipcRenderer.invoke('close-window', windowName),
@@ -140,6 +141,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   'reporte-ventas-filtrar-forma-cheque',
   'reporte-ventas-filtrar-forma-tarjeta',
   'reporte-ventas-totales-por-forma',
+  // Reporte de Compras window specific
+  'reporte-compras-detalle-transaccion',
+  'reporte-compras-eliminar-transaccion',
+  'reporte-compras-detalle-productos',
+  'reporte-compras-filtrar-fecha-todas',
+  'reporte-compras-filtrar-fecha-hoy',
+  'reporte-compras-filtrar-fecha-una',
+  'reporte-compras-filtrar-fecha-periodo',
+  'reporte-compras-filtrar-total-mayor',
+  'reporte-compras-filtrar-total-menor',
+  'reporte-compras-filtrar-total-igual',
+  'reporte-compras-filtrar-total-entre',
+  'reporte-compras-totales-por-proveedor',
   // Crédito window specific
   'menu-credito-registrar-abono',
   'menu-credito-imprimir',

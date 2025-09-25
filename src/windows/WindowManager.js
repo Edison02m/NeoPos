@@ -573,6 +573,79 @@ class WindowManager {
     return reporteWindow;
   }
 
+  createReporteComprasWindow(parentWindow) {
+    const reporteComprasWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Reporte de Compras',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+
+    this.loadContent(reporteComprasWindow, '/reportes/compras');
+
+    const menuTemplate = [
+      {
+        label: 'Transacción',
+        submenu: [
+          { label: 'Detalle de transacción', click: () => reporteComprasWindow.webContents.send('reporte-compras-detalle-transaccion') },
+          { label: 'Eliminar transacción', click: () => reporteComprasWindow.webContents.send('reporte-compras-eliminar-transaccion') },
+          { type: 'separator' },
+          { label: 'Detalle de productos comprados', click: () => reporteComprasWindow.webContents.send('reporte-compras-detalle-productos') }
+        ]
+      },
+      {
+        label: 'Edición',
+        submenu: [
+          {
+            label: 'Filtrar por fecha',
+            submenu: [
+              { label: 'Todas las transacciones', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-fecha-todas') },
+              { label: 'Transacciones del día de hoy', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-fecha-hoy') },
+              { label: 'Transacciones de una fecha…', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-fecha-una') },
+              { label: 'Transacciones de un periodo…', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-fecha-periodo') }
+            ]
+          },
+          {
+            label: 'Filtrar por total',
+            submenu: [
+              { label: 'Mayor a…', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-total-mayor') },
+              { label: 'Menor a…', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-total-menor') },
+              { label: 'Igual a…', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-total-igual') },
+              { label: 'Entre…', click: () => reporteComprasWindow.webContents.send('reporte-compras-filtrar-total-entre') }
+            ]
+          },
+          { type: 'separator' },
+          { label: 'Totales por proveedor', click: () => reporteComprasWindow.webContents.send('reporte-compras-totales-por-proveedor') }
+        ]
+      },
+      {
+        label: 'Cerrar ventana reportes',
+        click: () => reporteComprasWindow.close()
+      }
+    ];
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    reporteComprasWindow.setMenu(menu);
+
+    reporteComprasWindow.once('ready-to-show', () => reporteComprasWindow.show());
+    reporteComprasWindow.on('closed', () => this.windows.delete('reporte-compras'));
+
+    this.windows.set('reporte-compras', reporteComprasWindow);
+    return reporteComprasWindow;
+  }
+
   createVentasWindow(parentWindow) {
     const ventasWindow = new BrowserWindow({
       width: 1400,
