@@ -547,6 +547,15 @@ class MainController {
       return { success: true };
     });
 
+    // Abrir configuración de impresión de facturas
+    ipcMain.handle('open-impresion-factura-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+        return { success: false, error: 'Ventana principal no disponible' };
+      }
+      this.windowManager.createImpresionFacturaWindow(this.mainWindow);
+      return { success: true };
+    });
+
     // Abrir ventana de Reporte de Ventas (IPC opcional para llamadas desde renderer)
     ipcMain.handle('open-reporte-ventas-window', () => {
       if (!this.mainWindow || this.mainWindow.isDestroyed()) {

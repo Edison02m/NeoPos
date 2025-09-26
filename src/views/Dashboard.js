@@ -61,6 +61,22 @@ const Dashboard = ({ user, onLogout }) => {
     };
   }, []);
 
+  // Listener de acciones de menú para abrir configuración de impresión
+  useEffect(() => {
+    function handleMenuAction(e){
+      const action = e.detail;
+      if(action === 'menu-config-invoice-printing'){
+        if(window.electronAPI?.openImpresionFacturaWindow){
+          window.electronAPI.openImpresionFacturaWindow();
+        } else {
+          navigate('/configuracion-impresion');
+        }
+      }
+    }
+    window.addEventListener('menu-action', handleMenuAction);
+    return () => window.removeEventListener('menu-action', handleMenuAction);
+  }, [navigate]);
+
   const loadLogoPreview = async (logoPath) => {
     if (!logoPath || !validateImagePath(logoPath)) {
       setLogoPreview(null);

@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openProductoWindow: () => ipcRenderer.invoke('open-producto-window'),
     openInventarioWindow: () => ipcRenderer.invoke('open-inventario-window'),
     openVentasWindow: () => ipcRenderer.invoke('open-ventas-window'),
+  openImpresionFacturaWindow: () => ipcRenderer.invoke('open-impresion-factura-window'),
   // Reportes windows
   openReporteVentasWindow: () => ipcRenderer.invoke('open-reporte-ventas-window'),
   openReporteComprasWindow: () => ipcRenderer.invoke('open-reporte-compras-window'),
@@ -108,6 +109,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-config-user',
       'menu-config-company',
       'menu-config-sistema',
+  'menu-config-invoice-printing',
       'menu-inventory-customers',
       'menu-inventory-suppliers',
       'menu-ver-personas',
@@ -116,7 +118,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-ver-reservaciones',
       // Eventos específicos del menú de productos
       'menu-buscar-descripcion',
-      'menu-buscar-codigo-barras',
+      'menu-inventory-customers',
       'menu-buscar-codigo-auxiliar',
       'menu-filtrar-productos',
       'menu-marcar-producto',
@@ -203,11 +205,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-mostrar-todos',
       'menu-generar-pdf',
       'menu-exportar-excel',
-      'menu-reporte-stock-bajo',
+      'menu-config-invoice-printing',
       'menu-buscar-producto'
     ];
 
-    validActions.forEach(action => {
+    // El array tenía acciones duplicadas (p.ej. 'menu-config-invoice-printing') provocando doble disparo.
+    // Lo normalizamos para que cada acción se registre solo una vez.
+    const uniqueActions = [...new Set(validActions)];
+    uniqueActions.forEach(action => {
       const handler = () => {
         console.log(`[PRELOAD] Evento recibido: ${action}`);
         try {
@@ -228,7 +233,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     });
 
     return () => {
-      validActions.forEach(action => {
+      uniqueActions.forEach(action => {
         ipcRenderer.removeAllListeners(action);
       });
     };

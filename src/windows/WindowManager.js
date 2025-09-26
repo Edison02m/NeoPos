@@ -96,6 +96,41 @@ class WindowManager {
     return userWindow;
   }
 
+  createImpresionFacturaWindow(parentWindow) {
+    // Reutilizar si ya existe para evitar abrir dos veces la ventana
+    let existing = this.windows.get('impresion-factura');
+    if (existing && !existing.isDestroyed()) {
+      existing.focus();
+      return existing;
+    }
+    const impWindow = new BrowserWindow({
+      width: 900,
+      height: 700,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Configuración Impresión Facturas',
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+    this.loadContent(impWindow, '/configuracion-impresion');
+    const emptyMenu = Menu.buildFromTemplate([]);
+    impWindow.setMenu(emptyMenu);
+    impWindow.once('ready-to-show', () => { impWindow.show(); });
+    impWindow.on('closed', () => { this.windows.delete('impresion-factura'); });
+    this.windows.set('impresion-factura', impWindow);
+    return impWindow;
+  }
+
   createEmpresaWindow(parentWindow) {
     const empresaWindow = new BrowserWindow({
       width: 800,

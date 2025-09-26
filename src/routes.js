@@ -17,6 +17,7 @@ import ReservacionesView from './views/Reservaciones';
 import VentasReporteView from './views/Reportes/VentasReporte';
 import ComprasReporteView from './views/Reportes/ComprasReporte';
 import ProductosMasVendidosView from './views/Reportes/ProductosMasVendidos';
+import ImpresionFacturaConfig from './views/ImpresionFactura';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -51,6 +52,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/configuracion-sistema" 
         element={<ConfiguracionSistema />} 
+      />
+      <Route
+        path="/configuracion-impresion"
+        element={<ImpresionFacturaConfig />}
       />
       <Route 
         path="/cliente" 
