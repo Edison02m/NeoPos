@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import EmpresaModel from '../models/Empresa';
 
 const Empresa = () => {
-  // Establecer el título de la ventana
-  useEffect(() => {
-    document.title = 'Configuración de Empresa';
-  }, []);
+  // document.title eliminado: título ahora forzado desde proceso principal
   const [formData, setFormData] = useState({
     nombre: '',
     ruc: '',

@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openInventarioWindow: () => ipcRenderer.invoke('open-inventario-window'),
     openVentasWindow: () => ipcRenderer.invoke('open-ventas-window'),
   openImpresionFacturaWindow: () => ipcRenderer.invoke('open-impresion-factura-window'),
+  openCierreCajaWindow: () => ipcRenderer.invoke('open-cierre-caja-window'),
+  openRecaudacionWindow: () => ipcRenderer.invoke('open-recaudacion-window'),
   // Reportes windows
   openReporteVentasWindow: () => ipcRenderer.invoke('open-reporte-ventas-window'),
   openReporteComprasWindow: () => ipcRenderer.invoke('open-reporte-compras-window'),
@@ -211,7 +213,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // El array tenía acciones duplicadas (p.ej. 'menu-config-invoice-printing') provocando doble disparo.
     // Lo normalizamos para que cada acción se registre solo una vez.
-    const uniqueActions = [...new Set(validActions)];
+  const uniqueActions = [...new Set(validActions.concat(['menu-utilities-cash-closing','menu-utilities-recaudacion']))];
     uniqueActions.forEach(action => {
       const handler = () => {
         console.log(`[PRELOAD] Evento recibido: ${action}`);

@@ -103,10 +103,7 @@ const ProductosView = () => {
 
   // (Eliminado) Reportes de inventario: esta vista ahora solo maneja reportes de productos.
 
-  // Establecer el título de la ventana
-  useEffect(() => {
-    document.title = 'Gestión de Productos';
-  }, []);
+  // document.title eliminado: título controlado por WindowManager
 
   // Estados principales
   const [productos, setProductos] = useState([]);

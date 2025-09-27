@@ -67,7 +67,8 @@ class MainController {
         enableRemoteModule: false,
         preload: path.join(__dirname, 'preload.js')
       },
-      icon: path.join(__dirname, '../assets/images/icon.png'),
+  // Icono actualizado a icon4.ico solicitado
+  icon: path.join(__dirname, 'icons', 'icon4.ico'),
       show: false,
       titleBarStyle: 'default'
     });
@@ -231,8 +232,11 @@ class MainController {
               }
             },
             {
-              label: 'Facturaciones',
+              label: 'Recaudaciones',
               click: () => {
+                // Nuevo evento principal
+                this.mainWindow.webContents.send('menu-utilities-recaudacion');
+                // Backward compatibility (por si algún listener viejo aún espera este nombre)
                 this.mainWindow.webContents.send('menu-utilities-invoicing');
               }
             }
@@ -554,6 +558,24 @@ class MainController {
       }
       this.windowManager.createImpresionFacturaWindow(this.mainWindow);
       return { success: true };
+    });
+
+    // Abrir ventana Cierre de Caja
+    ipcMain.handle('open-cierre-caja-window', () => {
+      if(!this.mainWindow || this.mainWindow.isDestroyed()){
+        return { success:false, error:'Ventana principal no disponible' };
+      }
+      this.windowManager.createCierreCajaWindow(this.mainWindow);
+      return { success:true };
+    });
+
+    // Abrir ventana Recaudación
+    ipcMain.handle('open-recaudacion-window', () => {
+      if(!this.mainWindow || this.mainWindow.isDestroyed()){
+        return { success:false, error:'Ventana principal no disponible' };
+      }
+      this.windowManager.createRecaudacionWindow(this.mainWindow);
+      return { success:true };
     });
 
     // Abrir ventana de Reporte de Ventas (IPC opcional para llamadas desde renderer)

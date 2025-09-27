@@ -71,6 +71,18 @@ const Dashboard = ({ user, onLogout }) => {
         } else {
           navigate('/configuracion-impresion');
         }
+      } else if(action === 'menu-utilities-cash-closing'){
+        if(window.electronAPI?.openCierreCajaWindow){
+          window.electronAPI.openCierreCajaWindow();
+        } else {
+          navigate('/cierre-caja');
+        }
+      } else if(action === 'menu-utilities-invoicing' || action === 'menu-utilities-recaudacion'){
+        if(window.electronAPI?.openRecaudacionWindow){
+          window.electronAPI.openRecaudacionWindow();
+        } else {
+          navigate('/recaudacion');
+        }
       }
     }
     window.addEventListener('menu-action', handleMenuAction);

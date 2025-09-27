@@ -18,6 +18,8 @@ import VentasReporteView from './views/Reportes/VentasReporte';
 import ComprasReporteView from './views/Reportes/ComprasReporte';
 import ProductosMasVendidosView from './views/Reportes/ProductosMasVendidos';
 import ImpresionFacturaConfig from './views/ImpresionFactura';
+import CierreCajaView from './views/CierreCaja';
+import RecaudacionView from './views/Recaudacion';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -56,6 +58,14 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route
         path="/configuracion-impresion"
         element={<ImpresionFacturaConfig />}
+      />
+      <Route
+        path="/cierre-caja"
+        element={<CierreCajaView />}
+      />
+      <Route
+        path="/recaudacion"
+        element={<RecaudacionView />}
       />
       <Route 
         path="/cliente" 

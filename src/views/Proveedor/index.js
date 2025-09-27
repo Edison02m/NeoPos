@@ -10,10 +10,7 @@ import ProveedorForm from './ProveedorForm';
 import ActionPanel from './ActionPanel';
 
 const ProveedoresView = () => {
-  // Establecer el título de la ventana
-  useEffect(() => {
-    document.title = 'Gestión de Proveedores';
-  }, []);
+  // document.title eliminado: control centralizado en WindowManager
 
   // Estados principales
   const [proveedores, setProveedores] = useState([]);

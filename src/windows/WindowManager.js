@@ -6,6 +6,21 @@ class WindowManager {
     this.windows = new Map();
   }
 
+  // Fuerza un título fijo aunque el renderer cambie document.title
+  applyFixedTitle(win, fixedTitle){
+    if(!win) return;
+    try {
+      win.setTitle(fixedTitle);
+      // Bloquear futuros cambios desde el renderer (React cambiando document.title)
+      win.on('page-title-updated', (e) => {
+        e.preventDefault();
+        if(!win.isDestroyed()) win.setTitle(fixedTitle);
+      });
+    } catch(err){
+      console.warn('[WindowManager] No se pudo fijar título:', err?.message);
+    }
+  }
+
   // Helper para detectar si estamos en desarrollo o producción
   isDevelopment() {
     return !app.isPackaged;
@@ -69,13 +84,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Gestión de Usuarios',
+      title: 'Usuarios',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(userWindow,'Usuarios');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(userWindow, '/users');
@@ -115,13 +132,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Configuración Impresión Facturas',
+      title: 'Impresión de Facturas',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(impWindow,'Impresión de Facturas');
     this.loadContent(impWindow, '/configuracion-impresion');
     const emptyMenu = Menu.buildFromTemplate([]);
     impWindow.setMenu(emptyMenu);
@@ -129,6 +148,72 @@ class WindowManager {
     impWindow.on('closed', () => { this.windows.delete('impresion-factura'); });
     this.windows.set('impresion-factura', impWindow);
     return impWindow;
+  }
+
+  createCierreCajaWindow(parentWindow){
+    let existing = this.windows.get('cierre-caja');
+    if(existing && !existing.isDestroyed()) { existing.focus(); return existing; }
+    const win = new BrowserWindow({
+      width: 900,
+      height: 650,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences:{
+        nodeIntegration:false,
+        contextIsolation:true,
+        enableRemoteModule:false,
+        preload: path.join(__dirname,'../preload.js')
+      },
+      title:'Cierre de Caja',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
+      resizable:true,
+      minimizable:true,
+      maximizable:true,
+      frame:true,
+      skipTaskbar:false
+    });
+    this.applyFixedTitle(win,'Cierre de Caja');
+    this.loadContent(win, '/cierre-caja');
+    const emptyMenu = Menu.buildFromTemplate([]);
+    win.setMenu(emptyMenu);
+    win.once('ready-to-show', ()=> win.show());
+    win.on('closed', ()=> this.windows.delete('cierre-caja'));
+    this.windows.set('cierre-caja', win);
+    return win;
+  }
+
+  createRecaudacionWindow(parentWindow){
+    let existing = this.windows.get('recaudacion');
+    if(existing && !existing.isDestroyed()){ existing.focus(); return existing; }
+    const win = new BrowserWindow({
+      width: 750,
+      height: 600,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences:{
+        nodeIntegration:false,
+        contextIsolation:true,
+        enableRemoteModule:false,
+        preload: path.join(__dirname,'../preload.js')
+      },
+      title:'Recaudación',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
+      resizable:true,
+      minimizable:true,
+      maximizable:true,
+      frame:true,
+      skipTaskbar:false
+    });
+    this.applyFixedTitle(win,'Recaudación');
+    this.loadContent(win, '/recaudacion');
+    const emptyMenu = Menu.buildFromTemplate([]);
+    win.setMenu(emptyMenu);
+    win.once('ready-to-show', ()=> win.show());
+    win.on('closed', ()=> this.windows.delete('recaudacion'));
+    this.windows.set('recaudacion', win);
+    return win;
   }
 
   createEmpresaWindow(parentWindow) {
@@ -144,13 +229,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Configuración de Empresa',
+      title: 'Empresa',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(empresaWindow,'Empresa');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(empresaWindow, '/empresa');
@@ -185,12 +272,14 @@ class WindowManager {
         preload: path.join(__dirname, '../preload.js')
       },
       title: 'Configuración del Sistema',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(sistemaWindow,'Configuración del Sistema');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(sistemaWindow, '/configuracion-sistema');
@@ -224,13 +313,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Gestión de Clientes',
+      title: 'Clientes',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(clienteWindow,'Clientes');
 
   // Cargar contenido según el modo de desarrollo/producción
   // Ruta correcta en React Router es '/cliente'
@@ -339,13 +430,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Gestión de Proveedores',
+      title: 'Proveedores',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(proveedorWindow,'Proveedores');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(proveedorWindow, '/proveedor');
@@ -388,13 +481,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Gestión de Productos',
+      title: 'Productos',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(productoWindow,'Productos');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(productoWindow, '/producto');
@@ -519,13 +614,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Inventario de Existencias',
+      title: 'Inventario',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(inventarioWindow,'Inventario');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(inventarioWindow, '/inventario');
@@ -569,12 +666,14 @@ class WindowManager {
         preload: path.join(__dirname, '../preload.js')
       },
       title: 'Reporte de Ventas',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(reporteWindow,'Reporte de Ventas');
 
     // Cargar contenido a la ruta del reporte
     this.loadContent(reporteWindow, '/reportes/ventas');
@@ -655,12 +754,14 @@ class WindowManager {
         preload: path.join(__dirname, '../preload.js')
       },
       title: 'Reporte de Compras',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(reporteComprasWindow,'Reporte de Compras');
 
     this.loadContent(reporteComprasWindow, '/reportes/compras');
 
@@ -728,12 +829,14 @@ class WindowManager {
         preload: path.join(__dirname,'../preload.js')
       },
       title: 'Productos Más Vendidos',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable:true,
       minimizable:true,
       maximizable:true,
       frame:true,
       skipTaskbar:false
     });
+    this.applyFixedTitle(topWindow,'Productos Más Vendidos');
 
     this.loadContent(topWindow, '/reportes/productos-mas-vendidos');
 
@@ -778,13 +881,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Punto de Venta',
+      title: 'Ventas',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(ventasWindow,'Ventas');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(ventasWindow, '/ventas');
@@ -953,13 +1058,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Gestión de Compras',
+      title: 'Compras',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(comprasWindow,'Compras');
 
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(comprasWindow, '/compras');
@@ -1136,13 +1243,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Créditos de Clientes',
+      title: 'Créditos',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(creditoWindow,'Créditos');
 
     this.loadContent(creditoWindow, '/credito');
 
@@ -1244,13 +1353,15 @@ class WindowManager {
         enableRemoteModule: false,
         preload: path.join(__dirname, '../preload.js')
       },
-      title: 'Reservaciones de Clientes',
+      title: 'Reservas',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
       resizable: true,
       minimizable: true,
       maximizable: true,
       frame: true,
       skipTaskbar: false
     });
+    this.applyFixedTitle(reservasWindow,'Reservas');
 
     this.loadContent(reservasWindow, '/reservaciones');
 

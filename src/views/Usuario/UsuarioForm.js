@@ -155,7 +155,12 @@ const UsuarioForm = ({
             </div>
             <div>
               <dt className="text-xs text-gray-500">Empresa:</dt>
-              <dd className="text-xs font-medium text-gray-900">{formData.codempresa}</dd>
+              <dd className="text-xs font-medium text-gray-900">
+                {formData.empresa_nombre || '—'}
+                {formData.codempresa ? (
+                  <span className="text-gray-400 font-normal ml-1">(ID: {formData.codempresa})</span>
+                ) : null}
+              </dd>
             </div>
           </dl>
         </div>

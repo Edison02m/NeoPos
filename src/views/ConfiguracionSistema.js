@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const ConfiguracionSistema = () => {
-  // Establecer el título de la ventana
-  useEffect(() => {
-    document.title = 'Configuración del Sistema';
-  }, []);
+  // document.title eliminado: el título se fija desde WindowManager
 
   const [formData, setFormData] = useState({
     nombre: '',

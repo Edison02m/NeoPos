@@ -21,7 +21,8 @@ const TableModel = ({
     const isSelected = selectedRow && (
       (selectedRow.codigo && selectedRow.codigo === row.codigo) ||
       (selectedRow.cod && selectedRow.cod === row.cod) ||
-      (selectedRow.id && selectedRow.id === row.id)
+      (selectedRow.id && selectedRow.id === row.id) ||
+      (selectedRow.fecha && selectedRow.fecha === row.fecha)
     );
     
     if (isSelected) {
@@ -36,7 +37,8 @@ const TableModel = ({
     const isSelected = selectedRow && (
       (selectedRow.codigo && selectedRow.codigo === row.codigo) ||
       (selectedRow.cod && selectedRow.cod === row.cod) ||
-      (selectedRow.id && selectedRow.id === row.id)
+      (selectedRow.id && selectedRow.id === row.id) ||
+      (selectedRow.fecha && selectedRow.fecha === row.fecha)
     );
     
     return {

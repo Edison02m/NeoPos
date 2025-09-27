@@ -23,7 +23,7 @@
   ],
   "win": {
     "target": "nsis",
-    "icon": "src/assets/images/icon.ico"
+    "icon": "src/icons/icon4.ico"
   },
   "nsis": {
     "allowToChangeInstallationDirectory": true,

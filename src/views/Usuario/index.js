@@ -15,7 +15,8 @@ const Usuarios = () => {
     contrasena: '',
     alias: '',
     tipo: 1,
-    codempresa: 1
+    codempresa: 1,
+    empresa_nombre: ''
   });
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -23,10 +24,7 @@ const Usuarios = () => {
   const [loading, setLoading] = useState(true);
   const { modalState, showConfirm, showAlert, closeModal } = useModal();
 
-  // Establecer el título de la ventana
-  useEffect(() => {
-    document.title = 'Gestión de Usuarios - NeoPOS';
-  }, []);
+  // document.title eliminado: título ahora fijo desde WindowManager
 
   useEffect(() => {
     loadUsuarios();
@@ -63,7 +61,8 @@ const Usuarios = () => {
       contrasena: '',
       alias: '',
       tipo: 1,
-      codempresa: empresas.length > 0 ? empresas[0].cod : ''
+      codempresa: empresas.length > 0 ? empresas[0].cod : '',
+      empresa_nombre: empresas.length > 0 ? empresas[0].empresa : ''
     });
     setSelectedUser(null);
     setIsEditing(false);
@@ -87,7 +86,8 @@ const Usuarios = () => {
         contrasena: '', // No mostrar la contraseña actual
         alias: selectedUser.alias || '',
         tipo: selectedUser.tipo,
-        codempresa: selectedUser.codempresa || 1
+        codempresa: selectedUser.codempresa || 1,
+        empresa_nombre: selectedUser.empresa_nombre || ''
       });
     }
   };
@@ -158,6 +158,22 @@ const Usuarios = () => {
       ...prev,
       [name]: name === 'tipo' || name === 'codempresa' ? parseInt(value) : value
     }));
+
+    // Si cambia la empresa, actualizar su nombre asociado
+    if (name === 'codempresa') {
+      const empresa = empresas.find(e => e.cod === parseInt(value));
+      if (empresa) {
+        setFormData(prev => ({
+          ...prev,
+          empresa_nombre: empresa.empresa
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          empresa_nombre: ''
+        }));
+      }
+    }
   };
 
   const handleUserSelect = (usuario) => {
@@ -167,7 +183,8 @@ const Usuarios = () => {
       contrasena: '',
       alias: usuario.alias || '',
       tipo: usuario.tipo,
-      codempresa: usuario.codempresa || 1
+      codempresa: usuario.codempresa || 1,
+      empresa_nombre: usuario.empresa_nombre || ''
     });
     setIsEditing(false);
     setIsCreating(false);

@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 
 const ActionPanel = ({ 
   selectedUser, 
@@ -7,10 +6,12 @@ const ActionPanel = ({
   onEdit, 
   onDelete 
 }) => {
-  const navigate = useNavigate();
-
   const handleExit = () => {
-    navigate('/dashboard');
+    if (window.electronAPI?.closeCurrentWindow) {
+      window.electronAPI.closeCurrentWindow();
+    } else {
+      window.close();
+    }
   };
 
   return (
@@ -46,7 +47,7 @@ const ActionPanel = ({
         
         <button
           onClick={handleExit}
-          title="Volver al Dashboard"
+          title="Cerrar ventana"
           className="w-8 h-8 flex items-center justify-center text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
         >
           ✕

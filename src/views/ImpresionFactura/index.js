@@ -36,7 +36,7 @@ const ImpresionFacturaConfig = () => {
   const [items, setItems] = useState([]); // impresion
   const [search, setSearch] = useState('');
 
-  useEffect(()=>{ document.title = 'Configuración Impresión Facturas'; }, []);
+  // document.title eliminado: ahora el título se fija desde el proceso principal
 
   useEffect(()=>{ loadData(); }, []);
 
