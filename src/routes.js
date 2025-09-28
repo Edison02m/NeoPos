@@ -20,6 +20,7 @@ import ProductosMasVendidosView from './views/Reportes/ProductosMasVendidos';
 import ImpresionFacturaConfig from './views/ImpresionFactura';
 import CierreCajaView from './views/CierreCaja';
 import RecaudacionView from './views/Recaudacion';
+import ConfigurarDispositivosView from './views/ConfigurarDispositivos';
 
 
 const AppRoutes = ({ user, onLogin, onLogout }) => {
@@ -66,6 +67,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route
         path="/recaudacion"
         element={<RecaudacionView />}
+      />
+      <Route
+        path="/configurar-dispositivos"
+        element={<ConfigurarDispositivosView />}
       />
       <Route 
         path="/cliente" 

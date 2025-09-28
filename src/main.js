@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
 const DatabaseController = require('./controllers/DatabaseController');
 const WindowManager = require('./windows/WindowManager');
+const DispositivosController = require('./controllers/DispositivosController');
 
 // Mitigar problemas de pantalla en blanco en Windows por fallos de GPU
 // Ref: https://www.electronjs.org/docs/latest/api/app#appdisablehardwareacceleration
@@ -17,6 +18,7 @@ class MainController {
     this.mainWindow = null;
     this.databaseController = new DatabaseController();
     this.windowManager = new WindowManager();
+    this.dispositivosController = new DispositivosController();
     this.isInitialized = false;
   }
 
@@ -32,9 +34,12 @@ class MainController {
       // Configurar IPC handlers antes de crear ventana
       this.setupIpcHandlers();
       
-      // Crear ventana principal
-      console.log('🖥️ Creando ventana principal...');
+            // Crear ventana principal
+      console.log('� Creando ventana principal...');
       this.createWindow();
+
+      // Asignar la ventana principal al controlador de dispositivos
+      this.dispositivosController.setMainWindow(this.mainWindow);
       
       // Configurar menú inicial
       this.setupMenu(false); // Start with login menu
@@ -65,7 +70,10 @@ class MainController {
         nodeIntegration: false,
         contextIsolation: true,
         enableRemoteModule: false,
-        preload: path.join(__dirname, 'preload.js')
+        preload: path.join(__dirname, 'preload.js'),
+        // Configuración de seguridad mejorada
+        sandbox: true,
+        webSecurity: true
       },
   // Icono actualizado a icon4.ico solicitado
   icon: path.join(__dirname, 'icons', 'icon4.ico'),
@@ -87,6 +95,8 @@ class MainController {
 
     this.mainWindow.once('ready-to-show', () => {
       this.mainWindow.show();
+      // Asignar la ventana al controlador de dispositivos una vez que esté lista
+      this.dispositivosController.setMainWindow(this.mainWindow);
     });
 
     this.mainWindow.on('closed', () => {
@@ -285,6 +295,48 @@ class MainController {
   }
 
   setupIpcHandlers() {
+    // Handlers para dispositivos
+    ipcMain.handle('get-printers', async () => {
+      return await this.dispositivosController.getPrinters();
+    });
+
+    ipcMain.handle('get-saved-printer', async () => {
+      return await this.dispositivosController.getSavedPrinter();
+    });
+
+    ipcMain.handle('save-printer', async (event, printerName) => {
+      return await this.dispositivosController.savePrinter(printerName);
+    });
+
+    ipcMain.handle('test-printer', async (event, printerName) => {
+      return await this.dispositivosController.testPrinter(printerName);
+    });
+
+    ipcMain.handle('get-serial-ports', async () => {
+      return await this.dispositivosController.getSerialPorts();
+    });
+
+    ipcMain.handle('get-saved-serial-port', async () => {
+      return await this.dispositivosController.getSavedSerialPort();
+    });
+
+    ipcMain.handle('save-serial-port', async (event, portPath, config) => {
+      return await this.dispositivosController.saveSerialPort(portPath, config);
+    });
+
+    ipcMain.handle('test-scanner', async (event, portPath, config) => {
+      return await this.dispositivosController.testScanner(portPath, config);
+    });
+
+    ipcMain.handle('stop-scanner', async () => {
+      return await this.dispositivosController.stopScanner();
+    });
+
+    ipcMain.handle('open-dispositivos-window', () => {
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) return { success: false };
+      this.windowManager.createDispositivosWindow(this.mainWindow);
+      return { success: true };
+    });
     ipcMain.handle('db-initialize', async () => {
       try {
         if (!this.isInitialized) {

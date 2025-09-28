@@ -43,91 +43,64 @@ class DatabaseController {
     try {
       console.log('🔌 Iniciando inicialización de base de datos...');
       
-      // Si ya está inicializada y no está cerrada, no hacer nada
       if (this.db && !this.isClosed) {
         console.log('✅ Base de datos ya inicializada');
         return true;
       }
 
-      // Asegurar que el directorio de base de datos existe
       const dbDir = path.dirname(this.dbPath);
       if (!fs.existsSync(dbDir)) {
         console.log('📁 Creando directorio de base de datos:', dbDir);
         fs.mkdirSync(dbDir, { recursive: true });
       }
 
-      // Si la base de datos no existe en el destino, copiar desde un candidato de semilla (si disponible)
       if (!fs.existsSync(this.dbPath)) {
-        console.log('🔄 Base de datos no existe, buscando archivo de semilla para copiar...');
-        try {
-          let copied = false;
-          let chosenSeed = null;
-          for (const candidate of this.seedCandidates) {
-            if (candidate && fs.existsSync(candidate)) {
-              chosenSeed = candidate;
-              break;
-            }
-          }
-          if (chosenSeed) {
-            console.log('📦 Semilla encontrada en:', chosenSeed);
-            fs.copyFileSync(chosenSeed, this.dbPath);
+        console.log('🔄 Base de datos no existe, buscando archivo de semilla...');
+        let copied = false;
+        for (const candidate of this.seedCandidates) {
+          if (candidate && fs.existsSync(candidate)) {
+            fs.copyFileSync(candidate, this.dbPath);
+            console.log('✅ Base de datos copiada desde:', candidate);
             copied = true;
-            console.log('✅ Base de datos copiada desde semilla');
+            break;
           }
-          if (!copied) {
-            // Crear un archivo vacío si no hay recurso (permitirá crear tablas luego)
-            fs.closeSync(fs.openSync(this.dbPath, 'w'));
-            console.warn('⚠️ No se encontró archivo de semilla, se creó una BD vacía');
-          }
-        } catch (copyErr) {
-          console.error('❌ Error copiando/creando la base de datos:', copyErr);
-          throw new Error(`No se pudo crear la base de datos: ${copyErr.message}`);
+        }
+        if (!copied) {
+          fs.closeSync(fs.openSync(this.dbPath, 'w'));
+          console.warn('⚠️ No se encontró archivo de semilla, se creó una BD vacía');
         }
       } else {
         console.log('✅ Base de datos ya existe en:', this.dbPath);
       }
 
-      // Conectar a la base de datos con promesa
-      console.log('🔗 Conectando a la base de datos...');
-      const normalizedPath = this.dbPath.replace(/\\/g, '/');
-      const connectOnce = () => new Promise((resolve, reject) => {
-        this.db = new sqlite3.Database(normalizedPath, (err) => {
-          if (err) {
-            reject(err);
-          } else {
-            console.log('✅ Conectado a la base de datos SQLite en:', this.dbPath);
-            resolve();
-          }
+      // Conectar a la base de datos
+      this.db = await new Promise((resolve, reject) => {
+        const db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READWRITE, (err) => {
+          if (err) reject(err);
+          else resolve(db);
         });
       });
-      try {
-        await connectOnce();
-      } catch (err) {
-        console.error('❌ Error al conectar (primer intento):', err);
-        if (String(err && err.message).includes('SQLITE_CANTOPEN')) {
-          console.log('↻ Reintentando conexión a la BD en 500ms...');
-          await new Promise(r => setTimeout(r, 500));
-          await connectOnce();
-        } else {
-          throw new Error(`Error de conexión SQLite: ${err.message}`);
-        }
-      }
+
+      console.log('🔗 Conectado a la base de datos...');
+
+      // Configurar la base de datos
+      await new Promise((resolve, reject) => {
+        this.db.exec('PRAGMA foreign_keys = ON;', (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
       // Resetear el flag de cerrado
       this.isClosed = false;
 
-      // Habilitar foreign keys
-      console.log('🔧 Configurando base de datos...');
-      await this.runQuery('PRAGMA foreign_keys = ON');
-
-  // Solo asegurar tablas críticas mínimas (usuario, empresa, cliente) si faltan
-  await this.createTables();
-  // No alteramos estructuras ni agregamos columnas automáticamente fuera de las mínimas aprobadas
+      // Crear tablas necesarias
+      await this.createTables();
 
       console.log('✅ Base de datos inicializada completamente');
       return true;
     } catch (error) {
-      console.error('❌ Error crítico al inicializar la base de datos:', error);
+      console.error('❌ Error inicializando base de datos:', error);
       
       // Limpiar en caso de error
       if (this.db) {
@@ -140,67 +113,109 @@ class DatabaseController {
       }
       this.isClosed = true;
       
-      throw new Error(`Fallo en inicialización de BD: ${error.message}`);
+      throw error;
     }
   }
 
   async createTables() {
-    // Solo crear tablas mínimas aprobadas si faltan. NO crear tablas nuevas de ventas.
-    const usuarioTable = `CREATE TABLE IF NOT EXISTS usuario (
-      cod INTEGER PRIMARY KEY AUTOINCREMENT,
-      usuario TEXT NOT NULL,
-      contrasena TEXT NOT NULL,
-      tipo INTEGER NOT NULL CHECK(tipo IN (1, 2)),
-      codempresa INTEGER DEFAULT 1,
-      alias TEXT
-    )`;
-    
-    // Tabla de empresas (singular) utilizada por el módulo de usuarios para el JOIN
-    const empresaTable = `CREATE TABLE IF NOT EXISTS empresa (
-      cod INTEGER PRIMARY KEY AUTOINCREMENT,
-      empresa TEXT(255),
-      ruc TEXT(14),
-      direccion TEXT(255),
-      telefono TEXT(16),
-      fax TEXT(16),
-      email TEXT(41),
-      web TEXT(51),
-      representante TEXT(51),
-      rsocial TEXT(255),
-      logo TEXT(255),
-      ciudad TEXT(100),
-      codestab TEXT(3),
-      codemi TEXT(3),
-      direstablec TEXT(255),
-      resolucion TEXT(10),
-      contabilidad TEXT(1),
-      trial275 TEXT(1)
-    )`;
-    
-    const clienteTable = `CREATE TABLE IF NOT EXISTS cliente (
-      cod TEXT(14) NOT NULL,
-      apellidos TEXT(200),
-      nombres TEXT(200),
-      direccion TEXT(61),
-      telefono TEXT(16),
-      cedula TEXT(14),
-      tratamiento TEXT(20),
-      tipo REAL(11, 0),
-      limite REAL(10, 2),
-      referencias TEXT(100),
-      email TEXT(100),
-      tipoid TEXT(2),
-      relacionado TEXT(1),
-      trial272 TEXT(1),
-      PRIMARY KEY (cod)
-    )`;
+    try {
+      console.log('📝 Creando tablas del sistema...');
+      
+      // Tabla configuracion_dispositivos
+      await new Promise((resolve, reject) => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS configuracion_dispositivos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL,
+            valor TEXT NOT NULL,
+            configuracion TEXT,
+            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(tipo)
+          );
+          CREATE INDEX IF NOT EXISTS idx_config_disp_tipo ON configuracion_dispositivos(tipo);
+        `, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      
+      // Tabla usuario
+      await new Promise((resolve, reject) => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS usuario (
+            cod INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT NOT NULL,
+            contrasena TEXT NOT NULL,
+            tipo INTEGER NOT NULL CHECK(tipo IN (1, 2)),
+            codempresa INTEGER DEFAULT 1,
+            alias TEXT
+          )
+        `, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
-  // NO crear tablas legacy de ventas aquí; se asume que existen en la BD legacy
-    
+      // Tabla empresa
+      await new Promise((resolve, reject) => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS empresa (
+            cod INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa TEXT(255),
+            ruc TEXT(14),
+            direccion TEXT(255),
+            telefono TEXT(16),
+            fax TEXT(16),
+            email TEXT(41),
+            web TEXT(51),
+            representante TEXT(51),
+            rsocial TEXT(255),
+            logo TEXT(255),
+            ciudad TEXT(100),
+            codestab TEXT(3),
+            codemi TEXT(3),
+            direstablec TEXT(255),
+            resolucion TEXT(10),
+            contabilidad TEXT(1),
+            trial275 TEXT(1)
+          )
+        `, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
-    await this.runQuery(usuarioTable);
-    await this.runQuery(empresaTable);
-    await this.runQuery(clienteTable);
+      // Tabla cliente
+      await new Promise((resolve, reject) => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS cliente (
+            cod TEXT(14) NOT NULL,
+            apellidos TEXT(200),
+            nombres TEXT(200),
+            direccion TEXT(61),
+            telefono TEXT(16),
+            cedula TEXT(14),
+            tratamiento TEXT(20),
+            tipo REAL(11, 0),
+            limite REAL(10, 2),
+            referencias TEXT(100),
+            email TEXT(100),
+            tipoid TEXT(2),
+            relacionado TEXT(1),
+            trial272 TEXT(1),
+            PRIMARY KEY (cod)
+          )
+        `, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      console.log('✅ Tablas creadas exitosamente');
+    } catch (error) {
+      console.error('❌ Error creando tablas:', error);
+      throw error;
+    }
   }
 
   async updateTableStructures() {
@@ -242,55 +257,59 @@ class DatabaseController {
     }
   }
 
+  isConnected() {
+    return this.db != null && !this.isClosed;
+  }
+
   async executeQuery(query, params = []) {
-    // Asegurar que la conexión esté activa
-    if (!this.db || this.isClosed) {
-      await this.initializeDatabase();
-    }
-    
-    return new Promise((resolve, reject) => {
-      this.db.all(query, params, (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
+    try {
+      if (!this.isConnected()) {
+        await this.initializeDatabase();
+      }
+      return new Promise((resolve, reject) => {
+        this.db.all(query, params, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
       });
-    });
+    } catch (error) {
+      console.error('Error ejecutando query:', error);
+      throw error;
+    }
   }
 
   async getSingleRecord(query, params = []) {
-    // Asegurar que la conexión esté activa
-    if (!this.db || this.isClosed) {
-      await this.initializeDatabase();
-    }
-    
-    return new Promise((resolve, reject) => {
-      this.db.get(query, params, (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
+    try {
+      if (!this.isConnected()) {
+        await this.initializeDatabase();
+      }
+      return new Promise((resolve, reject) => {
+        this.db.get(query, params, (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
       });
-    });
+    } catch (error) {
+      console.error('Error obteniendo registro:', error);
+      throw error;
+    }
   }
 
   async runQuery(query, params = []) {
-    // Asegurar que la conexión esté activa
-    if (!this.db || this.isClosed) {
-      await this.initializeDatabase();
-    }
-    
-    return new Promise((resolve, reject) => {
-      this.db.run(query, params, function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ id: this.lastID, changes: this.changes, success: true });
-        }
+    try {
+      if (!this.isConnected()) {
+        await this.initializeDatabase();
+      }
+      return new Promise((resolve, reject) => {
+        this.db.run(query, params, function(err) {
+          if (err) reject(err);
+          else resolve({ lastID: this.lastID, changes: this.changes });
+        });
       });
-    });
+    } catch (error) {
+      console.error('Error ejecutando query:', error);
+      throw error;
+    }
   }
 
   // Exponer la instancia bruta para controladores que la requieren

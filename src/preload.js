@@ -1,6 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+    // Funciones para configuración de dispositivos
+    getPrinters: () => ipcRenderer.invoke('get-printers'),
+    getSavedPrinter: () => ipcRenderer.invoke('get-saved-printer'),
+    savePrinter: (printerName) => ipcRenderer.invoke('save-printer', printerName),
+    testPrinter: (printerName) => ipcRenderer.invoke('test-printer', printerName),
+    getSerialPorts: () => ipcRenderer.invoke('get-serial-ports'),
+    getSavedSerialPort: () => ipcRenderer.invoke('get-saved-serial-port'),
+    saveSerialPort: (portPath, config) => ipcRenderer.invoke('save-serial-port', portPath, config),
+    testScanner: (portPath, config) => ipcRenderer.invoke('test-scanner', portPath, config),
+    stopScanner: () => ipcRenderer.invoke('stop-scanner'),
   // App operations
   quitApp: () => ipcRenderer.invoke('quitApp'),
 

@@ -284,9 +284,23 @@ class WindowManager {
     // Cargar contenido según el modo de desarrollo/producción
     this.loadContent(sistemaWindow, '/configuracion-sistema');
 
-    // Establecer menú vacío para esta ventana específica
-    const emptyMenu = Menu.buildFromTemplate([]);
-    sistemaWindow.setMenu(emptyMenu);
+
+    // Menú nativo para configuración del sistema
+    const menuTemplate = [
+      {
+        label: 'Opciones',
+        submenu: [
+          {
+            label: 'Configurar Dispositivos',
+            click: () => {
+              this.createDispositivosWindow(sistemaWindow);
+            }
+          }
+        ]
+      }
+    ];
+    const sistemaMenu = Menu.buildFromTemplate(menuTemplate);
+    sistemaWindow.setMenu(sistemaMenu);
 
     sistemaWindow.once('ready-to-show', () => {
       sistemaWindow.show();
@@ -299,6 +313,42 @@ class WindowManager {
     this.windows.set('configuracion-sistema', sistemaWindow);
     return sistemaWindow;
   }
+  
+    createDispositivosWindow(parentWindow) {
+      let existing = this.windows.get('dispositivos');
+      if (existing && !existing.isDestroyed()) {
+        existing.focus();
+        return existing;
+      }
+      const win = new BrowserWindow({
+        width: 600,
+        height: 400,
+        parent: parentWindow,
+        modal: true,
+        show: false,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          enableRemoteModule: false,
+          preload: path.join(__dirname, '../preload.js')
+        },
+        title: 'Configurar Dispositivos',
+        icon: path.join(__dirname, '../icons', 'icon4.ico'),
+        resizable: true,
+        minimizable: true,
+        maximizable: true,
+        frame: true,
+        skipTaskbar: false
+      });
+      this.applyFixedTitle(win, 'Configurar Dispositivos');
+      this.loadContent(win, '/configurar-dispositivos');
+      const emptyMenu = Menu.buildFromTemplate([]);
+      win.setMenu(emptyMenu);
+      win.once('ready-to-show', () => win.show());
+      win.on('closed', () => this.windows.delete('dispositivos'));
+      this.windows.set('dispositivos', win);
+      return win;
+    }
 
   createClienteWindow(parentWindow) {
     const clienteWindow = new BrowserWindow({

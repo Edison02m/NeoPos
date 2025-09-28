@@ -1,6 +1,33 @@
 import React, { useState, useEffect } from 'react';
 
 const ConfiguracionSistema = () => {
+  // --- Menú contextual simulado para Electron ---
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = React.useRef(null);
+
+  // Cerrar menú al hacer clic fuera
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e) => {
+      if (menuButtonRef.current && !menuButtonRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [menuOpen]);
+
+  // Handler para abrir la ventana de dispositivos
+  const handleConfigurarDispositivos = async () => {
+    setMenuOpen(false);
+    if (window.electronAPI && window.electronAPI.openDispositivosWindow) {
+      await window.electronAPI.openDispositivosWindow();
+    } else if (window.electron && window.electron.ipcRenderer) {
+      window.electron.ipcRenderer.invoke('open-dispositivos-window');
+    } else {
+      alert('Función solo disponible en la versión de escritorio');
+    }
+  };
   // document.title eliminado: el título se fija desde WindowManager
 
   const [formData, setFormData] = useState({
@@ -273,15 +300,55 @@ const ConfiguracionSistema = () => {
   return (
     <div className="bg-white min-h-screen p-8 font-sans">
       <div className="max-w-2xl mx-auto bg-white">
-        <div className="text-center mb-8 pb-6 border-b border-gray-200">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500 rounded-2xl mb-4">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
+        <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-200">
+          <div className="flex items-center gap-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500 rounded-2xl mb-4">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuración del Sistema</h1>
+              <p className="text-sm text-gray-600">Configure el logo del sistema y otras opciones generales</p>
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Configuración del Sistema</h1>
-          <p className="text-sm text-gray-600">Configure el logo del sistema y otras opciones generales</p>
+          {/* Botón de menú contextual */}
+          <div className="relative">
+            <button
+              ref={menuButtonRef}
+              type="button"
+              className="px-4 py-2 bg-gray-100 border-2 border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-2"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-haspopup="true"
+              aria-expanded={menuOpen}
+            >
+              <svg width="18" height="18" fill="none" stroke="#374151" strokeWidth="2" viewBox="0 0 24 24">
+                <circle cx="5" cy="12" r="2"/>
+                <circle cx="12" cy="12" r="2"/>
+                <circle cx="19" cy="12" r="2"/>
+              </svg>
+              Opciones
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 animate-fade-in">
+                <button
+                  className="w-full text-left px-4 py-3 hover:bg-blue-50 text-blue-700 font-medium flex items-center gap-2 rounded-t-lg"
+                  onClick={handleConfigurarDispositivos}
+                >
+                  <svg width="18" height="18" fill="none" stroke="#2563eb" strokeWidth="2" viewBox="0 0 24 24">
+                    <rect x="3" y="7" width="18" height="10" rx="2"/>
+                    <rect x="7" y="3" width="10" height="4" rx="1"/>
+                    <rect x="9" y="17" width="6" height="2" rx="1"/>
+                  </svg>
+                  Configurar Dispositivos
+                </button>
+                <div className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
+                  Configura la impresora de facturas y el lector de barras
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {message && (
