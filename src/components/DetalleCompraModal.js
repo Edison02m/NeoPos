@@ -18,6 +18,8 @@ const DetalleCompraModal = ({ open, onClose, idCompra, initialTab='resumen' }) =
   const [proveedor, setProveedor] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [devCab, setDevCab] = useState([]);
+  const [devDetPorId, setDevDetPorId] = useState({});
 
   useEffect(()=> { if(open) setTab(initialTab); }, [open, initialTab]);
 
@@ -86,6 +88,38 @@ const DetalleCompraModal = ({ open, onClose, idCompra, initialTab='resumen' }) =
             }
           }
         } catch(_){ }
+        // Devoluciones asociadas a la compra
+        try{
+          const cab = await window.electronAPI.dbQuery('SELECT id, fecha, subtotal, descuento, total, fpago, idcompra FROM devcompra WHERE idcompra = ? OR idcompra IS NULL ORDER BY fecha ASC, id ASC', [idCompra]);
+          const lista = cab.success && Array.isArray(cab.data)? cab.data:[];
+          setDevCab(lista);
+          const map = {};
+          // Detectar columnas disponibles en devcompradet
+          let hasIdDevCompra = false, hasIdDev = false;
+          try{
+            const info = await window.electronAPI.dbQuery("PRAGMA table_info('devcompradet')", []);
+            const cols = Array.isArray(info?.data)? info.data:[];
+            hasIdDevCompra = cols.some(col => String(col.name||'').toLowerCase()==='iddevcompra');
+            hasIdDev = cols.some(col => String(col.name||'').toLowerCase()==='iddev');
+          }catch(_){ hasIdDevCompra=false; hasIdDev=false; }
+          for(const dc of lista){
+            let detc;
+            if(hasIdDevCompra){
+              detc = await window.electronAPI.dbQuery(`SELECT dd.item, dd.codprod, dd.cantidad, dd.precio, COALESCE(p.producto, p.descripcion, '') AS descripcion
+                FROM devcompradet dd LEFT JOIN producto p ON p.codigo = dd.codprod WHERE dd.iddevcompra = ? ORDER BY CAST(dd.item as INTEGER) ASC`, [dc.id]);
+            } else if(hasIdDev){
+              detc = await window.electronAPI.dbQuery(`SELECT dd.item, dd.codprod, dd.cantidad, dd.precio, COALESCE(p.producto, p.descripcion, '') AS descripcion
+                FROM devcompradet dd LEFT JOIN producto p ON p.codigo = dd.codprod WHERE dd.iddev = ? ORDER BY CAST(dd.item as INTEGER) ASC`, [dc.id]);
+            } else if(dc.idcompra){
+              detc = await window.electronAPI.dbQuery(`SELECT dd.item, dd.codprod, dd.cantidad, dd.precio, COALESCE(p.producto, p.descripcion, '') AS descripcion
+                FROM devcompradet dd LEFT JOIN producto p ON p.codigo = dd.codprod WHERE dd.idcompra = ? ORDER BY CAST(dd.item as INTEGER) ASC`, [dc.idcompra]);
+            } else {
+              detc = { success:true, data:[] };
+            }
+            map[dc.id] = detc.success && Array.isArray(detc.data)? detc.data:[];
+          }
+          setDevDetPorId(map);
+        }catch(_){ setDevCab([]); setDevDetPorId({}); }
       }catch(e){ setError(e.message); }
       finally{ setLoading(false); }
     };
@@ -126,6 +160,7 @@ const DetalleCompraModal = ({ open, onClose, idCompra, initialTab='resumen' }) =
               <TabButton active={tab==='resumen'} onClick={()=> setTab('resumen')}>Resumen</TabButton>
               <TabButton active={tab==='productos'} onClick={()=> setTab('productos')}>Productos</TabButton>
               <TabButton active={tab==='imeis'} onClick={()=> setTab('imeis')}>IMEIs</TabButton>
+              <TabButton active={tab==='devoluciones'} onClick={()=> setTab('devoluciones')}>Devoluciones</TabButton>
               <div className="flex-1" />
             </div>
             <div className="p-4 space-y-4 max-h-[60vh] overflow-auto">

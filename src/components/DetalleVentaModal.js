@@ -17,7 +17,10 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
   const [cliente, setCliente] = useState(null);
   const [productos, setProductos] = useState([]);
   const [abonos, setAbonos] = useState([]);
+  const [detallesFormaPago, setDetallesFormaPago] = useState([]);
   const [cuotas, setCuotas] = useState([]);
+  const [devCab, setDevCab] = useState([]); // cabeceras de devoluciones de esta venta
+  const [devDetPorId, setDevDetPorId] = useState({}); // { iddev: [ { codprod, descripcion, cantidad, precio } ] }
 
   useEffect(()=>{ if(open) setTab(initialTab); }, [open, initialTab]);
 
@@ -43,9 +46,40 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
         // Abonos
         const ab = await window.electronAPI.dbQuery('SELECT id, fecha, monto, formapago FROM abono WHERE idventa = ? ORDER BY fecha ASC, id ASC', [idventa]);
         setAbonos(ab.success && Array.isArray(ab.data)? ab.data : []);
+        // Detalle forma de pago (cheque/transferencia)
+        const df = await window.electronAPI.dbQuery('SELECT formapago, banco, numcheque, cobrado, fecha FROM detalleformapago WHERE idventa = ? ORDER BY rowid ASC', [idventa]);
+        setDetallesFormaPago(df.success && Array.isArray(df.data)? df.data : []);
         // Cuotas (si existen)
         const cu = await window.electronAPI.dbQuery('SELECT * FROM cuotas WHERE idventa = ? ORDER BY CAST(item as INTEGER) ASC', [idventa]);
         setCuotas(cu.success && Array.isArray(cu.data)? cu.data : []);
+
+        // Devoluciones asociadas a la venta (cabecera)
+        try{
+          const cab = await window.electronAPI.dbQuery('SELECT id, fecha, subtotal, descuento, total, formapago FROM devventa WHERE idventa_origen = ? ORDER BY fecha ASC, id ASC', [idventa]);
+          const lista = cab.success && Array.isArray(cab.data) ? cab.data : [];
+          setDevCab(lista);
+          // Detalles por cada devolución
+          const map = {};
+          // Detectar si devventadet tiene columna iddevventa para enlazar por cabecera
+          let hasIdDevVenta = false;
+          try{
+            const info = await window.electronAPI.dbQuery("PRAGMA table_info('devventadet')", []);
+            hasIdDevVenta = info?.success && Array.isArray(info.data) && info.data.some(col => String(col.name||'').toLowerCase()==='iddevventa');
+          }catch(_){ hasIdDevVenta = false; }
+          for(const dv of lista){
+            let detv;
+            if(hasIdDevVenta){
+              detv = await window.electronAPI.dbQuery(`SELECT dd.item, dd.codprod, dd.cantidad, dd.precio, COALESCE(p.producto, p.descripcion, '') AS descripcion
+                FROM devventadet dd LEFT JOIN producto p ON p.codigo = dd.codprod WHERE dd.iddevventa = ? ORDER BY CAST(dd.item as INTEGER) ASC`, [dv.id]);
+            } else {
+              // Fallback legacy: algunas bases guardan el id de la devolución en la columna idventa
+              detv = await window.electronAPI.dbQuery(`SELECT dd.item, dd.codprod, dd.cantidad, dd.precio, COALESCE(p.producto, p.descripcion, '') AS descripcion
+                FROM devventadet dd LEFT JOIN producto p ON p.codigo = dd.codprod WHERE dd.idventa = ? ORDER BY CAST(dd.item as INTEGER) ASC`, [dv.id]);
+            }
+            map[dv.id] = detv.success && Array.isArray(detv.data) ? detv.data : [];
+          }
+          setDevDetPorId(map);
+        }catch(_){ setDevCab([]); setDevDetPorId({}); }
       }catch(e){ setError(e.message); }
       finally{ setLoading(false); }
     };
@@ -79,7 +113,8 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
   if(!open) return null;
 
   const tipoVentaStr = (venta?.fpago===0? 'Contado' : venta?.fpago===1? 'Crédito' : venta?.fpago===2? 'Plan':'—');
-  const formaPagoStr = (venta?.formapago===1? 'Efectivo' : venta?.formapago===2? 'Cheque' : venta?.formapago===3? 'Tarjeta':'—');
+  const formaPagoStr = (venta?.formapago===1? 'Efectivo' : venta?.formapago===2? 'Cheque' : venta?.formapago===3? 'Tarjeta' : venta?.formapago===4? 'Transferencia':'—');
+  const fmtForma = (f) => (f===1?'Efectivo':f===2?'Cheque':f===3?'Tarjeta':f===4?'Transferencia':String(f||''));
   const comprobStr = (venta?.comprob==='F'? 'Factura' : 'Nota') + (venta?.numfactura? ` ${venta.numfactura}` : '');
 
   return (
@@ -98,6 +133,7 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
               <TabButton active={tab==='productos'} onClick={()=> setTab('productos')}>Productos</TabButton>
               <TabButton active={tab==='abonos'} onClick={()=> setTab('abonos')}>Abonos</TabButton>
               <TabButton active={tab==='cuotas'} onClick={()=> setTab('cuotas')}>Cuotas</TabButton>
+              <TabButton active={tab==='devoluciones'} onClick={()=> setTab('devoluciones')}>Devoluciones</TabButton>
               <div className="flex-1" />
             </div>
             <div className="p-4 space-y-4 max-h-[60vh] overflow-auto">
@@ -120,6 +156,22 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
                       <div><span className="font-medium">Valor cuota:</span> ${formatMoney(resumenCuota.valorCuota)} {resumenCuota.numCuotas?`(${resumenCuota.numCuotas})`:''}</div>
                       <div><span className="font-medium">Interés total:</span> ${formatMoney(resumenCuota.interesTotal)}</div>
                     </>
+                  )}
+                  {detallesFormaPago.length>0 && (
+                    <div className="md:col-span-4">
+                      <div className="mt-2 p-2 border rounded bg-gray-50">
+                        <div className="font-semibold text-gray-700 mb-1">Detalle forma de pago</div>
+                        {detallesFormaPago.map((d,i)=> (
+                          <div key={`dfp-${i}`} className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[11px] border-t pt-2 mt-2 first:border-t-0 first:pt-0 first:mt-0">
+                            <div><span className="text-gray-500">Forma:</span> {fmtForma(Number(d.formapago))}</div>
+                            <div><span className="text-gray-500">Banco:</span> {d.banco||''}</div>
+                            <div><span className="text-gray-500">Número:</span> {d.numcheque||''}</div>
+                            <div><span className="text-gray-500">Fecha:</span> {String(d.fecha||'').slice(0,10)}</div>
+                            <div><span className="text-gray-500">Cobrado:</span> {String(d.cobrado||'')}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -180,12 +232,13 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
                           <tr key={a.id} className="border-t">
                             <td className="px-2 py-1">{String(a.fecha||'').replace('T',' ').slice(0,19)}</td>
                             <td className="px-2 py-1 text-right">{formatMoney(a.monto)}</td>
-                            <td className="px-2 py-1">{a.formapago===1? 'Efectivo' : a.formapago===2? 'Cheque':'Tarjeta'}</td>
+                            <td className="px-2 py-1">{fmtForma(Number(a.formapago))}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                  {/* Detalle forma de pago se muestra solo en Resumen para evitar duplicación */}
                 </div>
               )}
 

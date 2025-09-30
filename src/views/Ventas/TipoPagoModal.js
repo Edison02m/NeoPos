@@ -2,7 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, setFormaPago, creditoConfig, setCreditoConfig, total, setAnticipoReserva }) => {
   const [localTipo, setLocalTipo] = useState(tipoVenta || 'contado');
-  const [localForma, setLocalForma] = useState(formaPago || { tipo: 'efectivo', tarjeta: null });
+  const [localForma, setLocalForma] = useState(formaPago || { tipo: 'efectivo', tarjeta: null, banco: '', numero: '' });
+  const requiereDetalles = (t) => t === 'cheque' || t === 'transferencia';
+  const detallesValidos = () => {
+    if (!requiereDetalles(localForma.tipo)) return true;
+    const bancoOk = String(localForma.banco||'').trim().length > 0;
+    const numeroOk = String(localForma.numero||'').trim().length > 0;
+    return bancoOk && numeroOk;
+  };
   // Keep as strings while typing to avoid leading zero/decimal glitches
   const [plazo, setPlazo] = useState(String(creditoConfig?.plazoDias ?? '30'));
   const [abono, setAbono] = useState(String(creditoConfig?.abonoInicial ?? '0'));
@@ -16,7 +23,7 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
   useEffect(() => {
     if (isOpen) {
       setLocalTipo(tipoVenta || 'contado');
-      setLocalForma(formaPago || { tipo: 'efectivo', tarjeta: null });
+      setLocalForma(formaPago || { tipo: 'efectivo', tarjeta: null, banco: '', numero: '' });
       setPlazo(String(creditoConfig?.plazoDias ?? '30'));
       setAbono(String(creditoConfig?.abonoInicial ?? '0'));
   setInteres(String(creditoConfig?.interesPorc ?? '0'));
@@ -69,13 +76,16 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
             <div className="text-xs font-medium text-gray-600 mb-1">Forma de pago</div>
             <div className="flex flex-wrap gap-3 text-sm items-center">
               <label className="flex items-center gap-1">
-                <input type="radio" name="formaPago" checked={localForma.tipo==='efectivo'} onChange={() => setLocalForma({ tipo: 'efectivo', tarjeta: null })} /> Efectivo
+                <input type="radio" name="formaPago" checked={localForma.tipo==='efectivo'} onChange={() => setLocalForma({ tipo: 'efectivo', tarjeta: null, banco:'', numero:'' })} /> Efectivo
               </label>
               <label className="flex items-center gap-1">
-                <input type="radio" name="formaPago" checked={localForma.tipo==='cheque'} onChange={() => setLocalForma({ tipo: 'cheque', tarjeta: null })} /> Cheque
+                <input type="radio" name="formaPago" checked={localForma.tipo==='cheque'} onChange={() => setLocalForma({ tipo: 'cheque', tarjeta: null, banco:(localForma.banco||''), numero:(localForma.numero||'') })} /> Cheque
               </label>
               <label className="flex items-center gap-1">
-                <input type="radio" name="formaPago" checked={localForma.tipo==='tarjeta'} onChange={() => setLocalForma({ tipo: 'tarjeta', tarjeta: 'Visa' })} /> Tarjeta
+                <input type="radio" name="formaPago" checked={localForma.tipo==='tarjeta'} onChange={() => setLocalForma({ tipo: 'tarjeta', tarjeta: 'Visa', banco:'', numero:'' })} /> Tarjeta
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="radio" name="formaPago" checked={localForma.tipo==='transferencia'} onChange={() => setLocalForma({ tipo: 'transferencia', tarjeta: null, banco:(localForma.banco||''), numero:(localForma.numero||'') })} /> Transferencia
               </label>
               {localForma.tipo==='tarjeta' && (
                 <select className="border rounded px-2 py-1 text-sm" value={localForma.tarjeta||'Visa'} onChange={(e)=>setLocalForma({ tipo:'tarjeta', tarjeta:e.target.value })}>
@@ -85,6 +95,29 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
                   <option>Cuota Fácil</option>
                   <option>American Express</option>
                 </select>
+              )}
+              {(localForma.tipo==='cheque' || localForma.tipo==='transferencia') && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Banco"
+                    value={localForma.banco||''}
+                    onChange={(e)=> setLocalForma(prev => ({ ...prev, banco: e.target.value }))}
+                    className={`border rounded px-2 py-1 text-sm ${String(localForma.banco||'').trim().length===0 ? 'border-red-400' : ''}`}
+                    style={{ width: '160px' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder={localForma.tipo==='cheque' ? 'N° Cheque' : 'N° Transferencia'}
+                    value={localForma.numero||''}
+                    onChange={(e)=> setLocalForma(prev => ({ ...prev, numero: e.target.value }))}
+                    className={`border rounded px-2 py-1 text-sm ${String(localForma.numero||'').trim().length===0 ? 'border-red-400' : ''}`}
+                    style={{ width: '160px' }}
+                  />
+                </div>
+              )}
+              {requiereDetalles(localForma.tipo) && !detallesValidos() && (
+                <div className="text-xs text-red-600 mt-1">Ingrese Banco y Número para {localForma.tipo}.</div>
               )}
             </div>
           </div>
@@ -190,6 +223,9 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
             <button onClick={onClose} className="px-3 py-1 bg-gray-200 rounded text-sm">Cancelar</button>
             <button
               onClick={()=>{
+                if (requiereDetalles(localForma.tipo) && !detallesValidos()) {
+                  return; // prevenir aceptación
+                }
                 setTipoVenta(localTipo);
                 setFormaPago(localForma);
                 const plazoNum = Math.max(parseInt(plazo || '0', 10) || 0, 0);
@@ -212,7 +248,8 @@ const TipoPagoModal = ({ isOpen, onClose, tipoVenta, setTipoVenta, formaPago, se
                 }
                 onClose();
               }}
-              className="px-3 py-1 bg-gray-800 text-white rounded text-sm"
+              className={`px-3 py-1 text-white rounded text-sm ${requiereDetalles(localForma.tipo) && !detallesValidos() ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-800'}`}
+              disabled={requiereDetalles(localForma.tipo) && !detallesValidos()}
             >Aceptar</button>
           </div>
         </div>

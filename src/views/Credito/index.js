@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+import Modal from '../../components/Modal';
+import useModal from '../../hooks/useModal';
 import CreditoController from '../../controllers/CreditoController';
 import DetalleCreditoModal from '../../components/DetalleCreditoModal';
 import CreditoPrintModal from '../../components/CreditoPrintModal';
@@ -17,6 +19,11 @@ const CreditoView = () => {
   const [busqueda, setBusqueda] = useState(''); // busca por nombre o cédula
   const [agrupar, setAgrupar] = useState(true); // agrupar por cliente
   const [openPrint, setOpenPrint] = useState(false);
+  const { modalState, showAlert } = useModal();
+
+  const modalAlert = async (message, title = 'Información') => {
+    try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); }
+  };
 
   const cargar = async () => {
     setLoading(true);
@@ -70,7 +77,7 @@ const CreditoView = () => {
     if(!window.electronAPI?.onMenuAction) return;
     const requireSelected = (fn) => {
       if(!selectedRef.current){
-        alert('Seleccione un crédito primero.');
+        modalAlert('Seleccione un crédito primero.', 'Información');
         return;
       }
       fn();
@@ -184,6 +191,14 @@ const CreditoView = () => {
       </div>
       <DetalleCreditoModal idventa={selected} open={openDetalle && !!selected} initialTab={detalleInitialTab} onClose={()=> setOpenDetalle(false)} />
       <CreditoPrintModal idventa={selected} open={openPrint && !!selected} onClose={()=> setOpenPrint(false)} />
+      <Modal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        onConfirm={modalState.onConfirm}
+        onClose={modalState.onClose}
+      />
     </div>
   );
 };

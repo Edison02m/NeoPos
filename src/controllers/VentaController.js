@@ -54,7 +54,7 @@ class VentaController {
             id, idcliente, fecha, subtotal, descuento, total,
             fpago, comprob, numfactura, formapago, anulado, codempresa, iva,
             fechapago, usuario, ordencompra, ispagos, transporte, trial279
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 1, ?, NULL, 'admin', ?, ?, 0, '0')
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 1, ?, NULL, 'admin', ?, ?, 0, '1')
         `, [
           legacyId,
           ventaData.idcliente || ventaData.cliente_ruc_ci || null,
@@ -94,6 +94,22 @@ class VentaController {
           }
         }
 
+        // Registrar detalle de forma de pago (legacy) para Cheque (2) y Transferencia (4)
+        try {
+          const hasDet = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='detalleformapago'");
+          if (hasDet && hasDet.name === 'detalleformapago') {
+            if (formapago === 2 || formapago === 4) {
+              const bancoStr = String(ventaData.banco || ventaData.forma_banco || ventaData.detalle_banco || '');
+              const numStr = String(ventaData.numero || ventaData.numcheque || ventaData.num_transferencia || ventaData.detalle_numero || '');
+              const cobrado = (fpago === 0 && formapago === 4) ? 'S' : 'N';
+              await db.run(
+                `INSERT INTO detalleformapago (idventa, formapago, banco, numcheque, fecha, cobrado, trial275) VALUES (?, ?, ?, ?, DATE('now'), ?, '0')`,
+                [legacyId, String(formapago), bancoStr, numStr, cobrado]
+              );
+            }
+          }
+        } catch(e){ console.warn('[VentaController] detalleformapago no registrado:', e.message); }
+
         // Compatibilidad: si la venta es crédito/plan y existe tabla legacy 'cuotas', registrar una fila mínima
         if (fpago === 1 || fpago === 2) {
           // Legacy: registrar crédito (tabla 'credito') si existe
@@ -120,6 +136,21 @@ class VentaController {
                 try {
                   const resAb = await db.run(`INSERT INTO abono (idventa, idcliente, fecha, monto, fpago, nrorecibo, formapago, idusuario, trial272) VALUES (?, ?, DATE('now'), ?, 1, NULL, ?, 1, '0')`, [legacyId, (ventaData.idcliente || ventaData.cliente_ruc_ci || null), abonoInicial, formapago]);
                   abonoInicialId = resAb?.lastID || null;
+                  // detalleformapago para abono inicial si aplica
+                  try {
+                    const hasDet2 = await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='detalleformapago'");
+                    if (hasDet2 && hasDet2.name === 'detalleformapago') {
+                      if (formapago === 2 || formapago === 4) {
+                        const bancoStr2 = String(ventaData.banco || ventaData.forma_banco || ventaData.detalle_banco || '');
+                        const numStr2 = String(ventaData.numero || ventaData.numcheque || ventaData.num_transferencia || ventaData.detalle_numero || '');
+                        const cobrado2 = (fpago === 0 && formapago === 4) ? 'S' : 'N';
+                        await db.run(
+                          `INSERT INTO detalleformapago (idventa, formapago, banco, numcheque, fecha, cobrado, trial275) VALUES (?, ?, ?, ?, DATE('now'), ?, '0')`,
+                          [legacyId, String(formapago), bancoStr2, numStr2, cobrado2]
+                        );
+                      }
+                    }
+                  } catch(eDet){ console.warn('[VentaController] detalleformapago (abono inicial) no registrado:', eDet.message); }
                 } catch(e){ console.warn('[VentaController] No se pudo guardar abono inicial para cuota:', e.message); }
               }
               await db.run(`INSERT INTO cuotas (idventa, item, fecha, monto1, interes, monto2, interesmora, idabono, interespagado, trial275) VALUES (?, 1, ?, ?, ?, ?, 0, ?, 0, ?)` , [legacyId, fechapago, valorCuotaProm, interesTotal, totalFinanciado, abonoInicialId, String(numCuotas)]);

@@ -64,10 +64,30 @@ class Usuario {
   }
 
   static async update(cod, usuarioData) {
-    const result = await window.electronAPI.dbRun(
-      'UPDATE usuario SET usuario = ?, contrasena = ?, tipo = ?, codempresa = ?, alias = ? WHERE cod = ?',
-      [usuarioData.usuario, usuarioData.contrasena, usuarioData.tipo, usuarioData.codempresa, usuarioData.alias, cod]
-    );
+    const hasNewPassword = typeof usuarioData.contrasena === 'string' && usuarioData.contrasena.trim() !== '';
+    let sql, params;
+    if (hasNewPassword) {
+      sql = 'UPDATE usuario SET usuario = ?, contrasena = ?, tipo = ?, codempresa = ?, alias = ? WHERE cod = ?';
+      params = [
+        usuarioData.usuario,
+        usuarioData.contrasena,
+        usuarioData.tipo,
+        usuarioData.codempresa,
+        usuarioData.alias,
+        cod
+      ];
+    } else {
+      // Mantener contraseña actual: no tocar la columna contrasena
+      sql = 'UPDATE usuario SET usuario = ?, tipo = ?, codempresa = ?, alias = ? WHERE cod = ?';
+      params = [
+        usuarioData.usuario,
+        usuarioData.tipo,
+        usuarioData.codempresa,
+        usuarioData.alias,
+        cod
+      ];
+    }
+    const result = await window.electronAPI.dbRun(sql, params);
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -80,6 +100,17 @@ class Usuario {
       throw new Error(result.error);
     }
     return result.data;
+  }
+
+  // Obtener listado de empresas para selector en Usuarios
+  static async getAllEmpresas() {
+    const result = await window.electronAPI.dbQuery(
+      'SELECT cod, empresa FROM empresa ORDER BY empresa'
+    );
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    return result.data || [];
   }
 
   static async authenticate(usuario, contrasena) {

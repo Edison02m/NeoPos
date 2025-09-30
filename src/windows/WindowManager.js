@@ -702,6 +702,66 @@ class WindowManager {
     return inventarioWindow;
   }
 
+  createDevolucionesWindow(parentWindow) {
+    let existing = this.windows.get('devoluciones');
+    if (existing && !existing.isDestroyed()) { existing.focus(); return existing; }
+    const win = new BrowserWindow({
+      width: 1100,
+      height: 780,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, '../preload.js')
+      },
+      title: 'Devoluciones',
+      icon: path.join(__dirname, '../icons', 'icon4.ico'),
+      resizable: true,
+      minimizable: true,
+      maximizable: true,
+      frame: true,
+      skipTaskbar: false
+    });
+    this.applyFixedTitle(win, 'Devoluciones');
+    this.loadContent(win, '/devoluciones');
+
+    // Menú para la ventana de Devoluciones
+    const menuTemplate = [
+      {
+        label: 'Vista',
+        submenu: [
+          { label: 'Devoluciones de ventas', type: 'radio', checked: true, click: () => win.webContents.send('devoluciones-modo-ventas') },
+          { label: 'Devoluciones de compras', type: 'radio', checked: false, click: () => win.webContents.send('devoluciones-modo-compras') }
+        ]
+      },
+      {
+        label: 'Opciones',
+        submenu: [
+          { label: 'Ver detalles', click: () => win.webContents.send('devoluciones-ver-detalles') },
+          { label: 'Eliminar seleccionadas', click: () => win.webContents.send('devoluciones-eliminar-seleccion') },
+          { type: 'separator' },
+          { label: 'Actualizar', click: () => win.webContents.send('devoluciones-actualizar') }
+        ]
+      },
+      {
+        label: 'Ventana',
+        submenu: [
+          { label: 'Cerrar ventana', click: () => win.close() }
+        ]
+      }
+    ];
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    win.setMenu(menu);
+
+    win.once('ready-to-show', () => win.show());
+    win.on('closed', () => this.windows.delete('devoluciones'));
+    this.windows.set('devoluciones', win);
+    return win;
+  }
+
   createReporteVentasWindow(parentWindow) {
     const reporteWindow = new BrowserWindow({
       width: 1200,

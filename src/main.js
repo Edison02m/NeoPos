@@ -164,6 +164,13 @@ class MainController {
               }
             },
             {
+              label: 'Devoluciones',
+              accelerator: 'CmdOrCtrl+D',
+              click: () => {
+                this.windowManager.createDevolucionesWindow(this.mainWindow);
+              }
+            },
+            {
               label: 'Crédito',
               accelerator: 'CmdOrCtrl+R',
               click: () => {

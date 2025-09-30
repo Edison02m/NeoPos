@@ -1,6 +1,6 @@
 import React from 'react';
 
-const TotalesPanel = ({ compraData, setCompraData, totales }) => {
+const TotalesPanel = ({ compraData, setCompraData, totales, onConfigurarPago }) => {
 	const { subtotal = 0, subtotal0 = 0, descuento = 0, iva = 0, total = 0 } = totales || {};
 
 	const formatMoney = (amount) => new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(amount || 0);
@@ -23,12 +23,17 @@ const TotalesPanel = ({ compraData, setCompraData, totales }) => {
 				<div className="space-y-2">
 					<div className="flex flex-col gap-1">
 						<label className="text-xs font-medium text-gray-600">Forma de pago</label>
-						<select value={compraData.fpago} onChange={e=> setCompraData(c=>({...c, fpago:e.target.value}))} className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-							<option value="CONTADO">CONTADO</option>
-							<option value="CREDITO">CREDITO</option>
-							<option value="TRANSFERENCIA">TRANSFERENCIA</option>
-							<option value="OTRO">OTRO</option>
-						</select>
+						<div className="flex items-center gap-2">
+							<select value={compraData.fpago} onChange={e=> setCompraData(c=>({...c, fpago:e.target.value}))} className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+								<option value="CONTADO">CONTADO</option>
+								<option value="CREDITO">CREDITO</option>
+								<option value="TRANSFERENCIA">TRANSFERENCIA</option>
+								<option value="OTRO">OTRO</option>
+							</select>
+							{onConfigurarPago && (
+								<button type="button" onClick={onConfigurarPago} className="px-2 py-1 text-xs bg-gray-700 text-white rounded hover:bg-gray-800">Configurar…</button>
+							)}
+						</div>
 					</div>
 					{compraData.fpago==='CREDITO' && (
 						<div className="flex flex-col gap-1">

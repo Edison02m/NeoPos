@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import Modal from '../../components/Modal';
 
 // Modal liviano para registrar IMEIs de un producto en la compra actual
 const ImeiModal = ({ isOpen, onClose, producto, onSave, cantidad }) => {
   const [imeis, setImeis] = useState([]); // array de strings
   const [input, setInput] = useState('');
+  const [modalState, setModalState] = useState({ isOpen:false, type:'info', title:'', message:'', onConfirm:null, onClose:null });
+  const modalAlert = (message, title='Información') => new Promise((resolve)=>{
+    setModalState({ isOpen:true, type:'info', title, message, onConfirm:()=>{ setModalState(s=>({...s, isOpen:false})); resolve(true); }, onClose:()=>{ setModalState(s=>({...s, isOpen:false})); resolve(true); } });
+  });
+  const modalConfirm = (message, title='Confirmación') => new Promise((resolve)=>{
+    setModalState({ isOpen:true, type:'confirm', title, message, onConfirm:()=>{ setModalState(s=>({...s, isOpen:false})); resolve(true); }, onClose:()=>{ setModalState(s=>({...s, isOpen:false})); resolve(false); } });
+  });
 
   useEffect(()=>{ if(isOpen){ setImeis([]); setInput(''); } }, [isOpen, producto?.codigo]);
   if(!isOpen) return null;
@@ -11,13 +19,13 @@ const ImeiModal = ({ isOpen, onClose, producto, onSave, cantidad }) => {
   const add = () => {
     const val = input.trim();
     if(!val) return;
-    if(imeis.includes(val)) { window.alert?.('IMEI duplicado'); return; }
+    if(imeis.includes(val)) { modalAlert('IMEI duplicado', 'Información'); return; }
     setImeis(prev=> [...prev, val]);
     setInput('');
   };
   const remove = (v)=> setImeis(prev=> prev.filter(x=> x!==v));
-  const handleSave = () => {
-    if(restan !== 0){ if(!window.confirm('Cantidad de IMEIs no coincide con cantidad del producto. Guardar de todas formas?')) return; }
+  const handleSave = async () => {
+    if(restan !== 0){ const ok = await modalConfirm('Cantidad de IMEIs no coincide con cantidad del producto. ¿Guardar de todas formas?', 'Confirmación'); if(!ok) return; }
     onSave?.(producto, imeis);
   };
   const onKey = e=> { if(e.key==='Enter'){ e.preventDefault(); add(); } };
@@ -47,6 +55,14 @@ const ImeiModal = ({ isOpen, onClose, producto, onSave, cantidad }) => {
           <button onClick={handleSave} className="px-3 py-2 bg-green-600 text-white rounded text-xs disabled:opacity-40" disabled={imeis.length===0}>Guardar IMEIs</button>
         </div>
       </div>
+      <Modal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        onConfirm={modalState.onConfirm}
+        onClose={modalState.onClose}
+      />
     </div>
   );
 };

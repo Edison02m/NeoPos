@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Modal from '../../components/Modal';
+import useModal from '../../hooks/useModal';
 import ReservaController from '../../controllers/ReservaController';
 import DetalleReservaModal from '../../components/DetalleReservaModal';
 import ConvertirReservaModal from '../../components/ConvertirReservaModal';
@@ -20,6 +22,9 @@ const ReservacionesView = () => {
   const [agrupar, setAgrupar] = useState(true);
   const [openPrint, setOpenPrint] = useState(false);
   useEffect(()=> { selectedRef.current = selected; }, [selected]);
+  const { modalState, showAlert, showConfirm } = useModal();
+  const modalAlert = async (message, title='Información') => { try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); } };
+  const modalConfirm = async (message, title='Confirmación') => { try { return await showConfirm(message, title); } catch { return window.confirm(`${title}: ${message}`); } };
 
   const cargar = async () => {
     setLoading(true);
@@ -43,7 +48,7 @@ const ReservacionesView = () => {
     if(!window.electronAPI?.onMenuAction) return;
     const requireSelected = (fn) => {
       if(!selectedRef.current){
-        alert('Seleccione una reservación primero.');
+        modalAlert('Seleccione una reservación primero.', 'Información');
         return;
       }
       fn();
@@ -61,12 +66,12 @@ const ReservacionesView = () => {
             try {
               // Obtener reserva completa para snapshot de productos
               const res = await reservaController.obtener(selectedRef.current);
-              if(!res.success || !res.data){ alert('No se pudo cargar la reservación'); return; }
+              if(!res.success || !res.data){ await modalAlert('No se pudo cargar la reservación', 'Error'); return; }
               const reserva = res.data;
               // Validar estado: solo se puede convertir si está activa
               const estado = (reserva.estado||'').toLowerCase();
               if(estado !== 'activa'){
-                alert('Solo las reservaciones ACTIVAS pueden convertirse a venta. Estado actual: '+ reserva.estado);
+                await modalAlert('Solo las reservaciones ACTIVAS pueden convertirse a venta. Estado actual: '+ reserva.estado, 'Operación no permitida');
                 return;
               }
               let productos = [];
@@ -83,10 +88,10 @@ const ReservacionesView = () => {
               // Abrir ventana de ventas
               await window.electronAPI.openVentasWindow();
               // Mensaje de feedback
-              alert('Abriendo ventana de Ventas con datos de la reserva...');
+              await modalAlert('Abriendo ventana de Ventas con datos de la reserva...', 'Información');
             } catch(e){
               console.error('Error preparando prefill reserva->venta', e);
-              alert('Error preparando conversión: '+ e.message);
+              await modalAlert('Error preparando conversión: '+ e.message, 'Error');
             }
           });
           break;
@@ -94,18 +99,19 @@ const ReservacionesView = () => {
           requireSelected(async ()=> {
             try {
               const res = await reservaController.obtener(selectedRef.current);
-              if(!res.success || !res.data){ alert('No se pudo cargar la reservación'); return; }
+              if(!res.success || !res.data){ await modalAlert('No se pudo cargar la reservación', 'Error'); return; }
               const estado = (res.data.estado||'').toLowerCase();
               if(estado !== 'activa'){
-                alert('Solo las reservaciones ACTIVAS pueden cancelarse. Estado actual: '+ res.data.estado);
+                await modalAlert('Solo las reservaciones ACTIVAS pueden cancelarse. Estado actual: '+ res.data.estado, 'Operación no permitida');
                 return;
               }
-              if(!window.confirm('¿Cancelar esta reserva y devolver stock?')) return;
+              const ok = await modalConfirm('¿Cancelar esta reserva y devolver stock?', 'Confirmación');
+              if(!ok) return;
               const r = await reservaController.cancelar({ id: selectedRef.current });
-              if(!r.success){ alert(r.error||'Error al cancelar'); return; }
+              if(!r.success){ await modalAlert(r.error||'Error al cancelar', 'Error'); return; }
               cargar();
             } catch(e){
-              alert('Error: '+ e.message);
+              await modalAlert('Error: '+ e.message, 'Error');
             }
           });
           break;
@@ -153,6 +159,14 @@ const ReservacionesView = () => {
     <DetalleReservaModal idReserva={selected} open={openDetalle && !!selected} initialTab={detalleInitialTab} onClose={()=> setOpenDetalle(false)} />
     <ConvertirReservaModal idReserva={selected} open={openConvertir && !!selected} onClose={()=> setOpenConvertir(false)} onConverted={(data)=> { setUltimaConversion(data); setOpenConvertir(false); cargar(); }} />
   <ReservaPrintModal idReserva={selected} open={openPrint && !!selected} onClose={()=> setOpenPrint(false)} />
+  <Modal
+    isOpen={modalState.isOpen}
+    type={modalState.type}
+    title={modalState.title}
+    message={modalState.message}
+    onConfirm={modalState.onConfirm}
+    onClose={modalState.onClose}
+  />
     </>
   );
 };

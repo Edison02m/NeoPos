@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Usuario from '../../models/Usuario';
-import Modal from '../../components/Modal';
-import useModal from '../../hooks/useModal';
 import ActionPanel from './ActionPanel';
 import UsuariosList from './UsuariosList';
 import UsuarioForm from './UsuarioForm';
@@ -22,7 +20,61 @@ const Usuarios = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [formActive, setFormActive] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { modalState, showConfirm, showAlert, closeModal } = useModal();
+
+  // Helpers de diálogo nativos (Electron) con fallback a navegador
+  const restoreFocus = (el) => {
+    if (el && typeof el.focus === 'function') {
+      el.focus();
+      try {
+        if (el.setSelectionRange && typeof el.value === 'string') {
+          const end = el.value.length;
+          el.setSelectionRange(end, end);
+        }
+      } catch (_) {}
+    }
+  };
+
+  const nativeAlert = async (message, title = 'Información') => {
+    const last = typeof document !== 'undefined' ? document.activeElement : null;
+    try {
+      if (window?.electronAPI?.showMessageBox) {
+        await window.electronAPI.showMessageBox({
+          type: 'info',
+          buttons: ['OK'],
+          defaultId: 0,
+          title,
+          message,
+        });
+        return;
+      }
+    } catch (_e) {} finally {
+      setTimeout(() => restoreFocus(last), 0);
+    }
+    alert(`${title}: ${message}`);
+  };
+
+  const nativeConfirm = async (message, title = 'Confirmación') => {
+    const last = typeof document !== 'undefined' ? document.activeElement : null;
+    try {
+      if (window?.electronAPI?.showMessageBox) {
+        const res = await window.electronAPI.showMessageBox({
+          type: 'question',
+          buttons: ['Cancelar', 'Aceptar'],
+          defaultId: 1,
+          cancelId: 0,
+          title,
+          message,
+        });
+        const r = typeof res === 'object' ? res.response : res;
+        return r === 1;
+      }
+      return window.confirm(`${title}: ${message}`);
+    } catch (_e) {
+      return window.confirm(`${title}: ${message}`);
+    } finally {
+      setTimeout(() => restoreFocus(last), 0);
+    }
+  };
 
   // document.title eliminado: título ahora fijo desde WindowManager
 
@@ -38,7 +90,7 @@ const Usuarios = () => {
       setUsuarios(usuariosData || []);
     } catch (error) {
       console.error('Error al cargar usuarios:', error);
-      await showAlert('Error al cargar usuarios');
+      await nativeAlert('Error al cargar usuarios', 'Error');
       setUsuarios([]);
     } finally {
       setLoading(false);
@@ -94,20 +146,20 @@ const Usuarios = () => {
 
   const handleDelete = async () => {
     if (selectedUser) {
-      const confirmed = await showConfirm(
+      const confirmed = await nativeConfirm(
         `¿Está seguro de eliminar el usuario "${selectedUser.usuario}"?`,
-        'Esta acción no se puede deshacer.'
+        'Confirmación'
       );
       
       if (confirmed) {
         try {
           await Usuario.delete(selectedUser.cod);
-          await showAlert('Usuario eliminado exitosamente', 'success');
+          await nativeAlert('Usuario eliminado exitosamente', 'Éxito');
           resetForm();
           loadUsuarios();
         } catch (error) {
           console.error('Error al eliminar usuario:', error);
-          await showAlert('Error al eliminar usuario');
+          await nativeAlert('Error al eliminar usuario', 'Error');
         }
       }
     }
@@ -131,14 +183,14 @@ const Usuarios = () => {
 
       if (isEditing && selectedUser) {
         await Usuario.update(selectedUser.cod, userData);
-        await showAlert('Usuario actualizado exitosamente', 'success');
+        await nativeAlert('Usuario actualizado exitosamente', 'Éxito');
       } else {
         if (!userData.contrasena) {
-          await showAlert('La contraseña es requerida para usuarios nuevos');
+          await nativeAlert('La contraseña es requerida para usuarios nuevos', 'Atención');
           return;
         }
         await Usuario.create(userData);
-        await showAlert('Usuario creado exitosamente', 'success');
+        await nativeAlert('Usuario creado exitosamente', 'Éxito');
       }
 
       resetForm();
@@ -148,7 +200,7 @@ const Usuarios = () => {
       window.dispatchEvent(new CustomEvent('user-updated', { detail: userData }));
     } catch (error) {
       console.error('Error al guardar usuario:', error);
-      await showAlert('Error al guardar usuario');
+      await nativeAlert('Error al guardar usuario', 'Error');
     }
   };
 
@@ -227,15 +279,7 @@ const Usuarios = () => {
         onCancel={handleCancel}
       />
       
-      <Modal
-        isOpen={modalState.isOpen}
-        type={modalState.type}
-        title={modalState.title}
-        message={modalState.message}
-        onConfirm={modalState.onConfirm}
-        onCancel={modalState.onCancel}
-        onClose={closeModal}
-      />
+      {/* Modal eliminado: usamos diálogos nativos */}
     </div>
   );
 };

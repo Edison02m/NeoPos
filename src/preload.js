@@ -218,7 +218,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'menu-generar-pdf',
       'menu-exportar-excel',
       'menu-config-invoice-printing',
-      'menu-buscar-producto'
+      'menu-buscar-producto',
+      // Devoluciones window specific
+      'devoluciones-actualizar',
+      'devoluciones-ver-detalles',
+      'devoluciones-eliminar-seleccion',
+      'devoluciones-modo-ventas',
+      'devoluciones-modo-compras'
     ];
 
     // El array tenía acciones duplicadas (p.ej. 'menu-config-invoice-printing') provocando doble disparo.

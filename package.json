@@ -1,6 +1,6 @@
 {
   "name": "neopos",
-  "version": "1.3.13-beta.1",
+  "version": "1.3.16-beta.1",
   "description": "Sistema de punto de venta con Electron, React y Tailwind CSS",
   "main": "src/main.js",
   "homepage": "./",

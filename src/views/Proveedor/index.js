@@ -26,8 +26,69 @@ const ProveedoresView = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   
-  // Hook para modales
-  const { modalState, showConfirm, showAlert, closeModal } = useModal();
+  const { modalState, showConfirm, showAlert } = useModal();
+
+  // Helpers de diálogo basados en Modal personalizado, con restauración de foco
+  const tryFocus = (el) => {
+    if (!el) return false;
+    if (el.disabled || el.readOnly) return false;
+    if (el.offsetParent === null && el !== document.body) return false; // not visible
+    if (typeof el.focus === 'function') {
+      el.focus();
+      try {
+        if (el.setSelectionRange && typeof el.value === 'string') {
+          const end = el.value.length;
+          el.setSelectionRange(end, end);
+        }
+      } catch (_) {}
+      return document.activeElement === el;
+    }
+    return false;
+  };
+
+  const getFirstFocusable = (root = document) => {
+    const sel = 'input:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select:not([disabled]), [contenteditable="true"], button:not([disabled])';
+    const list = Array.from(root.querySelectorAll(sel));
+    return list.find(el => el.offsetParent !== null) || null;
+  };
+
+  const restoreFocus = (last) => {
+    // Bring window to front
+    try { window?.focus?.(); } catch (_) {}
+    const container = (last && last.closest && last.closest('form')) || document;
+    const candidate = (last && document.contains(last) && !last.disabled && last.offsetParent !== null) ? last : getFirstFocusable(container);
+    const doRestore = () => {
+      if (!tryFocus(candidate)) {
+        // fallback to any focusable in document
+        tryFocus(getFirstFocusable(document));
+      }
+    };
+    // Two-phase restore to win over Electron timing
+    setTimeout(doRestore, 0);
+  };
+
+  // Helpers basados en Modal (useModal)
+  const modalAlert = async (message, title = 'Información') => {
+    const lastEl = typeof document !== 'undefined' ? document.activeElement : null;
+    try {
+      await showAlert(message, title);
+    } catch (_e) {
+      alert(`${title}: ${message}`);
+    } finally {
+      restoreFocus(lastEl);
+    }
+  };
+
+  const modalConfirm = async (message, title = 'Confirmación') => {
+    const lastEl = typeof document !== 'undefined' ? document.activeElement : null;
+    try {
+      return await showConfirm(message, title);
+    } catch (_e) {
+      return window.confirm(`${title}: ${message}`);
+    } finally {
+      restoreFocus(lastEl);
+    }
+  };
   
   // Cargar datos iniciales
   useEffect(() => {
@@ -63,17 +124,20 @@ const ProveedoresView = () => {
   };
 
   const handleDeleteProveedor = async () => {
-    if (selectedProveedor) {
-      const confirmed = await showConfirm('¿Está seguro de eliminar este proveedor?');
-      if (confirmed) {
-        try {
-          await Proveedor.delete(selectedProveedor.cod);
-          setSelectedProveedor(null);
-          loadProveedores();
-        } catch (error) {
-          console.error('Error al eliminar proveedor:', error);
-          await showAlert('Error al eliminar proveedor');
-        }
+    if (!selectedProveedor) return;
+    const confirmed = await modalConfirm('¿Está seguro de eliminar este proveedor?', 'Confirmación');
+    if (!confirmed) return;
+    try {
+      await Proveedor.delete(selectedProveedor.cod);
+      setSelectedProveedor(null);
+      await loadProveedores();
+    } catch (error) {
+      console.error('Error al eliminar proveedor:', error);
+      const msg = String(error?.message||'');
+      if (msg.includes('FOREIGN KEY')) {
+        await modalAlert('No se puede eliminar el proveedor porque tiene registros relacionados.', 'Operación no permitida');
+      } else {
+        await modalAlert('Error al eliminar proveedor', 'Error');
       }
     }
   };
@@ -93,7 +157,7 @@ const ProveedoresView = () => {
       
       if (!result.success) {
         setFormLoading(false);
-        await showAlert(result.message);
+        await modalAlert(result.message || 'No se pudo guardar el proveedor', 'Error');
         return;
       }
       
@@ -110,7 +174,7 @@ const ProveedoresView = () => {
       window.dispatchEvent(new CustomEvent('proveedor-updated', { detail: proveedorData }));
     } catch (error) {
       setFormLoading(false);
-      await showAlert('Error al guardar proveedor');
+      await modalAlert('Error al guardar proveedor', 'Error');
     }
   };
 
@@ -248,15 +312,13 @@ const ProveedoresView = () => {
         </div>
       </div>
 
-      {/* Modal */}
       <Modal
         isOpen={modalState.isOpen}
         type={modalState.type}
         title={modalState.title}
         message={modalState.message}
         onConfirm={modalState.onConfirm}
-        onCancel={modalState.onCancel}
-        onClose={closeModal}
+        onClose={modalState.onClose}
       />
     </div>
   );

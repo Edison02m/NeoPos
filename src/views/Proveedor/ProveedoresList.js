@@ -57,11 +57,6 @@ const ProveedoresList = ({ proveedores, loading, selectedProveedor, onRowClick }
       key: 'relacionado',
       title: 'Relacionado',
       width: '16'
-    },
-    {
-      key: 'trial279',
-      title: 'Trial279',
-      width: '16'
     }
   ];
 

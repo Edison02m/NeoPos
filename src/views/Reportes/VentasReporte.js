@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Modal from '../../components/Modal';
+import useModal from '../../hooks/useModal';
 import DetalleVentaModal from '../../components/DetalleVentaModal';
+import DetalleDevolucionModal from '../../components/DetalleDevolucionModal';
 
 function formatMoney(n){
   const v = Number(n||0);
@@ -9,21 +12,28 @@ function formatMoney(n){
 const VentasReporte = () => {
   const [ventas, setVentas] = useState([]);
   const [abonos, setAbonos] = useState([]);
-  const [selectedVenta, setSelectedVenta] = useState(null);
+  const [modoDevoluciones, setModoDevoluciones] = useState(false); // false: Ventas, true: Devoluciones
+  const [selectedVentas, setSelectedVentas] = useState(new Set());
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [detalleTab, setDetalleTab] = useState('resumen');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [desde, setDesde] = useState(() => new Date(new Date().setHours(0,0,0,0)).toISOString().slice(0,10));
   const [hasta, setHasta] = useState(() => new Date(new Date().setHours(23,59,59,999)).toISOString().slice(0,10));
-  const [formaPago, setFormaPago] = useState('todas'); // todas|efectivo|cheque|tarjeta
+  const [formaPago, setFormaPago] = useState('todas'); // todas|efectivo|cheque|tarjeta|transferencia
+  const [incluirDevueltas, setIncluirDevueltas] = useState(false); // cuando false, solo trial279=1
   const [tipoVenta, setTipoVenta] = useState('todas'); // todas|contado|credito|plan
   const [totalFilter, setTotalFilter] = useState(null); // {op:'gt|lt|eq|between', a:number, b?:number}
+  const [bancoFiltro, setBancoFiltro] = useState('');
+  const [cobradoFiltro, setCobradoFiltro] = useState('todas'); // todas|S|N
+  const { modalState, showAlert, showConfirm } = useModal();
+  const modalAlert = async (message, title='Información') => { try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); } };
+  const modalConfirm = async (message, title='Confirmación') => { try { return await showConfirm(message, title); } catch { return window.confirm(`${title}: ${message}`); } };
 
   // Menú de la ventana de reportes
   useEffect(() => {
     if(!window?.electronAPI?.onMenuAction) return;
-    const remove = window.electronAPI.onMenuAction((action) => {
+    const remove = window.electronAPI.onMenuAction(async (action) => {
       switch(action){
         case 'reporte-ventas-filtrar-fecha-todas':
           setDesde(''); setHasta(''); cargar(true); break;
@@ -51,6 +61,7 @@ const VentasReporte = () => {
         case 'reporte-ventas-filtrar-forma-efectivo': setFormaPago('efectivo'); cargar(true); break;
         case 'reporte-ventas-filtrar-forma-cheque': setFormaPago('cheque'); cargar(true); break;
         case 'reporte-ventas-filtrar-forma-tarjeta': setFormaPago('tarjeta'); cargar(true); break;
+        case 'reporte-ventas-filtrar-forma-transferencia': setFormaPago('transferencia'); cargar(true); break;
         case 'reporte-ventas-filtrar-total-mayor':
           {
             const a = Number(prompt('Total mayor a (USD):')||''); if(!isNaN(a)) setTotalFilter({op:'gt', a}); cargar(true);
@@ -75,29 +86,36 @@ const VentasReporte = () => {
           }
           break;
         case 'reporte-ventas-detalle-transaccion':
-          if(!selectedVenta){ alert('Seleccione una venta.'); return; }
+          const selectedForTrans = selectedVentas.size === 1 ? Array.from(selectedVentas)[0] : null;
+          if(!selectedForTrans){ await modalAlert('Seleccione una sola venta para ver detalles.', 'Información'); return; }
           setDetalleTab('resumen'); setDetalleOpen(true);
           break;
         case 'reporte-ventas-detalle-productos':
-          if(!selectedVenta){ alert('Seleccione una venta.'); return; }
+          const selectedForProducts = selectedVentas.size === 1 ? Array.from(selectedVentas)[0] : null;
+          if(!selectedForProducts){ await modalAlert('Seleccione una sola venta para ver productos.', 'Información'); return; }
           setDetalleTab('productos'); setDetalleOpen(true);
           break;
         case 'reporte-ventas-eliminar-transaccion':
-          if(!selectedVenta){ alert('Seleccione una venta.'); return; }
-          eliminarVenta(selectedVenta);
+          if(selectedVentas.size === 0){ await modalAlert('Seleccione al menos una venta para eliminar.', 'Información'); return; }
+          eliminarVentasSeleccionadas();
           break;
         case 'reporte-ventas-crear-comprobante':
-          if(!selectedVenta){ alert('Seleccione una venta.'); return; }
-          crearComprobante(selectedVenta);
+          const selectedForComprobante = selectedVentas.size === 1 ? Array.from(selectedVentas)[0] : null;
+          if(!selectedForComprobante){ await modalAlert('Seleccione una sola venta para crear comprobante.', 'Información'); return; }
+          crearComprobante(selectedForComprobante);
           break;
         case 'reporte-ventas-totales-por-forma':
           mostrarTotalesPorForma();
           break;
+        case 'reporte-ventas-ver-devoluciones':
+          setModoDevoluciones(true); cargar(true); break;
+        case 'reporte-ventas-ver-ventas':
+          setModoDevoluciones(false); cargar(true); break;
         default: break;
       }
     });
     return () => { if(remove) remove(); };
-  }, [selectedVenta, desde, hasta]);
+  }, [selectedVentas, desde, hasta, bancoFiltro, cobradoFiltro]);
 
   const cargar = async (silent=false) => {
     try{
@@ -112,7 +130,7 @@ const VentasReporte = () => {
         where.push('fpago = ?'); params.push(map[tipoVenta]);
       }
       if (formaPago !== 'todas') {
-        const map = { efectivo: 1, cheque: 2, tarjeta: 3 };
+        const map = { efectivo: 1, cheque: 2, tarjeta: 3, transferencia: 4 };
         where.push('formapago = ?'); params.push(map[formaPago]);
       }
       if (totalFilter && !isNaN(totalFilter.a)) {
@@ -121,43 +139,85 @@ const VentasReporte = () => {
         if(totalFilter.op==='eq') { where.push('total = ?'); params.push(totalFilter.a); }
         if(totalFilter.op==='between' && !isNaN(totalFilter.b)) { where.push('total BETWEEN ? AND ?'); params.push(totalFilter.a, totalFilter.b); }
       }
-      const whereSql = where.length? ('WHERE ' + where.join(' AND ')) : '';
-      const sql = `SELECT id, fecha, idcliente, subtotal, descuento, iva, total, fpago, formapago, comprob, numfactura FROM venta ${whereSql} ORDER BY fecha DESC, id DESC LIMIT 1000`;
-      const res = await window.electronAPI.dbQuery(sql, params);
-      if(!res.success) throw new Error(res.error || 'No se pudo consultar ventas');
+      if (!modoDevoluciones) {
+        const whereSql = where.length? ('WHERE ' + where.join(' AND ')) : '';
+        const sql = `SELECT id, fecha, idcliente, subtotal, descuento, iva, total, fpago, formapago, comprob, numfactura, COALESCE(trial279,1) AS trial279 FROM venta ${whereSql} ORDER BY fecha DESC, id DESC LIMIT 1000`;
+        const res = await window.electronAPI.dbQuery(sql, params);
+        if(!res.success) throw new Error(res.error || 'No se pudo consultar ventas');
 
-      const data = res.data || [];
-      const out = [];
-      for(const v of data){
-        let clienteNombre = '';
-        try{
-          const c = await window.electronAPI.dbGetSingle('SELECT apellidos, nombres, cedula FROM cliente WHERE cedula = ? OR cod = ? LIMIT 1', [v.idcliente, v.idcliente]);
-          if(c.success && c.data){ clienteNombre = `${c.data.apellidos||''} ${c.data.nombres||''}`.trim() || (c.data.cedula||''); }
-        }catch(_){ }
-        out.push({ ...v, clienteNombre });
-      }
-      setVentas(out);
-
-      // Abonos del periodo
-      const whereAb = [];
-      const paramsAb = [];
-      if (desde) { whereAb.push('date(fecha) >= date(?)'); paramsAb.push(desde); }
-      if (hasta) { whereAb.push('date(fecha) <= date(?)'); paramsAb.push(hasta); }
-      const whereSqlAb = whereAb.length? ('WHERE ' + whereAb.join(' AND ')) : '';
-      const sqlAb = `SELECT id, idventa, idcliente, fecha, monto, formapago FROM abono ${whereSqlAb} ORDER BY fecha DESC, id DESC LIMIT 2000`;
-      const resAb = await window.electronAPI.dbQuery(sqlAb, paramsAb);
-      let abonosOut = [];
-      if(resAb.success && Array.isArray(resAb.data)){
-        for(const a of resAb.data){
+        // Filtrar por estado según incluirDevueltas (si está OFF, solo vendidas: trial279=1)
+        let data = res.data || [];
+        if(!incluirDevueltas){ data = data.filter(v => Number(v.trial279 ?? 1) === 1); }
+        const out = [];
+        for(const v of data){
           let clienteNombre = '';
           try{
-            const c = await window.electronAPI.dbGetSingle('SELECT apellidos, nombres, cedula FROM cliente WHERE cedula = ? OR cod = ? LIMIT 1', [a.idcliente, a.idcliente]);
+            const c = await window.electronAPI.dbGetSingle('SELECT apellidos, nombres, cedula FROM cliente WHERE cedula = ? OR cod = ? LIMIT 1', [v.idcliente, v.idcliente]);
             if(c.success && c.data){ clienteNombre = `${c.data.apellidos||''} ${c.data.nombres||''}`.trim() || (c.data.cedula||''); }
           }catch(_){ }
-          abonosOut.push({ ...a, clienteNombre });
+          out.push({ ...v, clienteNombre });
         }
+        // Cargar detalleformapago para ventas con formapago 2/4
+        try{
+          const ids = out.map(v=> v.id).filter(Boolean);
+          if(ids.length>0){
+            const placeholders = ids.map(()=>'?').join(',');
+            const detSql = `SELECT idventa, formapago, banco, numcheque, cobrado FROM detalleformapago WHERE idventa IN (${placeholders})`;
+            const detRes = await window.electronAPI.dbQuery(detSql, ids);
+            if(detRes.success && Array.isArray(detRes.data)){
+              const mapDet = {};
+              for(const d of detRes.data){ if(!mapDet[d.idventa]) mapDet[d.idventa] = d; }
+              for(const v of out){ const d = mapDet[v.id]; if(d){ v.detalleFormaPago = { banco: d.banco||'', numero: d.numcheque||'', cobrado: d.cobrado||'N', formapago: d.formapago }; } }
+            }
+          }
+        }catch(_){ }
+        // Filtros cliente banco/cobrado
+        const outFiltered = out.filter(v => {
+          let ok = true;
+          if (bancoFiltro.trim()) { const banco = String(v.detalleFormaPago?.banco || '').toLowerCase(); ok = ok && banco.includes(bancoFiltro.trim().toLowerCase()); }
+          if (cobradoFiltro !== 'todas') { const cob = String(v.detalleFormaPago?.cobrado || ''); ok = ok && cob === cobradoFiltro; }
+          return ok;
+        });
+        setVentas(outFiltered);
+
+        // Abonos del periodo
+        const whereAb = []; const paramsAb = [];
+        if (desde) { whereAb.push('date(fecha) >= date(?)'); paramsAb.push(desde); }
+        if (hasta) { whereAb.push('date(fecha) <= date(?)'); paramsAb.push(hasta); }
+        const whereSqlAb = whereAb.length? ('WHERE ' + whereAb.join(' AND ')) : '';
+        const sqlAb = `SELECT id, idventa, idcliente, fecha, monto, formapago FROM abono ${whereSqlAb} ORDER BY fecha DESC, id DESC LIMIT 2000`;
+        const resAb = await window.electronAPI.dbQuery(sqlAb, paramsAb);
+        let abonosOut = [];
+        if(resAb.success && Array.isArray(resAb.data)){
+          for(const a of resAb.data){
+            let clienteNombre = '';
+            try{
+              const c = await window.electronAPI.dbGetSingle('SELECT apellidos, nombres, cedula FROM cliente WHERE cedula = ? OR cod = ? LIMIT 1', [a.idcliente, a.idcliente]);
+              if(c.success && c.data){ clienteNombre = `${c.data.apellidos||''} ${c.data.nombres||''}`.trim() || (c.data.cedula||''); }
+            }catch(_){ }
+            abonosOut.push({ ...a, clienteNombre });
+          }
+        }
+        setAbonos(abonosOut);
+      } else {
+        // Modo devoluciones: consultar devventa
+        const whereSql = where.length? ('WHERE ' + where.join(' AND ')) : '';
+        const sql = `SELECT id, fecha, idcliente, subtotal, descuento, total, fpago, formapago FROM devventa ${whereSql} ORDER BY fecha DESC, id DESC LIMIT 1000`;
+        const res = await window.electronAPI.dbQuery(sql, params);
+        if(!res.success) throw new Error(res.error || 'No se pudo consultar devoluciones');
+        const data = res.data || [];
+        const out = [];
+        for(const v of data){
+          let clienteNombre = '';
+          try{
+            const c = await window.electronAPI.dbGetSingle('SELECT apellidos, nombres, cedula FROM cliente WHERE cedula = ? OR cod = ? LIMIT 1', [v.idcliente, v.idcliente]);
+            if(c.success && c.data){ clienteNombre = `${c.data.apellidos||''} ${c.data.nombres||''}`.trim() || (c.data.cedula||''); }
+          }catch(_){ }
+          out.push({ ...v, clienteNombre });
+        }
+        setVentas(out);
+        setAbonos([]);
       }
-      setAbonos(abonosOut);
     }catch(e){ setError(e.message); }
     finally{ if(!silent) setLoading(false); }
   };
@@ -179,7 +239,7 @@ const VentasReporte = () => {
   // Exportaciones
   const exportExcel = async () => {
     try{
-      const rows = ventas.map(v => ({
+      const rows = !modoDevoluciones ? ventas.map(v => ({
         ID: v.id,
         Fecha: String(v.fecha).replace('T',' ').slice(0,19),
         Cliente: v.clienteNombre||v.idcliente,
@@ -189,18 +249,44 @@ const VentasReporte = () => {
         IVA: Number(v.iva)||0,
         Total: Number(v.total)||0,
         Tipo: (v.fpago===0? 'Contado' : v.fpago===1? 'Crédito':'Plan'),
-        'Forma pago': (v.formapago===1? 'Efectivo' : v.formapago===2? 'Cheque':'Tarjeta')
+        'Forma pago': (
+          v.formapago===1? 'Efectivo'
+          : v.formapago===2? 'Cheque'
+          : v.formapago===3? 'Tarjeta'
+          : v.formapago===4? 'Transferencia'
+          : String(v.formapago)
+        ),
+        Banco: v.detalleFormaPago?.banco || '',
+        Numero: v.detalleFormaPago?.numero || '',
+        Cobrado: v.detalleFormaPago?.cobrado || ''
+      })) : ventas.map(v => ({
+        ID: v.id,
+        Fecha: String(v.fecha).replace('T',' ').slice(0,19),
+        Cliente: v.clienteNombre||v.idcliente,
+        Subtotal: Number(v.subtotal)||0,
+        Descuento: Number(v.descuento)||0,
+        Total: Number(v.total)||0,
+        'Forma pago': (
+          v.formapago===1? 'Efectivo'
+          : v.formapago===2? 'Cheque'
+          : v.formapago===3? 'Tarjeta'
+          : v.formapago===4? 'Transferencia'
+          : String(v.formapago)
+        )
       }));
       const result = await window.electronAPI.generateExcelReport(rows, 'reporte_ventas', 'Ventas');
       if(!result?.success) throw new Error(result?.error||'No se pudo exportar');
-      alert('Reporte Excel generado');
-    }catch(e){ alert('Error al exportar: ' + e.message); }
+      await modalAlert('Reporte Excel generado', 'Información');
+    }catch(e){ await modalAlert('Error al exportar: ' + e.message, 'Error'); }
   };
 
   const exportPDF = async () => {
     try{
-      const headers = ['#','Fecha','Cliente','Comprob.','Subtotal','Desc.','IVA','Total','Tipo','FPago'];
-      const data = ventas.map(v => [
+      // Columnas compactas para mayor legibilidad en PDF
+      const headers = !modoDevoluciones
+        ? ['#','Fecha','Cliente','Comprob.','Subtotal','Desc.','IVA','Total','FPago']
+        : ['#','Fecha','Cliente','Subtotal','Desc.','Total','FPago'];
+      const data = !modoDevoluciones ? ventas.map(v => [
         String(v.id),
         String(v.fecha).replace('T',' ').slice(0,19),
         v.clienteNombre||v.idcliente,
@@ -209,15 +295,37 @@ const VentasReporte = () => {
         formatMoney(v.descuento),
         formatMoney(v.iva),
         formatMoney(v.total),
-        (v.fpago===0? 'Contado' : v.fpago===1? 'Crédito':'Plan'),
-        (v.formapago===1? 'Efectivo' : v.formapago===2? 'Cheque':'Tarjeta')
+        (
+          v.formapago===1? 'Efectivo'
+          : v.formapago===2? 'Cheque'
+          : v.formapago===3? 'Tarjeta'
+          : v.formapago===4? 'Transferencia'
+          : String(v.formapago)
+        )
+      ]) : ventas.map(v => [
+        String(v.id),
+        String(v.fecha).replace('T',' ').slice(0,19),
+        v.clienteNombre||v.idcliente,
+        formatMoney(v.subtotal),
+        formatMoney(v.descuento),
+        formatMoney(v.total),
+        (
+          v.formapago===1? 'Efectivo'
+          : v.formapago===2? 'Cheque'
+          : v.formapago===3? 'Tarjeta'
+          : v.formapago===4? 'Transferencia'
+          : String(v.formapago)
+        )
       ]);
       const footerTotals = {
         label: 'TOTALES',
-        labelIndex: 3,
-        totals: { 4: formatMoney(totals.subtotal), 5: formatMoney(totals.descuento), 6: formatMoney(totals.iva), 7: formatMoney(totals.total) }
+        labelIndex: !modoDevoluciones ? 3 : 2,
+        // Totales según cabeceras
+        totals: !modoDevoluciones
+          ? { 4: formatMoney(totals.subtotal), 5: formatMoney(totals.descuento), 6: formatMoney(totals.iva), 7: formatMoney(totals.total) }
+          : { 3: formatMoney(totals.subtotal), 4: formatMoney(totals.descuento), 5: formatMoney(totals.total) }
       };
-      const reportData = { title: 'REPORTE DE VENTAS', headers, data, footerTotals, stats: [
+      const reportData = { title: !modoDevoluciones ? 'REPORTE DE VENTAS' : 'REPORTE DE DEVOLUCIONES', headers, data, footerTotals, stats: [
         `Rango: ${desde} a ${hasta}`,
         `Tipo: ${tipoVenta}`,
         `Forma de pago: ${formaPago}`,
@@ -225,15 +333,74 @@ const VentasReporte = () => {
       ] };
       const result = await window.electronAPI.generatePDFReport(reportData, 'reporte_ventas');
       if(!result?.success) throw new Error(result?.error||'No se pudo exportar PDF');
-      alert('Reporte PDF generado');
-    }catch(e){ alert('Error al exportar PDF: ' + e.message); }
+      await modalAlert('Reporte PDF generado', 'Información');
+    }catch(e){ await modalAlert('Error al exportar PDF: ' + e.message, 'Error'); }
   };
 
   // Acciones
   // Modal de detalle: manejado por DetalleVentaModal
 
+  const toggleSeleccionTodo = () => {
+    if (selectedVentas.size === ventas.length) {
+      setSelectedVentas(new Set());
+    } else {
+      setSelectedVentas(new Set(ventas.map(v => v.id)));
+    }
+  };
+
+  const toggleSeleccionVenta = (ventaId) => {
+    const newSelection = new Set(selectedVentas);
+    if (newSelection.has(ventaId)) {
+      newSelection.delete(ventaId);
+    } else {
+      newSelection.add(ventaId);
+    }
+    setSelectedVentas(newSelection);
+  };
+
+  const eliminarVentasSeleccionadas = async () => {
+    if (selectedVentas.size === 0) {
+      await modalAlert('No hay ventas seleccionadas para eliminar.', 'Información');
+      return;
+    }
+
+    const ok = await modalConfirm(`¿Eliminar ${selectedVentas.size} transacción(es) seleccionada(s)? Esta acción revertirá stock y relacionados.`, 'Confirmación');
+    if(!ok) return;
+
+    setLoading(true);
+    try {
+      // Procesar todas las ventas en una sola transacción
+      for (const ventaId of selectedVentas) {
+        // Actualizar stock
+        const det = await window.electronAPI.dbQuery('SELECT codprod, cantidad FROM ventadet WHERE idventa = ?', [ventaId]);
+        if(det.success){
+          for(const it of det.data||[]){
+            await window.electronAPI.dbRun('UPDATE producto SET almacen = almacen + ? WHERE codigo = ?', [Number(it.cantidad)||0, it.codprod]);
+          }
+        }
+        // Eliminar registros relacionados
+        await window.electronAPI.dbRun('DELETE FROM ventadet WHERE idventa = ?', [ventaId]);
+        await window.electronAPI.dbRun('DELETE FROM credito WHERE idventa = ?', [ventaId]);
+        await window.electronAPI.dbRun('DELETE FROM abono WHERE idventa = ?', [ventaId]);
+        await window.electronAPI.dbRun('DELETE FROM venta WHERE id = ?', [ventaId]);
+      }
+      
+      // Limpiar selección y recargar datos
+      setSelectedVentas(new Set());
+      await cargar();
+      
+      // Una sola notificación al final
+      await modalAlert(`${selectedVentas.size} transacción(es) eliminada(s) correctamente`, 'Información');
+    } catch (e) {
+      await modalAlert('Error eliminando transacciones: ' + e.message, 'Error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const eliminarVenta = async (ventaId) => {
-    if(!window.confirm('¿Eliminar la transacción seleccionada? Esta acción revertirá stock y relacionados.')) return;
+    const ok = await modalConfirm('¿Eliminar esta venta? Esto revertirá el stock y registros relacionados.', 'Confirmación');
+    if(!ok) return;
     try{
       const det = await window.electronAPI.dbQuery('SELECT codprod, cantidad FROM ventadet WHERE idventa = ?', [ventaId]);
       if(det.success){
@@ -245,25 +412,49 @@ const VentasReporte = () => {
       await window.electronAPI.dbRun('DELETE FROM credito WHERE idventa = ?', [ventaId]);
       await window.electronAPI.dbRun('DELETE FROM abono WHERE idventa = ?', [ventaId]);
       await window.electronAPI.dbRun('DELETE FROM venta WHERE id = ?', [ventaId]);
-      await cargar();
-      alert('Transacción eliminada');
-    }catch(e){ alert('Error eliminando: ' + e.message); }
+      await cargar(true);
+      await modalAlert('Venta eliminada', 'Información');
+    }catch(e){ await modalAlert('Error eliminando: ' + e.message, 'Error'); }
   };
 
   const crearComprobante = async (ventaId) => {
-    alert('Crear comprobante aún no implementado. Venta #' + ventaId);
+    modalAlert('Crear comprobante aún no implementado. Venta #' + ventaId, 'Información');
   };
 
   const mostrarTotalesPorForma = () => {
     const porForma = ventas.reduce((acc,v)=>{ const k = v.formapago; acc[k] = (acc[k]||0) + Number(v.total||0); return acc; },{});
-    alert(`Totales por forma de pago:\nEfectivo: ${formatMoney(porForma[1]||0)}\nCheque: ${formatMoney(porForma[2]||0)}\nTarjeta: ${formatMoney(porForma[3]||0)}`);
+    modalAlert(`Totales por forma de pago:\nEfectivo: ${formatMoney(porForma[1]||0)}\nCheque: ${formatMoney(porForma[2]||0)}\nTarjeta: ${formatMoney(porForma[3]||0)}\nTransferencia: ${formatMoney(porForma[4]||0)}`, 'Información');
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <div className="p-4 border-b bg-white flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-800">Reporte de Ventas</h1>
+        <h1 className="text-lg font-semibold text-gray-800">{modoDevoluciones? 'Reporte de Devoluciones' : 'Reporte de Ventas'}</h1>
         <div className="flex gap-2">
+          {modoDevoluciones && (
+            <div className="relative">
+              <details className="inline-block">
+                <summary className="list-none bg-gray-700 text-white text-sm px-3 py-1 rounded cursor-pointer select-none">Opciones ▾</summary>
+                <div className="absolute right-0 mt-1 w-56 bg-white border rounded shadow text-sm z-10">
+                  <button
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100"
+                    onClick={async ()=>{
+                      const sel = selectedVentas.size === 1 ? Array.from(selectedVentas)[0] : null;
+                      if(!sel){ await modalAlert('Seleccione una sola devolución para ver detalles.', 'Información'); return; }
+                      setDetalleTab('resumen'); setDetalleOpen(true);
+                    }}
+                  >Ver detalles</button>
+                  <div className="border-t my-1" />
+                  <button
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100"
+                    onClick={()=>{ try { window.close(); } catch(_){} }}
+                  >Cerrar ventana</button>
+                </div>
+              </details>
+            </div>
+          )}
+
           <button onClick={exportPDF} className="bg-red-600 text-white text-sm px-3 py-1 rounded">Exportar PDF</button>
           <button onClick={exportExcel} className="bg-emerald-600 text-white text-sm px-3 py-1 rounded">Exportar Excel</button>
         </div>
@@ -295,6 +486,25 @@ const VentasReporte = () => {
               <option value="efectivo">Efectivo</option>
               <option value="cheque">Cheque</option>
               <option value="tarjeta">Tarjeta</option>
+              <option value="transferencia">Transferencia</option>
+            </select>
+          </div>
+          {!modoDevoluciones && (
+            <label className="flex items-center gap-2 text-xs text-gray-700">
+              <input type="checkbox" checked={incluirDevueltas} onChange={e=> setIncluirDevueltas(e.target.checked)} />
+              Incluir devueltas
+            </label>
+          )}
+          <div>
+            <label className="block text-xs text-gray-600">Banco (contiene)</label>
+            <input type="text" value={bancoFiltro} onChange={e=> setBancoFiltro(e.target.value)} className="border rounded px-2 py-1 text-sm" placeholder="Banco..." />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600">Cobrado</label>
+            <select value={cobradoFiltro} onChange={e=> setCobradoFiltro(e.target.value)} className="border rounded px-2 py-1 text-sm">
+              <option value="todas">Todas</option>
+              <option value="S">Sí</option>
+              <option value="N">No</option>
             </select>
           </div>
           <button onClick={()=>cargar()} className="bg-blue-600 text-white text-sm px-3 py-1 rounded disabled:opacity-50" disabled={loading}>{loading? 'Cargando...' : 'Aplicar filtros'}</button>
@@ -302,55 +512,79 @@ const VentasReporte = () => {
 
         {error && <div className="text-red-600 text-sm">{error}</div>}
 
-        {/* Grid superior: Ventas */}
+        {/* Grid superior: Ventas o Devoluciones */}
         <div className="bg-white rounded border shadow-sm">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
-                <th className="px-2 py-1 text-center"><input type="checkbox" disabled className="opacity-40" /></th>
+                <th className="px-2 py-1 text-center">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedVentas.size === ventas.length && ventas.length > 0}
+                    onChange={toggleSeleccionTodo}
+                  />
+                </th>
                 <th className="text-left px-2 py-1">#</th>
                 <th className="text-left px-2 py-1">Fecha</th>
                 <th className="text-left px-2 py-1">Cliente</th>
-                <th className="text-left px-2 py-1">Comprob.</th>
+                {!modoDevoluciones && <th className="text-left px-2 py-1">Comprob.</th>}
+                {!modoDevoluciones && <th className="text-left px-2 py-1">Estado</th>}
                 <th className="text-right px-2 py-1">Subtotal</th>
                 <th className="text-right px-2 py-1">Descuento</th>
-                <th className="text-right px-2 py-1">IVA</th>
+                {!modoDevoluciones && <th className="text-right px-2 py-1">IVA</th>}
                 <th className="text-right px-2 py-1">Total</th>
-                <th className="text-left px-2 py-1">Tipo</th>
                 <th className="text-left px-2 py-1">Forma pago</th>
               </tr>
             </thead>
             <tbody>
             {ventas.length===0 && (
-              <tr><td className="px-2 py-3 text-center text-gray-500" colSpan={11}>Sin resultados en el rango.</td></tr>
+              <tr><td className="px-2 py-3 text-center text-gray-500" colSpan={modoDevoluciones?9:10}>Sin resultados en el rango.</td></tr>
             )}
             {ventas.map(v => (
-              <tr key={v.id} className={`border-t cursor-pointer ${selectedVenta===v.id? 'bg-blue-50':''}`} onClick={()=> setSelectedVenta(v.id)}>
+              <tr key={v.id} className={`border-t cursor-pointer ${selectedVentas.has(v.id)? 'bg-blue-50':''}`} onClick={()=> toggleSeleccionVenta(v.id)}>
                 <td className="px-2 py-1 text-center align-middle" onClick={e=> e.stopPropagation()}>
-                  <input type="checkbox" checked={selectedVenta===v.id} onChange={()=> setSelectedVenta(selectedVenta===v.id? null : v.id)} />
+                  <input type="checkbox" checked={selectedVentas.has(v.id)} onChange={()=> toggleSeleccionVenta(v.id)} />
                 </td>
                 <td className="px-2 py-1">{v.id}</td>
                 <td className="px-2 py-1">{String(v.fecha).replace('T',' ').slice(0,19)}</td>
                 <td className="px-2 py-1">{v.clienteNombre||v.idcliente}</td>
-                <td className="px-2 py-1">{v.comprob==='F'? 'Factura' : 'Nota'}<span className="text-gray-500"> {v.numfactura||''}</span></td>
+                {!modoDevoluciones && <td className="px-2 py-1">{v.comprob==='F'? 'Factura' : 'Nota'}<span className="text-gray-500"> {v.numfactura||''}</span></td>}
+                {!modoDevoluciones && (
+                  <td className="px-2 py-1">
+                    {Number(v.trial279) === 1 ? (
+                      <span className="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">Vendida</span>
+                    ) : Number(v.trial279) === 2 ? (
+                      <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">Devolución parcial</span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700">Devuelta</span>
+                    )}
+                  </td>
+                )}
                 <td className="px-2 py-1 text-right">{formatMoney(v.subtotal)}</td>
                 <td className="px-2 py-1 text-right">{formatMoney(v.descuento)}</td>
-                <td className="px-2 py-1 text-right">{formatMoney(v.iva)}</td>
+                {!modoDevoluciones && <td className="px-2 py-1 text-right">{formatMoney(v.iva)}</td>}
                 <td className="px-2 py-1 text-right">{formatMoney(v.total)}</td>
-                <td className="px-2 py-1">{v.fpago===0? 'Contado' : v.fpago===1? 'Crédito':'Plan'}</td>
-                <td className="px-2 py-1">{v.formapago===1? 'Efectivo' : v.formapago===2? 'Cheque':'Tarjeta'}</td>
+                <td className="px-2 py-1">{
+                  v.formapago===1? 'Efectivo'
+                  : v.formapago===2? 'Cheque'
+                  : v.formapago===3? 'Tarjeta'
+                  : v.formapago===4? 'Transferencia'
+                  : String(v.formapago)
+                }</td>
+
               </tr>
             ))}
             </tbody>
             <tfoot className="bg-gray-50">
               <tr>
-                <td className="px-2 py-2 font-semibold text-right" colSpan={11}>Total Ventas USD $ {formatMoney(totals.total)}</td>
+                <td className="px-2 py-2 font-semibold text-right" colSpan={modoDevoluciones?9:10}>Total USD $ {formatMoney(totals.total)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
 
-        {/* Grid inferior: Abonos */}
+        {/* Grid inferior: Abonos (sólo en ventas) */}
+        {!modoDevoluciones && (
         <div className="bg-white rounded border shadow-sm">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100">
@@ -374,7 +608,13 @@ const VentasReporte = () => {
                   <td className="px-2 py-1">{String(a.fecha).replace('T',' ').slice(0,19)}</td>
                   <td className="px-2 py-1 text-right">{formatMoney(a.monto)}</td>
                   <td className="px-2 py-1">Crédito</td>
-                  <td className="px-2 py-1">{a.formapago===1? 'Efectivo' : a.formapago===2? 'Cheque':'Tarjeta'}</td>
+                  <td className="px-2 py-1">{
+                    a.formapago===1? 'Efectivo'
+                    : a.formapago===2? 'Cheque'
+                    : a.formapago===3? 'Tarjeta'
+                    : a.formapago===4? 'Transferencia'
+                    : String(a.formapago)
+                  }</td>
                 </tr>
               ))}
             </tbody>
@@ -384,13 +624,35 @@ const VentasReporte = () => {
               </tr>
             </tfoot>
           </table>
-        </div>
+        </div>)}
 
         {/* Totales generales */}
         <div className="text-right text-sm font-semibold">Total USD $ {formatMoney(totals.total)}</div>
       </div>
-      <DetalleVentaModal idventa={selectedVenta} open={!!selectedVenta && detalleOpen} onClose={()=> setDetalleOpen(false)} initialTab={detalleTab} />
+      {!modoDevoluciones ? (
+        <DetalleVentaModal 
+          idventa={selectedVentas.size === 1 ? Array.from(selectedVentas)[0] : null} 
+          open={selectedVentas.size === 1 && detalleOpen} 
+          onClose={()=> setDetalleOpen(false)} 
+          initialTab={detalleTab} 
+        />
+      ) : (
+        <DetalleDevolucionModal 
+          iddev={selectedVentas.size === 1 ? Array.from(selectedVentas)[0] : null} 
+          open={selectedVentas.size === 1 && detalleOpen} 
+          onClose={()=> setDetalleOpen(false)} 
+        />
+      )}
     </div>
+    <Modal
+      isOpen={modalState.isOpen}
+      type={modalState.type}
+      title={modalState.title}
+      message={modalState.message}
+      onConfirm={modalState.onConfirm}
+      onClose={modalState.onClose}
+    />
+    </>
   );
 };
 

@@ -1076,7 +1076,10 @@ export function useVentas() {
       const formaPagoCode = (fp) => {
         if (!fp) return 1;
         const t = (fp.tipo || 'efectivo').toLowerCase();
-        return t === 'cheque' ? 2 : t.startsWith('tarjeta') ? 3 : 1;
+        if (t === 'cheque') return 2;
+        if (t.startsWith('tarjeta')) return 3;
+        if (t === 'transferencia') return 4;
+        return 1; // efectivo
       };
 
       // Determinar comprobante (F para factura, N para nota de venta)
@@ -1186,7 +1189,7 @@ export function useVentas() {
             null, // ordencompra se deja en null
             (tipoVenta === 'contado') ? 'S' : 'N',
             0,
-            '0'
+            '1'
           ]
         );
         if (!legacyInsert || legacyInsert.success === false) legacyInsertOk=false;
@@ -1195,6 +1198,26 @@ export function useVentas() {
         try { await window.electronAPI.dbRun('ROLLBACK'); } catch(_){}
         showAlert('No se pudo registrar/actualizar la venta (legacy). Operación revertida.', 'Error');
         setLoading(false); return;
+      }
+
+      // Registrar detalle de forma de pago (legacy: detalleformapago) para Cheque (2) y Transferencia (4)
+      try {
+        const hasDet = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='detalleformapago'");
+        if (hasDet?.data?.name === 'detalleformapago') {
+          const fpCode = formaPagoCode(formaPago);
+          if (fpCode === 2 || fpCode === 4) {
+            const bancoStr = String(formaPago?.banco || '');
+            const numStr = String(formaPago?.numero || '');
+            const cobrado = (tipoVenta === 'contado' && fpCode === 4) ? 'S' : 'N';
+            await window.electronAPI.dbRun(
+              `INSERT INTO detalleformapago (idventa, formapago, banco, numcheque, fecha, cobrado, trial275) VALUES (?, ?, ?, ?, DATE('now'), ?, '0')`,
+              [legacyId, String(fpCode), bancoStr, numStr, cobrado]
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('No se pudo registrar detalle de forma de pago (legacy):', e.message);
+        // no abortar la transacción por fallo de detalle
       }
 
       // Si tiene plazo/abono, registrar en tablas de crédito legacy si existen
@@ -1218,6 +1241,23 @@ export function useVentas() {
                 [legacyId, (cliente.ruc || null), round2(abonoInicial), formaPagoCode(formaPago)]
               );
               if (resAbono?.success) abonoInicialId = resAbono.data?.id || null;
+
+              // También registrar detalleformapago para el abono inicial si fp es cheque/transferencia
+              try {
+                const hasDet2 = await window.electronAPI.dbGetSingle("SELECT name FROM sqlite_master WHERE type='table' AND name='detalleformapago'");
+                if (hasDet2?.data?.name === 'detalleformapago') {
+                  const fpCode2 = formaPagoCode(formaPago);
+                  if (fpCode2 === 2 || fpCode2 === 4) {
+                    const bancoStr2 = String(formaPago?.banco || '');
+                    const numStr2 = String(formaPago?.numero || '');
+                    const cobrado2 = (tipoVenta === 'contado' && fpCode2 === 4) ? 'S' : 'N';
+                    await window.electronAPI.dbRun(
+                      `INSERT INTO detalleformapago (idventa, formapago, banco, numcheque, fecha, cobrado, trial275) VALUES (?, ?, ?, ?, DATE('now'), ?, '0')`,
+                      [legacyId, String(fpCode2), bancoStr2, numStr2, cobrado2]
+                    );
+                  }
+                }
+              } catch(eDet){ console.warn('No se pudo registrar detalleformapago para abono inicial:', eDet.message); }
             }
           }
         } catch (e) {

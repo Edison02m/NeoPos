@@ -300,7 +300,7 @@ class ReservaController {
       const insertVenta = await window.electronAPI.dbRun(
         `INSERT INTO venta (id, idcliente, fecha, subtotal, descuento, total, fpago, comprob, numfactura, formapago, anulado, codempresa, iva, fechapago, usuario, ordencompra, ispagos, transporte, trial279)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [legacyId, (clienteRow?.cedula||null), fechaIso, tot.subtotal, descuentoCalc, totalVenta, tipoVentaCode, comprobSigla, numeroComprobante, 1, 'N', 1, tot.iva, fechaPagoStr, 'admin', null, (formaPago==='contado'?'S':'N'), 0, '0']
+        [legacyId, (clienteRow?.cedula||null), fechaIso, tot.subtotal, descuentoCalc, totalVenta, tipoVentaCode, comprobSigla, numeroComprobante, 1, 'N', 1, tot.iva, fechaPagoStr, 'admin', null, (formaPago==='contado'?'S':'N'), 0, '1']
       );
       if(!insertVenta || insertVenta.success===false){
         await window.electronAPI.dbRun('ROLLBACK');

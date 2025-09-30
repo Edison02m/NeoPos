@@ -315,21 +315,7 @@ const ConfiguracionSistema = () => {
           </div>
           {/* Botón de menú contextual */}
           <div className="relative">
-            <button
-              ref={menuButtonRef}
-              type="button"
-              className="px-4 py-2 bg-gray-100 border-2 border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-2"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-haspopup="true"
-              aria-expanded={menuOpen}
-            >
-              <svg width="18" height="18" fill="none" stroke="#374151" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="5" cy="12" r="2"/>
-                <circle cx="12" cy="12" r="2"/>
-                <circle cx="19" cy="12" r="2"/>
-              </svg>
-              Opciones
-            </button>
+
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 animate-fade-in">
                 <button

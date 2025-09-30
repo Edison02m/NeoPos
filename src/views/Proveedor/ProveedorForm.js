@@ -19,7 +19,6 @@ const ProveedorForm = ({
     ruc: '',
     tipoid: '',
     relacionado: '',
-    trial279: ''
   });
 
   useEffect(() => {
@@ -35,7 +34,6 @@ const ProveedorForm = ({
         ruc: proveedor.ruc || '',
         tipoid: proveedor.tipoid || '',
         relacionado: proveedor.relacionado || '',
-        trial279: proveedor.trial279 || ''
       });
     } else {
       // Limpiar formulario para nuevo proveedor
@@ -51,7 +49,6 @@ const ProveedorForm = ({
         ruc: '',
         tipoid: '',
         relacionado: '',
-        trial279: ''
       });
     }
   }, [proveedor, isEditing]);
@@ -182,27 +179,6 @@ const ProveedorForm = ({
             />
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-700">Relacionado</label>
-            <input
-              type="text"
-              value={formData.relacionado}
-              onChange={(e) => handleInputChange('relacionado', e.target.value)}
-              disabled={!formActive}
-              className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-700">Trial279</label>
-            <input
-              type="text"
-              value={formData.trial279}
-              onChange={(e) => handleInputChange('trial279', e.target.value)}
-              disabled={!formActive}
-              className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
-            />
-          </div>
 
           {formActive && (
              <div className="pt-2">

@@ -4,6 +4,8 @@ import TableModel from '../../components/TableModel';
 import ActionPanel from './ActionPanel';
 import InventarioFilter from './InventarioFilter';
 import SearchFilter from '../../components/SearchFilter';
+import Modal from '../../components/Modal';
+import useModal from '../../hooks/useModal';
 
 const Inventario = () => {
   const [inventario, setInventario] = useState([]);
@@ -24,6 +26,10 @@ const Inventario = () => {
   const [searchType, setSearchType] = useState('producto');
   const [searchValue, setSearchValue] = useState('');
   const [searchExactMatch, setSearchExactMatch] = useState(false);
+  const { modalState, showAlert } = useModal();
+  const modalAlert = async (message, title = 'Información') => {
+    try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); }
+  };
 
   useEffect(() => {
     loadInventario();
@@ -152,7 +158,7 @@ const Inventario = () => {
       console.log('Datos filtrados:', filteredInventario.length);
       
       if (!filteredInventario || filteredInventario.length === 0) {
-        alert('No hay datos para exportar. Verifique que haya productos en el inventario.');
+        await modalAlert('No hay datos para exportar. Verifique que haya productos en el inventario.', 'Información');
         return;
       }
 
@@ -191,13 +197,13 @@ const Inventario = () => {
       );
 
       if (pdfResult.success) {
-        alert('Reporte PDF generado exitosamente');
+        await modalAlert('Reporte PDF generado exitosamente', 'Información');
       } else {
         throw new Error(pdfResult.error || 'Error desconocido al generar PDF');
       }
     } catch (error) {
       console.error('Error al generar reporte:', error);
-      alert('Error al generar el reporte: ' + error.message);
+      await modalAlert('Error al generar el reporte: ' + error.message, 'Error');
     }
   };
 
@@ -221,13 +227,13 @@ const Inventario = () => {
       );
 
       if (result.success) {
-        alert('Reporte Excel generado exitosamente');
+        await modalAlert('Reporte Excel generado exitosamente', 'Información');
       } else {
         throw new Error(result.error);
       }
     } catch (error) {
       console.error('Error al generar Excel:', error);
-      alert('Error al generar el reporte Excel: ' + error.message);
+      await modalAlert('Error al generar el reporte Excel: ' + error.message, 'Error');
     }
   };
 
@@ -332,6 +338,7 @@ const Inventario = () => {
   }
 
   return (
+    <>
     <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
       {/* Content - Sin header */}
       <div className="flex flex-1 min-h-0">
@@ -459,6 +466,15 @@ const Inventario = () => {
         </div>
       </div>
     </div>
+    <Modal
+      isOpen={modalState.isOpen}
+      type={modalState.type}
+      title={modalState.title}
+      message={modalState.message}
+      onConfirm={modalState.onConfirm}
+      onClose={modalState.onClose}
+    />
+    </>
   );
 };
 

@@ -30,7 +30,7 @@ const ProductoForm = ({
     peso: 0,
     procedencia: '',
     grabaiva: '1',
-    iva_percentage: 12.0,
+    iva_percentage: 15.0,
     descripcion: '',
     sucursal: 0,
     isservicio: '0',
@@ -48,8 +48,13 @@ const ProductoForm = ({
     utilidadPorcentaje: 0,
     pvpConIva: 0,
     pvpSugerido: 0,
-    mayoristaCalculado: 0
+    mayoristaCalculado: 0,
+    ivaAmount: 0
   });
+
+  // Modo de ingreso de PVP: por neto (sin IVA) o por total con IVA
+  const [priceEntryMode, setPriceEntryMode] = useState('neto'); // 'neto' | 'total_iva'
+  const [pvpTotalConIvaInput, setPvpTotalConIvaInput] = useState('');
 
   const [errors, setErrors] = useState({});
   const [imagePreview, setImagePreview] = useState(null);
@@ -59,7 +64,7 @@ const ProductoForm = ({
   useEffect(() => {
     const pcompra = parseFloat(formData.pcompra) || 0;
     const pvp = parseFloat(formData.pvp) || 0;
-    const ivaPercentage = parseFloat(formData.iva_percentage) || 12;
+    const ivaPercentage = parseFloat(formData.iva_percentage) || 15;
     
     // Calcular utilidad y porcentaje de utilidad
     const utilidad = pvp - pcompra;
@@ -67,6 +72,7 @@ const ProductoForm = ({
     
     // Calcular PVP con IVA
     const pvpConIva = formData.grabaiva === '1' ? (pvp * (1 + ivaPercentage / 100)) : pvp;
+    const ivaAmount = formData.grabaiva === '1' ? (pvpConIva - pvp) : 0;
     
     // Calcular PVP sugerido basado en precio de compra + margen
     const pvpSugerido = pcompra * (1 + porcentajes.margenPVP / 100);
@@ -75,13 +81,19 @@ const ProductoForm = ({
     const mayoristaCalculado = pvp * (porcentajes.porcentajeMayorista / 100);
     
     setCalculatedValues({
-      utilidad: utilidad.toFixed(5),
+      utilidad: utilidad.toFixed(2),
       utilidadPorcentaje: utilidadPorcentaje.toFixed(2),
-      pvpConIva: pvpConIva.toFixed(5),
-      pvpSugerido: pvpSugerido.toFixed(5),
-      mayoristaCalculado: mayoristaCalculado.toFixed(5)
+      pvpConIva: pvpConIva.toFixed(2),
+      pvpSugerido: pvpSugerido.toFixed(2),
+      mayoristaCalculado: mayoristaCalculado.toFixed(2),
+      ivaAmount: ivaAmount.toFixed(2)
     });
-  }, [formData.pcompra, formData.pvp, formData.grabaiva, formData.iva_percentage, porcentajes]);
+
+    // Si el modo es total con IVA, mantener sincronizado el campo de entrada visible
+    if (priceEntryMode === 'total_iva') {
+      setPvpTotalConIvaInput(pvpConIva ? Number(pvpConIva).toFixed(2) : '');
+    }
+  }, [formData.pcompra, formData.pvp, formData.grabaiva, formData.iva_percentage, porcentajes, priceEntryMode]);
 
   // Efecto para cargar la imagen cuando cambie la ruta
   useEffect(() => {
@@ -152,7 +164,7 @@ const ProductoForm = ({
         peso: producto.peso || 0,
         procedencia: producto.procedencia || '',
         grabaiva: producto.grabaiva || '1',
-        iva_percentage: producto.iva_percentage || 12.0,
+        iva_percentage: producto.iva_percentage || 15.0,
         descripcion: producto.descripcion || '',
         sucursal: producto.sucursal || 0,
         isservicio: producto.isservicio || '0',
@@ -178,7 +190,7 @@ const ProductoForm = ({
         peso: 0,
         procedencia: '',
         grabaiva: '1',
-        iva_percentage: 12.0,
+        iva_percentage: 15.0,
         descripcion: '',
         sucursal: 0,
         isservicio: '0',
@@ -269,6 +281,12 @@ const ProductoForm = ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const round2 = (n) => {
+    const v = parseFloat(n);
+    if (isNaN(v)) return 0;
+    return Math.round(v * 100) / 100;
   };
 
   const validateForm = () => {
@@ -396,7 +414,7 @@ const ProductoForm = ({
     const pcompra = parseFloat(formData.pcompra) || 0;
     if (pcompra > 0) {
       const nuevoPVP = pcompra * (1 + porcentajes.margenPVP / 100);
-      handleInputChange('pvp', nuevoPVP);
+      handleInputChange('pvp', round2(nuevoPVP));
     }
   };
 
@@ -404,7 +422,7 @@ const ProductoForm = ({
     const pvp = parseFloat(formData.pvp) || 0;
     if (pvp > 0) {
       const nuevoMayorista = pvp * (porcentajes.porcentajeMayorista / 100);
-      handleInputChange('pmayorista', nuevoMayorista);
+      handleInputChange('pmayorista', round2(nuevoMayorista));
     }
   };
 
@@ -585,28 +603,82 @@ const ProductoForm = ({
                 %
               </span>
             </label>
-            <div className="mt-0.5 flex gap-1">
-              <input
-                type="number"
-                step="0.00001"
-                min="0"
-                value={formData.pvp === 0 ? '' : formData.pvp}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  handleInputChange('pvp', value === '' ? 0 : value);
-                }}
-                onFocus={(e) => e.target.select()}
-                disabled={!formActive}
-                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
-              />
-              {formActive && (
-                <button
-                  type="button"
-                  onClick={() => aplicarFormulaPVP()}
-                  className="px-3 py-1 text-xs bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-700 whitespace-nowrap"
-                >
-                  Aplicar
-                </button>
+            <div className="mt-0.5 flex flex-col gap-2">
+              {/* Selector de modo de ingreso */}
+              <div className="flex items-center gap-3 text-[11px] text-gray-700">
+                <label className="inline-flex items-center gap-1">
+                  <input type="radio" name="priceEntryMode" checked={priceEntryMode==='neto'} onChange={()=> setPriceEntryMode('neto')} />
+                  Ingresar PVP sin IVA
+                </label>
+                <label className="inline-flex items-center gap-1">
+                  <input type="radio" name="priceEntryMode" checked={priceEntryMode==='total_iva'} onChange={()=> setPriceEntryMode('total_iva')} />
+                  Ingresar total con IVA
+                </label>
+              </div>
+
+              {/* Campo según modo */}
+              {priceEntryMode === 'neto' ? (
+                <div className="flex gap-1">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.pvp === 0 ? '' : formData.pvp}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      handleInputChange('pvp', value === '' ? 0 : value);
+                    }}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      const r = v === '' ? 0 : round2(v);
+                      handleInputChange('pvp', r);
+                      if (e.target.value !== '') e.target.value = r.toFixed(2);
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    disabled={!formActive}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+                  />
+                  {formActive && (
+                    <button
+                      type="button"
+                      onClick={() => aplicarFormulaPVP()}
+                      className="px-3 py-1 text-xs bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-700 whitespace-nowrap"
+                    >
+                      Aplicar
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={pvpTotalConIvaInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPvpTotalConIvaInput(val);
+                      const total = parseFloat(val) || 0;
+                      const ivaP = parseFloat(formData.iva_percentage) || 0;
+                      if (formData.grabaiva === '1') {
+                        const neto = ivaP > 0 ? (total / (1 + (ivaP/100))) : total;
+                        handleInputChange('pvp', round2(neto));
+                      } else {
+                        handleInputChange('pvp', round2(total));
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (val === '') return;
+                      const r = round2(val);
+                      setPvpTotalConIvaInput(r.toFixed(2));
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    disabled={!formActive}
+                    className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+                    placeholder="Total con IVA (ej: 20.00)"
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -617,6 +689,17 @@ const ProductoForm = ({
             <input
               type="text"
               value={calculatedValues.pvpConIva}
+              disabled={true}
+              className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-100 text-gray-500"
+            />
+          </div>
+
+          {/* IVA desglosado */}
+          <div>
+            <label className="block text-xs text-gray-700">IVA incluido</label>
+            <input
+              type="text"
+              value={calculatedValues.ivaAmount}
               disabled={true}
               className="mt-0.5 block w-full px-2 py-1 text-xs border border-gray-300 rounded bg-gray-100 text-gray-500"
             />

@@ -17,6 +17,8 @@ import ReservacionesView from './views/Reservaciones';
 import VentasReporteView from './views/Reportes/VentasReporte';
 import ComprasReporteView from './views/Reportes/ComprasReporte';
 import ProductosMasVendidosView from './views/Reportes/ProductosMasVendidos';
+import DevolucionesView from './views/Devoluciones/index';
+
 import ImpresionFacturaConfig from './views/ImpresionFactura';
 import CierreCajaView from './views/CierreCaja';
 import RecaudacionView from './views/Recaudacion';
@@ -128,6 +130,10 @@ const AppRoutes = ({ user, onLogin, onLogout }) => {
       <Route 
         path="/reportes/productos-mas-vendidos" 
         element={<ProductosMasVendidosView />} 
+      />
+      <Route
+        path="/devoluciones"
+        element={<DevolucionesView />}
       />
     </Routes>
   );

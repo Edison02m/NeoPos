@@ -79,6 +79,12 @@ const VentasView = () => {
   const [ventasHistorial, setVentasHistorial] = useState([]);
   const [tipoPagoModalOpen, setTipoPagoModalOpen] = useState(false);
   const [editarComprobantesOpen, setEditarComprobantesOpen] = useState(false);
+  const [incluirDevueltasHist, setIncluirDevueltasHist] = useState(false);
+
+  const ventasHistorialFiltradas = React.useMemo(()=>{
+    if(incluirDevueltasHist) return ventasHistorial;
+    return ventasHistorial.filter(v => Number(v.trial279 ?? 1) === 1);
+  }, [ventasHistorial, incluirDevueltasHist]);
 
   // Pause auto-scan while any modal is open to avoid input blocking
   useEffect(() => {
@@ -132,7 +138,7 @@ const VentasView = () => {
           try {
             // Consulta principal de ventas
             const res = await window.electronAPI.dbQuery(
-              `SELECT id, fecha, total, fpago, formapago, numfactura FROM venta ORDER BY fecha DESC, id DESC LIMIT 200`
+              `SELECT id, fecha, total, fpago, formapago, numfactura, COALESCE(trial279,1) AS trial279 FROM venta ORDER BY fecha DESC, id DESC LIMIT 200`
             );
             
             if (res.success && res.data) {
@@ -223,6 +229,10 @@ const VentasView = () => {
           break;
         case 'menu-pago-tarjeta-amex':
           setFormaPago({ tipo: 'tarjeta', tarjeta: 'American Express' });
+          setTipoPagoModalOpen(true);
+          break;
+        case 'menu-pago-transferencia':
+          setFormaPago({ tipo: 'transferencia', tarjeta: null });
           setTipoPagoModalOpen(true);
           break;
         case 'menu-editar-comprobante':
@@ -649,7 +659,13 @@ const VentasView = () => {
           <div className="bg-white w-[800px] max-h-[80vh] rounded shadow border p-4 flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold">Historial de Ventas</h3>
-              <button onClick={() => setHistorialOpen(false)} className="text-gray-600 hover:text-gray-900">✕</button>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-gray-700">
+                  <input type="checkbox" checked={incluirDevueltasHist} onChange={e=> setIncluirDevueltasHist(e.target.checked)} />
+                  Incluir devueltas
+                </label>
+                <button onClick={() => setHistorialOpen(false)} className="text-gray-600 hover:text-gray-900">✕</button>
+              </div>
             </div>
             <div className="overflow-auto">
               <table className="w-full text-sm">
@@ -659,13 +675,14 @@ const VentasView = () => {
                     <th className="text-left py-2 px-3">Productos</th>
                     <th className="text-left py-2 px-3">Tipo Pago</th>
                     <th className="text-left py-2 px-3">Fecha</th>
+                    <th className="text-left py-2 px-3">Estado</th>
                     <th className="text-right py-2 px-3">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ventasHistorial.length === 0 ? (
-                    <tr><td colSpan="5" className="text-center py-6 text-gray-500">Sin registros</td></tr>
-                  ) : ventasHistorial.map(v => (
+                  {ventasHistorialFiltradas.length === 0 ? (
+                    <tr><td colSpan="6" className="text-center py-6 text-gray-500">Sin registros</td></tr>
+                  ) : ventasHistorialFiltradas.map(v => (
                     <tr key={v.id} className="border-b">
                       <td className="py-2 px-3">{v.numfactura || v.id}</td>
                       <td className="py-2 px-3 max-w-xs truncate" title={v.productos}>{v.productos}</td>
@@ -684,6 +701,15 @@ const VentasView = () => {
                         </div>
                       </td>
                       <td className="py-2 px-3">{new Date(v.fecha).toLocaleString()}</td>
+                      <td className="py-2 px-3">
+                        {Number(v.trial279) === 1 ? (
+                          <span className="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">Vendida</span>
+                        ) : Number(v.trial279) === 2 ? (
+                          <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">Devolución parcial</span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700">Devuelta</span>
+                        )}
+                      </td>
                       <td className="py-2 px-3 text-right">${(Number(v.total)||0).toFixed(2)}</td>
                     </tr>
                   ))}

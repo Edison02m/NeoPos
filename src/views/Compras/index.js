@@ -5,16 +5,19 @@ import HistorialCompras from './HistorialCompras';
 import ComprasPorProveedor from './ComprasPorProveedor';
 import ImeiModal from './ImeiModal';
 import TotalesPanel from './TotalesPanel';
+import TipoPagoCompraModal from './TipoPagoCompraModal';
 import BuscarProductoModal from '../../components/BuscarProductoModal';
 import BuscarProveedorModal from '../../components/BuscarProveedorModal';
 import ProductoController from '../../controllers/ProductoController';
 import CompraController from '../../controllers/CompraController';
+import Modal from '../../components/Modal';
+import useModal from '../../hooks/useModal';
 // Vista principal de Compras con historial integrado
 const ComprasView = () => {
 	const [productos, setProductos] = useState([]);
 	const [compraId, setCompraId] = useState(null);
 	const [proveedor, setProveedor] = useState(null);
-  const [compraData, setCompraData] = useState({ fecha: new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0 });
+  const [compraData, setCompraData] = useState({ fecha: new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0, anticipadaBool:false, pagadoBool:true });
   const [totales, setTotales] = useState({ subtotal:0, subtotal0:0, descuento:0, iva:0, total:0 });
   const [modoDescuento, setModoDescuento] = useState(false);
   const [descuentoPorcentaje, setDescuentoPorcentaje] = useState(false); // true = %, false = valor absoluto
@@ -40,8 +43,20 @@ const ComprasView = () => {
 	const [history, setHistory] = useState([]);
 	const [future, setFuture] = useState([]);
 
+  // Modal de forma de pago (Compras)
+  const [pagoModalOpen, setPagoModalOpen] = useState(false);
+
 	const productoController = new ProductoController();
 	const compraController = new CompraController();
+
+  // Modal helpers
+  const { modalState, showConfirm, showAlert } = useModal();
+  const modalAlert = async (message, title = 'Información') => {
+    try { await showAlert(message, title); } catch (_e) { alert(`${title}: ${message}`); }
+  };
+  const modalConfirm = async (message, title = 'Confirmación') => {
+    try { return await showConfirm(message, title); } catch (_e) { return window.confirm(`${title}: ${message}`); }
+  };
 
 	const captureState = useCallback(()=>({
 		productos: JSON.parse(JSON.stringify(productos)),
@@ -81,11 +96,11 @@ const ComprasView = () => {
   }, [productos, compraData.considerar_iva, descuentoPorcentaje]);
 
 	const obtenerProximoId = useCallback(async ()=>{ try { const res = await window.electronAPI?.dbGetSingle?.('SELECT MAX(id) as lastId FROM compra'); if(res?.success){ const last=parseInt(res.data?.lastId)||0; return last+1;} } catch(_){} return null; }, []);
-  const nuevaCompra = useCallback(async ()=>{ setHabilitado(true); setProductos([]); setProveedor(null); setCompraData(c=>({...c, numfactura:'', fecha:new Date().toISOString().split('T')[0], considerar_iva:true, fpago:'CONTADO', plazodias:0 })); const next=await obtenerProximoId(); setCompraId(next); }, [obtenerProximoId]);
+  const nuevaCompra = useCallback(async ()=>{ setHabilitado(true); setProductos([]); setProveedor(null); setCompraData(c=>({...c, numfactura:'', fecha:new Date().toISOString().split('T')[0], considerar_iva:true, fpago:'CONTADO', plazodias:0, anticipadaBool:false, pagadoBool:true })); const next=await obtenerProximoId(); setCompraId(next); }, [obtenerProximoId]);
 	const editarCompra = ()=>{}; // Placeholder
 	const cerrarVentana = ()=> { try { window.close(); } catch(_){} };
-	const abrirImei = ()=>{ if(!habilitado) return; if(productos.length===0){ window.alert?.('Agregue productos primero'); return;} const prodPend = productos.find(p=> !(imeiMap[p.codigo]) || imeiMap[p.codigo].length < p.cantidad); setImeiProductoSel(prodPend || productos[0]); setImeiModalOpen(true); };
-  const eliminarCompra = ()=>{ if(!habilitado) return; if(window.confirm('¿Desea limpiar completamente el formulario de compra?')){ pushHistory(); setProductos([]); setProveedor(null); setCompraData({ fecha:new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0 }); setTotales({subtotal:0, subtotal0:0, descuento:0, iva:0,total:0}); setCodigoBarras(''); setImeiMap({}); setImeiProductoSel(null); setImeiModalOpen(false); setDeteccionAutomaticaActiva(false); setDevolucionActiva(false); setCompraId(null); setHabilitado(false); setModoDescuento(false); try{ window.electronAPI?.setComprasDescuentoMenu?.(false);}catch(_){} } };
+	const abrirImei = async ()=>{ if(!habilitado) return; if(productos.length===0){ await modalAlert('Agregue productos primero', 'Información'); return;} const prodPend = productos.find(p=> !(imeiMap[p.codigo]) || imeiMap[p.codigo].length < p.cantidad); setImeiProductoSel(prodPend || productos[0]); setImeiModalOpen(true); };
+  const eliminarCompra = async ()=>{ if(!habilitado) return; const ok = await modalConfirm('¿Desea limpiar completamente el formulario de compra?', 'Confirmación'); if(ok){ pushHistory(); setProductos([]); setProveedor(null); setCompraData({ fecha:new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0 }); setTotales({subtotal:0, subtotal0:0, descuento:0, iva:0,total:0}); setCodigoBarras(''); setImeiMap({}); setImeiProductoSel(null); setImeiModalOpen(false); setDeteccionAutomaticaActiva(false); setDevolucionActiva(false); setCompraId(null); setHabilitado(false); setModoDescuento(false); try{ window.electronAPI?.setComprasDescuentoMenu?.(false);}catch(_){} } };
 	const toggleDevolucion = ()=>{ pushHistory(); setDevolucionActiva(d=>!d); };
   const agregarProducto = (p)=>{ if(!habilitado) return; pushHistory(); const precioBase=parseFloat(p.pcompra ?? p.precio_compra ?? p.precio ?? p.pvp ?? 0)||0; if(precioBase<=0){ window.alert?.('El producto no tiene precio de compra definido'); return;} setProductos(prev=>{ const existe=prev.find(x=>x.codigo===p.codigo); if(existe) return prev.map(x=> x.codigo===p.codigo?{...x, cantidad:x.cantidad+1}:x); return [...prev, { codigo:p.codigo, descripcion:p.descripcion||p.producto, cantidad:1, precio:precioBase, descuento:0, codbarra:p.codigobarra||p.codbarra||p.codigoaux||'', gravaiva:(p.grabaiva ?? p.gravaiva)==='0'? '0':'1' }]; }); setOpenProdModal(false); };
 	const eliminarProducto = useCallback(codigo=>{ pushHistory(); setProductos(prev=> prev.filter(p=> p.codigo!==codigo)); }, [pushHistory]);
@@ -152,20 +167,24 @@ const ComprasView = () => {
 	const handleCodigoBarrasChange = (v)=> setCodigoBarras(v);
 	const toggleDeteccionAutomatica = ()=>{ if(!habilitado) return; setDeteccionAutomaticaActiva(a=>!a); };
 
-	const guardarCompra = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ window.alert?.('No hay productos'); return;} if(!proveedor){ window.alert?.('Seleccione un proveedor'); return;} const productosConImeiPend=productos.filter(p=>{ const requiere=/imei/i.test(p.descripcion||'') || (p.codbarra && p.codbarra.length>=14 && p.codbarra.length<=17); if(!requiere) return false; const arr=imeiMap[p.codigo]||[]; return arr.length!==p.cantidad; }); if(productosConImeiPend.length>0){ if(!window.confirm('Faltan IMEIs. ¿Guardar de todas formas?')) return; } // Calcular totales coherentes
+	const guardarCompra = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ await modalAlert('No hay productos', 'Información'); return;} if(!proveedor){ await modalAlert('Seleccione un proveedor', 'Información'); return;} const productosConImeiPend=productos.filter(p=>{ const requiere=/imei/i.test(p.descripcion||'') || (p.codbarra && p.codbarra.length>=14 && p.codbarra.length<=17); if(!requiere) return false; const arr=imeiMap[p.codigo]||[]; return arr.length!==p.cantidad; }); if(productosConImeiPend.length>0){ const ok = await modalConfirm('Faltan IMEIs. ¿Guardar de todas formas?', 'Confirmación'); if(!ok) return; } // Calcular totales coherentes
     let subtotalGravado=0, subtotalCero=0, descGrav=0, descCero=0; const lineas=[];
     for(const p of productos){ const linea=p.cantidad*p.precio; const desc=Math.min(Math.max(p.descuento||0,0), linea); if(p.gravaiva==='1'){ subtotalGravado+=linea; descGrav+=desc; } else { subtotalCero+=linea; descCero+=desc; } lineas.push(p); }
     const subtotal = subtotalGravado + subtotalCero; const descuento = descGrav + descCero; const baseIva = subtotalGravado - descGrav; const iva = compraData.considerar_iva ? baseIva * 0.15 : 0; const total = subtotal - descuento + iva; try { const numfact = compraData.numfactura?.trim() || ('CF-'+Date.now().toString().slice(-6)); const idprovReal = proveedor?.cod || proveedor?.codigo || ''; if(!idprovReal){ console.warn('Proveedor sin cod/codigo definido. Se usará id/ruc/cedula como fallback y esto afectará consultas agrupadas.'); } const idprovFallback = proveedor?.id || proveedor?.ruc || proveedor?.cedula || ''; // Descripción basada en productos
       let descProductos = productos.map(p=>`${p.codigo}x${p.cantidad}`).join(', ');
       if(descProductos.length>190) descProductos = descProductos.slice(0,187)+'...';
       const esCredito = compraData.fpago==='CREDITO';
-      const payload={ idprov: idprovReal || idprovFallback, fecha:compraData.fecha, subtotal, descuento, total, fpago:compraData.fpago, codempresa:1, iva, descripcion:descProductos, numfactura:numfact, autorizacion:'', subtotal0:subtotalCero, credito: esCredito ? 'S':'', anticipada:'', pagado: esCredito ? 'N':'S', plazodias: esCredito ? (parseInt(compraData.plazodias)||0):0, tipo:'', sustento:'', trial272:'' };
-  const resp=await compraController.saveCompra(payload); if(!resp.success){ window.alert?.('Error guardando compra: '+resp.message); return;} const saved=resp.data; if(window.electronAPI?.dbRun){ try { await window.electronAPI.dbRun('BEGIN'); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) + ?, pcompra = ? WHERE codigo = ?', [pr.cantidad, pr.precio, pr.codigo]); // Intentar agregar columna descuento si no existe (una sola vez)
-    if(idx===0){ try { await window.electronAPI.dbRun('ALTER TABLE compradet ADD COLUMN descuento REAL(9,3)'); } catch(_ignored){} }
+      const anticipadaFlag = compraData.anticipadaBool ? 'S' : '';
+      const pagadoFlag = esCredito ? 'N' : (compraData.pagadoBool ? 'S' : 'N');
+      const payload={ idprov: idprovReal || idprovFallback, fecha:compraData.fecha, subtotal, descuento, total, fpago:compraData.fpago, codempresa:1, iva, descripcion:descProductos, numfactura:numfact, autorizacion:'', subtotal0:subtotalCero, credito: esCredito ? 'S':'', anticipada: anticipadaFlag, pagado: pagadoFlag, plazodias: esCredito ? (parseInt(compraData.plazodias)||0):0, tipo:'', sustento:'', trial272:'1' };
+  const resp=await compraController.saveCompra(payload); if(!resp.success){ await modalAlert('Error guardando compra: '+resp.message, 'Error'); return;} const saved=resp.data; if(window.electronAPI?.dbRun){ try { await window.electronAPI.dbRun('BEGIN'); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) + ?, pcompra = ? WHERE codigo = ?', [pr.cantidad, pr.precio, pr.codigo]); // Intentar agregar columna descuento si no existe (una sola vez)
+    if(idx===0){ try { const info = await window.electronAPI.dbQuery("PRAGMA table_info('compradet')", []); const exists = info?.success && Array.isArray(info.data) && info.data.some(col => String(col.name||'').toLowerCase()==='descuento'); if(!exists){ await window.electronAPI.dbRun('ALTER TABLE compradet ADD COLUMN descuento REAL(9,3)'); } } catch(_ignored){} }
     const lineaDesc = Math.min(Math.max(pr.descuento||0,0), pr.cantidad*pr.precio);
-    await window.electronAPI.dbRun('INSERT INTO compradet (item, codprod, cantidad, precio, gravaiva, descuento, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1', lineaDesc,'', saved.id]); const imeis=imeiMap[pr.codigo]||[]; for(const imei of imeis){ await window.electronAPI.dbRun('INSERT INTO compraimei (codprod, idcompra, imei) VALUES (?, ?, ?)', [pr.codigo, saved.id, imei]); } } await window.electronAPI.dbRun('COMMIT'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} } } setCompraId(saved.id); window.alert?.('Compra guardada'); } catch(e){ window.alert?.('Error guardando compra'); } }, [habilitado, productos, proveedor, compraData, imeiMap, compraController]);
+    await window.electronAPI.dbRun('INSERT INTO compradet (item, codprod, cantidad, precio, gravaiva, descuento, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1', lineaDesc,'', saved.id]); const imeis=imeiMap[pr.codigo]||[]; for(const imei of imeis){ await window.electronAPI.dbRun('INSERT INTO compraimei (codprod, idcompra, imei) VALUES (?, ?, ?)', [pr.codigo, saved.id, imei]); } } await window.electronAPI.dbRun('COMMIT'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} } } setCompraId(saved.id); await modalAlert('Compra guardada', 'Información'); } catch(e){ await modalAlert('Error guardando compra', 'Error'); } }, [habilitado, productos, proveedor, compraData, imeiMap, compraController]);
 
-  const guardarDevolucion = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ window.alert?.('No hay productos para devolver'); return;} if(!proveedor){ window.alert?.('Seleccione un proveedor'); return;} try { if(!window.confirm('Confirmar devolución?')) return; let subtotal = productos.reduce((s,p)=> s + p.cantidad*p.precio,0); await window.electronAPI.dbRun('BEGIN'); let nextId=Date.now(); try{ const r=await window.electronAPI.dbGetSingle('SELECT MAX(id) as lastId FROM devcompra'); if(r?.data?.lastId) nextId=(parseInt(r.data.lastId)||0)+1;}catch(_){ } await window.electronAPI.dbRun('INSERT INTO devcompra (id, fecha, subtotal, total, descripcion, idcompra, trial272) VALUES (?, ?, ?, ?, ?, ?, ?)', [nextId, new Date().toISOString().split('T')[0], subtotal, subtotal, 'Devolución compra', compraId||'', '']); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) - ? WHERE codigo = ?', [pr.cantidad, pr.codigo]); await window.electronAPI.dbRun('INSERT INTO devcompradet (item, codprod, cantidad, precio, gravaiva, trial272, iddevcompra) VALUES (?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1','', nextId]); } await window.electronAPI.dbRun('COMMIT'); window.alert?.('Devolución registrada'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} window.alert?.('Error devolución'); } }, [habilitado, productos, proveedor, compraId]);
+  const guardarDevolucion = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ await modalAlert('No hay productos para devolver', 'Información'); return;} if(!proveedor){ await modalAlert('Seleccione un proveedor', 'Información'); return;} try { const ok = await modalConfirm('Confirmar devolución?', 'Confirmación'); if(!ok) return; let subtotal = productos.reduce((s,p)=> s + p.cantidad*p.precio,0); await window.electronAPI.dbRun('BEGIN'); let nextId=Date.now(); try{ const r=await window.electronAPI.dbGetSingle('SELECT MAX(id) as lastId FROM devcompra'); if(r?.data?.lastId) nextId=(parseInt(r.data.lastId)||0)+1;}catch(_){ } await window.electronAPI.dbRun('INSERT INTO devcompra (id, fecha, subtotal, total, descripcion, trial272) VALUES (?, ?, ?, ?, ?, ?)', [nextId, new Date().toISOString().split('T')[0], subtotal, subtotal, 'Devolución compra', '']); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) - ? WHERE codigo = ?', [pr.cantidad, pr.codigo]); await window.electronAPI.dbRun('INSERT INTO devcompradet (item, codprod, cantidad, precio, gravaiva, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1','', nextId]); } // Marcar compra como devuelta
+      if(compraId){ try { await window.electronAPI.dbRun('UPDATE compra SET trial272 = ? WHERE id = ?', ['0', compraId]); } catch(_e){} }
+      await window.electronAPI.dbRun('COMMIT'); await modalAlert('Devolución registrada', 'Información'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} await modalAlert('Error devolución', 'Error'); } }, [habilitado, productos, proveedor, compraId]);
 
   const cargarHistorial = useCallback(async ()=>{ setCargandoHistorial(true); try{ const resp=await compraController.getHistorialCompras(300); if(resp.success) setHistorial(resp.data); } catch(e){} finally{ setCargandoHistorial(false);} }, [compraController]);
 
@@ -229,14 +248,14 @@ const ComprasView = () => {
   // Eliminar productos agregados y botón de migración
   // Migración de compras antiguas (idprov con ruc/cedula -> cod)
   const verDetalleCompra = useCallback(async (compra)=>{
-    if(!compra) return; setCargandoDetalle(true); try { const resp = await compraController.getDetalleCompra(compra.id); if(resp.success){ setDetalleCompraSel(resp.data); } else { window.alert?.('No se pudo cargar detalle'); } } catch(e){ console.error(e); } finally { setCargandoDetalle(false);} }, [compraController]);
+    if(!compra) return; setCargandoDetalle(true); try { const resp = await compraController.getDetalleCompra(compra.id); if(resp.success){ setDetalleCompraSel(resp.data); } else { await modalAlert('No se pudo cargar detalle', 'Información'); } } catch(e){ console.error(e); } finally { setCargandoDetalle(false);} }, [compraController, modalAlert]);
 
   useEffect(()=>{ if(!window.electronAPI?.onMenuAction) return; const off2 = window.electronAPI.onMenuAction((action)=>{ if(action==='menu-compras-proveedor'){ setMostrarHistorial(false); setMostrarPorProveedor(true); if(proveedorFiltro){ cargarComprasProveedor(proveedorFiltro); } } }); return ()=> { try { off2?.(); } catch(_){} }; }, [proveedorFiltro, cargarComprasProveedor]);
 
   // (Recalculado arriba, se elimina duplicado)
 
   // Búsqueda rápida por código de barras (placeholder)
-  const buscarPorCodigoBarras = async (codigo)=>{ if(!codigo) return; try { const resp = await productoController.getProductoByCodigo?.(codigo); if(resp?.success && resp.data){ agregarProducto(resp.data); setCodigoBarras(''); } else { window.alert?.('Producto no encontrado'); } } catch(_){} };
+  const buscarPorCodigoBarras = async (codigo)=>{ if(!codigo) return; try { const resp = await productoController.getProductoByCodigo?.(codigo); if(resp?.success && resp.data){ agregarProducto(resp.data); setCodigoBarras(''); } else { await modalAlert('Producto no encontrado', 'Información'); } } catch(_){} };
   // Limpieza simple (el escáner avanzado se re-implementará luego si es necesario)
   useEffect(()=>()=> { if(window.__comprasTimeout) clearTimeout(window.__comprasTimeout); }, []);
 
@@ -518,12 +537,29 @@ const ComprasView = () => {
                 </div>
               </div>
               <div className="w-80 p-4 bg-gray-50 border-l border-gray-200">
-                <TotalesPanel compraData={compraData} setCompraData={setCompraData} totales={totales} />
+                <TotalesPanel compraData={compraData} setCompraData={setCompraData} totales={totales} onConfigurarPago={()=> setPagoModalOpen(true)} />
               </div>
             </div>
           </div>
         </div>
       )}
+      {/* Modal de forma de pago (Compras) */}
+      <TipoPagoCompraModal
+        isOpen={pagoModalOpen}
+        onClose={()=> setPagoModalOpen(false)}
+        forma={compraData.fpago}
+        plazodias={compraData.plazodias||0}
+        onSave={(forma, plazodias, anticipada, pagado)=>{
+          setCompraData(c=>({
+            ...c,
+            fpago: forma,
+            plazodias: forma==='CREDITO' ? (parseInt(plazodias)||0) : 0,
+            anticipadaBool: !!anticipada,
+            pagadoBool: !!pagado
+          }));
+          setPagoModalOpen(false);
+        }}
+      />
       <BuscarProductoModal isOpen={openProdModal} onClose={()=> setOpenProdModal(false)} onSelect={agregarProducto} />
       <BuscarProveedorModal isOpen={openProvModal} onClose={()=> setOpenProvModal(false)} onSelect={seleccionarProveedor} />
       <ImeiModal
@@ -596,6 +632,14 @@ const ComprasView = () => {
           </div>
         </div>
       )}
+      <Modal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        onConfirm={modalState.onConfirm}
+        onClose={modalState.onClose}
+      />
     </>
   );
 };

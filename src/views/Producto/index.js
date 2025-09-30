@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Producto from '../../models/Producto';
 import ProductoController from '../../controllers/ProductoController';
-import Modal from '../../components/Modal';
 import ExportModal from '../../components/ExportModal';
+import Modal from '../../components/Modal';
 import useModal from '../../hooks/useModal';
 import * as ReportGenerator from '../../utils/reportGenerator';
 
@@ -29,6 +29,7 @@ import SearchFilter from '../../components/SearchFilter';
 
 const ProductosView = () => {  
   const navigate = useNavigate();
+  const { modalState, showConfirm, showAlert, closeModal } = useModal();
 
   // Fallbacks locales por si el módulo de reportes no expone las funciones correctamente
   const fallbackGenerateProductsExcel = async (productos, filename) => {
@@ -130,8 +131,73 @@ const ProductosView = () => {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   
-  // Hook para modales
-  const { modalState, showConfirm, showAlert, closeModal } = useModal();
+  // Helpers: diálogos nativos con restauración de foco robusta (fallback a alert/confirm)
+  const tryFocus = (el) => {
+    if (!el) return false;
+    if (el.disabled || el.readOnly) return false;
+    if (el.offsetParent === null && el !== document.body) return false; // oculto
+    if (typeof el.focus === 'function') {
+      el.focus();
+      try {
+        if (el.setSelectionRange && typeof el.value === 'string') {
+          const end = el.value.length;
+          el.setSelectionRange(end, end);
+        }
+      } catch (_) {}
+      return document.activeElement === el;
+    }
+    return false;
+  };
+
+  const getFirstFocusable = (root = document) => {
+    const sel = 'input:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select:not([disabled]), [contenteditable="true"], button:not([disabled])';
+    const list = Array.from(root.querySelectorAll(sel));
+    return list.find(el => el.offsetParent !== null) || null;
+  };
+
+  const restoreFocus = (last) => {
+    try { window?.focus?.(); } catch (_) {}
+    const container = (last && last.closest && last.closest('form')) || document;
+    const candidate = (last && document.contains(last) && !last.disabled && last.offsetParent !== null) ? last : getFirstFocusable(container);
+    const fallbackSelector = '#codbarra, input[name="codbarra"], input, textarea, select, [contenteditable="true"]';
+    const doRestore = () => {
+      if (tryFocus(candidate)) return;
+      const fromContainer = container.querySelector ? container.querySelector(fallbackSelector) : null;
+      if (tryFocus(fromContainer)) return;
+      if (tryFocus(getFirstFocusable(document))) return;
+      const fromDoc = document.querySelector(fallbackSelector);
+      tryFocus(fromDoc);
+    };
+    // Intentos en 0ms, 50ms y 120ms para cubrir timings de Electron
+    setTimeout(doRestore, 0);
+    setTimeout(doRestore, 50);
+    setTimeout(doRestore, 120);
+    // Notificar a formularios por si quieren autoenfocar un campo específico
+    try { window.dispatchEvent(new CustomEvent('cascade-restore-focus', { detail: { scope: 'productos' } })); } catch (_) {}
+  };
+
+  const nativeAlert = async (message, title = 'Información') => {
+    const last = typeof document !== 'undefined' ? document.activeElement : null;
+    try {
+      await showAlert(message, title);
+    } catch (_e) {
+      // fallback
+      alert(`${title}: ${message}`);
+    } finally {
+      restoreFocus(last);
+    }
+  };
+
+  const nativeConfirm = async (message, title = 'Confirmación') => {
+    const last = typeof document !== 'undefined' ? document.activeElement : null;
+    try {
+      return await showConfirm(message, title);
+    } catch (_e) {
+      return window.confirm(`${title}: ${message}`);
+    } finally {
+      restoreFocus(last);
+    }
+  };
   
   // Controlador
   const productoController = new ProductoController();
@@ -216,11 +282,11 @@ const ProductosView = () => {
             if (todosLosProductos.success && todosLosProductos.data?.length > 0) {
               setExportModalOpen(true);
             } else {
-              showAlert('Información', 'No hay productos para generar el reporte');
+              nativeAlert('No hay productos para generar el reporte', 'Información');
             }
           } catch (error) {
             console.error('[PRODUCTOS] Error al verificar productos para reporte:', error);
-            showAlert('Error', 'No se pudo obtener los datos para el reporte');
+            nativeAlert('No se pudo obtener los datos para el reporte', 'Error');
           }
           break;
           
@@ -238,7 +304,7 @@ const ProductosView = () => {
         if (removeListener) removeListener();
       };
     }
-  }, [productos, selectedProducto, markedProducts, productoController, showConfirm, showAlert]); // Incluir dependencias necesarias
+  }, [productos, selectedProducto, markedProducts, productoController]); // Incluir dependencias necesarias
 
   // Cargar productos
   const loadProductos = async () => {
@@ -258,11 +324,11 @@ const ProductosView = () => {
         }
       } else {
         console.error('Error al cargar productos:', result.message);
-        showAlert('Error', result.message || 'Error al cargar productos');
+        nativeAlert(result.message || 'Error al cargar productos', 'Error');
       }
     } catch (error) {
       console.error('Error al cargar productos:', error);
-      showAlert('Error', 'Error inesperado al cargar productos');
+      nativeAlert('Error inesperado al cargar productos', 'Error');
     } finally {
       setLoading(false);
     }
@@ -276,7 +342,7 @@ const ProductosView = () => {
 
   const handleEditProducto = () => {
     if (!selectedProducto) {
-      showAlert('Atención', 'Debe seleccionar un producto para editar');
+      nativeAlert('Debe seleccionar un producto para editar', 'Atención');
       return;
     }
     setShowForm(true);
@@ -284,40 +350,36 @@ const ProductosView = () => {
 
   const handleDeleteProducto = () => {
     if (!selectedProducto) {
-      showAlert('Atención', 'Debe seleccionar un producto para eliminar');
+      nativeAlert('Debe seleccionar un producto para eliminar', 'Atención');
       return;
     }
-
-    showConfirm(
-      'Confirmar eliminación',
-      `¿Está seguro de que desea eliminar el producto "${selectedProducto.producto}"?`,
-      async () => {
-        try {
-          setFormLoading(true);
-          const result = await productoController.deleteProducto(selectedProducto.codigo);
-          
-          if (result.success) {
-            showAlert('Éxito', result.message);
-            await loadProductos();
-            setSelectedProducto(null);
-            setShowForm(false);
-          } else {
-            showAlert('Error', result.message);
-          }
-        } catch (error) {
-          console.error('Error al eliminar producto:', error);
-          showAlert('Error', 'Error inesperado al eliminar producto');
-        } finally {
-          setFormLoading(false);
+    (async () => {
+      const ok = await nativeConfirm(`¿Está seguro de que desea eliminar el producto "${selectedProducto.producto}"?`, 'Confirmar eliminación');
+      if (!ok) return;
+      try {
+        setFormLoading(true);
+        const result = await productoController.deleteProducto(selectedProducto.codigo);
+        if (result.success) {
+          await nativeAlert(result.message || 'Producto eliminado', 'Éxito');
+          await loadProductos();
+          setSelectedProducto(null);
+          setShowForm(false);
+        } else {
+          await nativeAlert(result.message || 'No se pudo eliminar el producto', 'Error');
         }
+      } catch (error) {
+        console.error('Error al eliminar producto:', error);
+        await nativeAlert('Error inesperado al eliminar producto', 'Error');
+      } finally {
+        setFormLoading(false);
       }
-    );
+    })();
   };
 
   // Funciones unificadas de búsqueda y filtrado
   const handleSearchFilterExecute = async () => {
     if (!searchFilterValue.trim()) {
-      showAlert('Atención', `Por favor ingrese un valor para ${searchFilterMode === 'search' ? 'buscar' : 'filtrar'}`);
+      nativeAlert(`Por favor ingrese un valor para ${searchFilterMode === 'search' ? 'buscar' : 'filtrar'}`, 'Atención');
       return;
     }
 
@@ -331,13 +393,11 @@ const ProductosView = () => {
         if (result.success) {
           setProductos(result.data || []);
           setSelectedProducto(null);
-          showAlert('Información', 
-            result.data && result.data.length > 0 
+          nativeAlert(result.data && result.data.length > 0 
               ? `Se encontraron ${result.data.length} producto(s)` 
-              : 'No se encontraron productos con esa búsqueda'
-          );
+              : 'No se encontraron productos con esa búsqueda', 'Información');
         } else {
-          showAlert('Error', result.message || 'Error al buscar productos');
+          nativeAlert(result.message || 'Error al buscar productos', 'Error');
         }
       } else {
         // Lógica de filtrado
@@ -347,18 +407,16 @@ const ProductosView = () => {
           setProductos(result.data || []);
           setCurrentFilter({ type: searchFilterType, value: searchFilterValue.trim(), exact: searchFilterExactMatch });
           setSelectedProducto(null);
-          showAlert('Información', 
-            result.data && result.data.length > 0 
+          nativeAlert(result.data && result.data.length > 0 
               ? `Se encontraron ${result.data.length} producto(s)` 
-              : 'No se encontraron productos con ese filtro'
-          );
+              : 'No se encontraron productos con ese filtro', 'Información');
         } else {
-          showAlert('Error', result.message || 'Error al filtrar productos');
+          nativeAlert(result.message || 'Error al filtrar productos', 'Error');
         }
       }
     } catch (error) {
       console.error(`Error al ${searchFilterMode === 'search' ? 'buscar' : 'filtrar'} productos:`, error);
-      showAlert('Error', `Error inesperado al ${searchFilterMode === 'search' ? 'buscar' : 'filtrar'} productos`);
+      nativeAlert(`Error inesperado al ${searchFilterMode === 'search' ? 'buscar' : 'filtrar'} productos`, 'Error');
     } finally {
       setLoading(false);
     }
@@ -370,7 +428,7 @@ const ProductosView = () => {
     setCurrentFilter({ type: '', value: '', exact: false });
     setSearchFilterVisible(false);
     await loadProductos();
-    showAlert('Información', 'Filtro limpiado - Mostrando todos los productos');
+    nativeAlert('Filtro limpiado - Mostrando todos los productos', 'Información');
   };
 
   const handleSearch = () => {
@@ -380,7 +438,7 @@ const ProductosView = () => {
 
   const handleMarcarProducto = async () => {
     if (!selectedProducto) {
-      showAlert('Atención', 'Debe seleccionar un producto para marcar');
+      nativeAlert('Debe seleccionar un producto para marcar', 'Atención');
       return;
     }
 
@@ -394,18 +452,18 @@ const ProductosView = () => {
         if (isMarked) {
           // Remover de la lista local
           setMarkedProducts(markedProducts.filter(p => p.codigo !== selectedProducto.codigo));
-          showAlert('Información', 'Producto desmarcado');
+          nativeAlert('Producto desmarcado', 'Información');
         } else {
           // Agregar a la lista local
           setMarkedProducts([...markedProducts, selectedProducto]);
-          showAlert('Información', 'Producto marcado');
+          nativeAlert('Producto marcado', 'Información');
         }
       } else {
-        showAlert('Error', result.message || 'Error al marcar/desmarcar producto');
+        nativeAlert(result.message || 'Error al marcar/desmarcar producto', 'Error');
       }
     } catch (error) {
       console.error('Error al marcar producto:', error);
-      showAlert('Error', 'Error inesperado al marcar producto');
+      nativeAlert('Error inesperado al marcar producto', 'Error');
     }
   };
 
@@ -419,7 +477,7 @@ const ProductosView = () => {
         setMarkedProducts(marcados);
         
         if (marcados.length === 0) {
-          showAlert('Información', 'No hay productos marcados');
+          nativeAlert('No hay productos marcados', 'Información');
           return;
         }
         
@@ -430,24 +488,21 @@ const ProductosView = () => {
           loadProductos();
         }
       } else {
-        showAlert('Error', result.message || 'Error al cargar productos marcados');
+        nativeAlert(result.message || 'Error al cargar productos marcados', 'Error');
       }
     } catch (error) {
       console.error('Error al cargar productos marcados:', error);
-      showAlert('Error', 'Error inesperado al cargar productos marcados');
+      nativeAlert('Error inesperado al cargar productos marcados', 'Error');
     }
   };
 
   const handleLimpiarMarcados = async () => {
     if (markedProducts.length === 0) {
-      showAlert('Información', 'No hay productos marcados para limpiar');
+      nativeAlert('No hay productos marcados para limpiar', 'Información');
       return;
     }
 
-    const confirmed = await showConfirm(
-      'Confirmar',
-      `¿Está seguro de que desea desmarcar todos los productos (${markedProducts.length} productos)?`
-    );
+    const confirmed = await nativeConfirm(`¿Está seguro de que desea desmarcar todos los productos (${markedProducts.length} productos)?`, 'Confirmar');
 
     if (confirmed) {
       try {
@@ -456,14 +511,14 @@ const ProductosView = () => {
         if (result.success) {
           setMarkedProducts([]);
           setShowMarkedOnly(false);
-          showAlert('Información', 'Todas las marcas han sido eliminadas');
+          nativeAlert('Todas las marcas han sido eliminadas', 'Información');
           await loadProductos(); // Recargar para reflejar los cambios
         } else {
-          showAlert('Error', result.message || 'Error al limpiar marcas');
+          nativeAlert(result.message || 'Error al limpiar marcas', 'Error');
         }
       } catch (error) {
         console.error('Error al limpiar marcas:', error);
-        showAlert('Error', 'Error inesperado al limpiar marcas');
+        nativeAlert('Error inesperado al limpiar marcas', 'Error');
       }
     }
   };
@@ -497,16 +552,16 @@ const ProductosView = () => {
       }
 
       if (result.success) {
-        showAlert('Éxito', result.message);
+        await nativeAlert(result.message || 'Producto guardado', 'Éxito');
         await loadProductos();
         setShowForm(false);
         setSelectedProducto(null);
       } else {
-        showAlert('Error', result.message);
+        await nativeAlert(result.message || 'Error al guardar producto', 'Error');
       }
     } catch (error) {
       console.error('Error al guardar producto:', error);
-      showAlert('Error', 'Error inesperado al guardar producto');
+      await nativeAlert('Error inesperado al guardar producto', 'Error');
     } finally {
       setFormLoading(false);
     }
@@ -529,7 +584,7 @@ const ProductosView = () => {
   const handleGoToFirst = () => {
     if (productos.length > 0) {
       setSelectedProducto(productos[0]);
-      showAlert('Información', 'Navegado al primer registro');
+      nativeAlert('Navegado al primer registro', 'Información');
     }
   };
 
@@ -539,9 +594,9 @@ const ProductosView = () => {
     const currentIndex = productos.findIndex(p => p.codigo === selectedProducto.codigo);
     if (currentIndex < productos.length - 1) {
       setSelectedProducto(productos[currentIndex + 1]);
-      showAlert('Información', 'Navegado al siguiente registro');
+      nativeAlert('Navegado al siguiente registro', 'Información');
     } else {
-      showAlert('Información', 'Ya está en el último registro');
+      nativeAlert('Ya está en el último registro', 'Información');
     }
   };
 
@@ -551,16 +606,16 @@ const ProductosView = () => {
     const currentIndex = productos.findIndex(p => p.codigo === selectedProducto.codigo);
     if (currentIndex > 0) {
       setSelectedProducto(productos[currentIndex - 1]);
-      showAlert('Información', 'Navegado al registro anterior');
+      nativeAlert('Navegado al registro anterior', 'Información');
     } else {
-      showAlert('Información', 'Ya está en el primer registro');
+      nativeAlert('Ya está en el primer registro', 'Información');
     }
   };
 
   const handleGoToLast = () => {
     if (productos.length > 0) {
       setSelectedProducto(productos[productos.length - 1]);
-      showAlert('Información', 'Navegado al último registro');
+      nativeAlert('Navegado al último registro', 'Información');
     }
   };
 
@@ -570,9 +625,9 @@ const ProductosView = () => {
       const index = parseInt(recordNumber) - 1;
       if (index >= 0 && index < productos.length) {
         setSelectedProducto(productos[index]);
-        showAlert('Información', `Navegado al registro ${recordNumber}`);
+        nativeAlert(`Navegado al registro ${recordNumber}`, 'Información');
       } else {
-        showAlert('Error', 'Número de registro inválido');
+        nativeAlert('Número de registro inválido', 'Error');
       }
     }
   };
@@ -583,7 +638,7 @@ const ProductosView = () => {
     try {
       const todosLosProductos = await productoController.getAllProductos();
       if (!todosLosProductos.success || !todosLosProductos.data?.length) {
-        showAlert('Error', 'No se pudieron obtener los datos para el reporte');
+        nativeAlert('No se pudieron obtener los datos para el reporte', 'Error');
         return;
       }
 
@@ -603,11 +658,11 @@ const ProductosView = () => {
         // En éxito, cerramos el modal sin mostrar alerta
         setExportModalOpen(false);
       } else {
-        showAlert('Error', result.error || 'No se pudo generar el reporte Excel');
+        nativeAlert(result.error || 'No se pudo generar el reporte Excel', 'Error');
       }
     } catch (error) {
       console.error('Error generando Excel:', error);
-      showAlert('Error', `Error inesperado al generar el reporte Excel: ${error?.message || error}`);
+      nativeAlert(`Error inesperado al generar el reporte Excel: ${error?.message || error}`, 'Error');
     } finally {
       setExportLoading(false);
     }
@@ -618,7 +673,7 @@ const ProductosView = () => {
     try {
       const todosLosProductos = await productoController.getAllProductos();
       if (!todosLosProductos.success || !todosLosProductos.data?.length) {
-        showAlert('Error', 'No se pudieron obtener los datos para el reporte');
+        nativeAlert('No se pudieron obtener los datos para el reporte', 'Error');
         return;
       }
 
@@ -638,11 +693,11 @@ const ProductosView = () => {
         // En éxito, cerramos el modal sin mostrar alerta
         setExportModalOpen(false);
       } else {
-        showAlert('Error', result.error || 'No se pudo generar el reporte PDF');
+        nativeAlert(result.error || 'No se pudo generar el reporte PDF', 'Error');
       }
     } catch (error) {
       console.error('Error generando PDF:', error);
-      showAlert('Error', `Error inesperado al generar el reporte PDF: ${error?.message || error}`);
+      nativeAlert(`Error inesperado al generar el reporte PDF: ${error?.message || error}`, 'Error');
     } finally {
       setExportLoading(false);
     }
@@ -656,12 +711,12 @@ const ProductosView = () => {
 
   // Funciones de reportes (mantener por compatibilidad)
   const handleReporteInventario = () => {
-    showAlert('Información', 'Función de reporte de inventario en desarrollo');
+    nativeAlert('Función de reporte de inventario en desarrollo', 'Información');
     // Aquí se implementaría la generación del reporte de inventario
   };
 
   const handleReporteProductos = () => {
-    showAlert('Información', 'Función de reporte de productos en desarrollo');
+    nativeAlert('Función de reporte de productos en desarrollo', 'Información');
     // Aquí se implementaría la generación del reporte de productos
   };
 
@@ -736,17 +791,6 @@ const ProductosView = () => {
         </div>
       </div>
 
-      {/* Modal de confirmación estándar */}
-      <Modal
-        isOpen={modalState.isOpen}
-        type={modalState.type}
-        title={modalState.title}
-        message={modalState.message}
-        onConfirm={modalState.onConfirm}
-        onCancel={modalState.onCancel}
-        onClose={closeModal}
-      />
-
       {/* Modal de exportación */}
       <ExportModal
         isOpen={exportModalOpen}
@@ -755,6 +799,14 @@ const ProductosView = () => {
         onExportPDF={handleExportPDF}
         title="Exportar Reporte de Productos"
         loading={exportLoading}
+      />
+      <Modal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        onConfirm={modalState.onConfirm}
+        onClose={modalState.onClose}
       />
     </div>
   );

@@ -36,8 +36,23 @@ const ClientesView = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   
-  // Hook para modales
-  const { modalState, showConfirm, showAlert, closeModal } = useModal();
+  const { modalState, showConfirm, showAlert } = useModal();
+
+  // Helpers de diálogo basados en Modal
+  const modalAlert = async (message, title = 'Información') => {
+    try { await showAlert(message, title); }
+    catch (_e) { alert(`${title}: ${message}`); }
+  };
+
+  // Selección de fila de cliente en la tabla
+  const handleClienteRowClick = (cliente) => {
+    setSelectedCliente(cliente);
+  };
+
+  const modalConfirm = async (message, title = 'Confirmación') => {
+    try { return await showConfirm(message, title); }
+    catch (_e) { return window.confirm(`${title}: ${message}`); }
+  };
   
 
   // Cargar datos iniciales
@@ -109,63 +124,7 @@ const ClientesView = () => {
     }
   };
 
-  const handleDeleteCliente = async () => {
-    if (selectedCliente) {
-      const confirmed = await showConfirm('¿Está seguro de eliminar este cliente?');
-      if (confirmed) {
-        try {
-          await Cliente.delete(selectedCliente.cod);
-          setSelectedCliente(null);
-          loadClientes();
-        } catch (error) {
-          console.error('Error al eliminar cliente:', error);
-          await showAlert('Error al eliminar cliente');
-        }
-      }
-    }
-  };
-
-  const handleSaveCliente = async (clienteData) => {
-    try {
-      setFormLoading(true);
-      
-      const clienteController = new ClienteController();
-      let result;
-      
-      if (isEditing && selectedCliente) {
-        result = await clienteController.updateCliente(selectedCliente.cod, clienteData);
-      } else {
-        result = await clienteController.createCliente(clienteData);
-      }
-      
-      if (!result.success) {
-        setFormLoading(false);
-        await showAlert(result.message);
-        return;
-      }
-      
-      // Resetear estados del formulario
-      setShowForm(false);
-      setSelectedCliente(null);
-      setIsEditing(false);
-      setFormLoading(false);
-      
-      // Recargar datos
-      await loadClientes();
-      
-      // Emitir evento para notificar que los datos de cliente se actualizaron
-      window.dispatchEvent(new CustomEvent('cliente-updated', { detail: clienteData }));
-    } catch (error) {
-      setFormLoading(false);
-      await showAlert('Error al guardar cliente');
-    }
-  };
-
-  const handleClienteRowClick = (cliente) => {
-    setSelectedCliente(cliente);
-  };
-
-  // Funciones de manejo de empresas
+  // Empresa handlers (faltantes)
   const handleNewEmpresa = () => {
     setSelectedEmpresa(null);
     setIsEditing(false);
@@ -179,9 +138,76 @@ const ClientesView = () => {
     }
   };
 
+  const handleDeleteCliente = async () => {
+    if (!selectedCliente) return;
+    // Verificar referencias para evitar error de FOREIGN KEY
+    try{
+      const codOrCed = selectedCliente.cedula || selectedCliente.cod;
+      const qVenta = await window.electronAPI.dbGetSingle('SELECT COUNT(1) AS c FROM venta WHERE idcliente = ? OR idcliente = ?', [codOrCed, selectedCliente.cod]);
+      const ventasCount = (qVenta.success && qVenta.data && Number(qVenta.data.c)) || 0;
+      const qCred = await window.electronAPI.dbGetSingle('SELECT COUNT(1) AS c FROM credito WHERE idcliente = ? OR idcliente = ?', [codOrCed, selectedCliente.cod]);
+      const credCount = (qCred.success && qCred.data && Number(qCred.data.c)) || 0;
+      const qAb = await window.electronAPI.dbGetSingle('SELECT COUNT(1) AS c FROM abono WHERE idcliente = ? OR idcliente = ?', [codOrCed, selectedCliente.cod]);
+      const abCount = (qAb.success && qAb.data && Number(qAb.data.c)) || 0;
+      if(ventasCount + credCount + abCount > 0){
+        await modalAlert(`No se puede eliminar el cliente porque tiene datos relacionados:
+Ventas: ${ventasCount}
+Créditos: ${credCount}
+Abonos: ${abCount}
+
+Anule o reasigne esos registros antes de eliminar.`, 'Operación no permitida');
+        return;
+      }
+    }catch(_e){ /* si falla el prechequeo, seguimos con confirmación normal */ }
+
+    const confirmed = await modalConfirm('¿Está seguro de eliminar este cliente?', 'Confirmación');
+    if (!confirmed) return;
+    try {
+      await Cliente.delete(selectedCliente.cod);
+      setSelectedCliente(null);
+      await loadClientes();
+    } catch (error) {
+      console.error('Error al eliminar cliente:', error);
+      if(String(error?.message||'').includes('FOREIGN KEY')){
+        await modalAlert('No se puede eliminar el cliente porque tiene registros relacionados (ventas, créditos, abonos, etc.).', 'Operación no permitida');
+      } else {
+        await modalAlert('Error al eliminar cliente', 'Error');
+      }
+    }
+  };
+
+  const handleSaveCliente = async (clienteData) => {
+    try {
+      setFormLoading(true);
+      const clienteController = new ClienteController();
+      let result;
+      if (isEditing && selectedCliente) {
+        result = await clienteController.updateCliente(selectedCliente.cod, clienteData);
+      } else {
+        result = await clienteController.createCliente(clienteData);
+      }
+      if (!result.success) {
+        await modalAlert(result.message || 'No se pudo guardar el cliente', 'Error');
+        return;
+      }
+      // Resetear estados del formulario
+      setShowForm(false);
+      setSelectedCliente(null);
+      setIsEditing(false);
+      // Recargar datos
+      await loadClientes();
+      // Emitir evento
+      window.dispatchEvent(new CustomEvent('cliente-updated', { detail: clienteData }));
+    } catch (error) {
+      await modalAlert('Error al guardar cliente', 'Error');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   const handleDeleteEmpresa = async () => {
     if (selectedEmpresa) {
-      const confirmed = await showConfirm('¿Está seguro de eliminar esta empresa?');
+      const confirmed = await modalConfirm('¿Está seguro de eliminar esta empresa?', 'Confirmación');
       if (confirmed) {
         try {
           await Empresas.delete(selectedEmpresa.id);
@@ -189,7 +215,7 @@ const ClientesView = () => {
           loadEmpresas();
         } catch (error) {
           console.error('Error al eliminar empresa:', error);
-          await showAlert('Error al eliminar empresa');
+          await modalAlert('Error al eliminar empresa', 'Error');
         }
       }
     }
@@ -198,33 +224,27 @@ const ClientesView = () => {
   const handleSaveEmpresa = async (empresaData) => {
     try {
       setFormLoading(true);
-      
       const empresaController = new EmpresasController();
       let result;
-      
       if (isEditing && selectedEmpresa) {
         result = await empresaController.updateEmpresa(selectedEmpresa.id, empresaData);
       } else {
         result = await empresaController.createEmpresa(empresaData);
       }
-      
       if (!result.success) {
-        setFormLoading(false);
-        await showAlert(result.message);
+        await modalAlert(result.message || 'No se pudo guardar la empresa', 'Error');
         return;
       }
-      
       // Resetear estados del formulario
       setShowForm(false);
       setSelectedEmpresa(null);
       setIsEditing(false);
-      setFormLoading(false);
-      
       // Recargar datos
       await loadEmpresas();
     } catch (error) {
+      await modalAlert('Error al guardar empresa', 'Error');
+    } finally {
       setFormLoading(false);
-      await showAlert('Error al guardar empresa');
     }
   };
 
@@ -435,15 +455,13 @@ const ClientesView = () => {
         </div>
       </div>
 
-      {/* Modal */}
       <Modal
         isOpen={modalState.isOpen}
         type={modalState.type}
         title={modalState.title}
         message={modalState.message}
         onConfirm={modalState.onConfirm}
-        onCancel={modalState.onCancel}
-        onClose={closeModal}
+        onClose={modalState.onClose}
       />
     </div>
   );

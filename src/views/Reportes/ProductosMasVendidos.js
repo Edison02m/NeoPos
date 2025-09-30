@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+import Modal from '../../components/Modal';
+import useModal from '../../hooks/useModal';
 import ProductoController from '../../controllers/ProductoController';
 
 function formatMoney(n){
@@ -26,6 +28,8 @@ const ProductosMasVendidos = () => {
   const [error,setError]=useState(null);
   const [sortKey,setSortKey]=useState('cantidad'); // 'cantidad' | 'subtotal'
   const [sortDir,setSortDir]=useState('desc'); // 'asc' | 'desc'
+  const { modalState, showAlert } = useModal();
+  const modalAlert = async (message, title='Información') => { try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); } };
 
   // Refs para acceder a valores actuales dentro del listener sin re-suscribir
   const desdeRef = useRef(desde); const hastaRef = useRef(hasta); const limitRef = useRef(limit);
@@ -93,8 +97,8 @@ const ProductosMasVendidos = () => {
       const data = sortedRows.map((r,i)=> ({ Num:i+1, Producto:r.descripcion||r.codigo, PVP:Number(r.pvp)||0, Cantidad:Number(r.cantidad)||0, Subtotal:Number(r.subtotal)||0 }));
       const result = await window.electronAPI.generateExcelReport(data,'productos_mas_vendidos','TopProductos');
       if(!result?.success) throw new Error(result?.error||'No se pudo exportar');
-      alert('Reporte Excel generado');
-    }catch(e){ alert('Error exportando: '+ e.message); }
+      await modalAlert('Reporte Excel generado', 'Información');
+    }catch(e){ await modalAlert('Error exportando: '+ e.message, 'Error'); }
   };
 
   const exportPDF = async ()=>{
@@ -105,11 +109,12 @@ const ProductosMasVendidos = () => {
       const reportData = { title:'PRODUCTOS MÁS VENDIDOS', headers, data, footerTotals, stats:[`Registros: ${sortedRows.length}`, `Cantidad total: ${totalCantidad}`, `Subtotal total: ${formatMoney(totalSubtotal)}`, `Límite: ${limit}`] };
       const result = await window.electronAPI.generatePDFReport(reportData,'productos_mas_vendidos');
       if(!result?.success) throw new Error(result?.error||'No se pudo exportar PDF');
-      alert('Reporte PDF generado');
-    }catch(e){ alert('Error exportando PDF: '+ e.message); }
+      await modalAlert('Reporte PDF generado', 'Información');
+    }catch(e){ await modalAlert('Error exportando PDF: '+ e.message, 'Error'); }
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <div className="p-4 border-b bg-white flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -170,6 +175,15 @@ const ProductosMasVendidos = () => {
         </div>
       </div>
     </div>
+    <Modal
+      isOpen={modalState.isOpen}
+      type={modalState.type}
+      title={modalState.title}
+      message={modalState.message}
+      onConfirm={modalState.onConfirm}
+      onClose={modalState.onClose}
+    />
+    </>
   );
 };
 
