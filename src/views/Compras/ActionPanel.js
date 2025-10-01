@@ -12,7 +12,8 @@ const ActionPanel = ({
 	onCerrar,
 	undoAvailable = false,
 	loading = false,
-	disabled = false
+	disabled = false,
+	canGuardar = true
 }) => {
 	const base = 'w-8 h-8 flex items-center justify-center rounded text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-blue-500/40';
 	return (
@@ -32,7 +33,7 @@ const ActionPanel = ({
 					<Undo2 size={14} />
 				</button>
 				{/* Guardar */}
-				<button title="Guardar" onClick={onGuardar} disabled={loading || disabled} className={`${base} bg-gray-900 text-white hover:bg-gray-800`}><Save size={14} /></button>
+				<button title="Guardar" onClick={onGuardar} disabled={loading || disabled || !canGuardar} className={`${base} bg-gray-900 text-white hover:bg-gray-800`}><Save size={14} /></button>
 				{/* IMEI */}
 				<button title="Registrar IMEIs" onClick={onAbrirImei} disabled={loading || disabled} className={`${base} bg-indigo-600 text-white hover:bg-indigo-700`}><ScanBarcode size={14} /></button>
 				{/* Devolución */}

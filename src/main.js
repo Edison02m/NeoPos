@@ -910,6 +910,19 @@ class MainController {
       }
     });
 
+    // Handler para cifrar contraseñas
+    ipcMain.handle('hash-password', async (event, plainPassword) => {
+      try {
+        const bcrypt = require('bcrypt');
+        const saltRounds = 10;
+        const hash = await bcrypt.hash(plainPassword, saltRounds);
+        return { success: true, hash };
+      } catch (error) {
+        console.error('Error cifrando contraseña:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     // Handler de autenticación
     ipcMain.handle('authenticate-user', async (event, usuario, contrasena) => {
       try {

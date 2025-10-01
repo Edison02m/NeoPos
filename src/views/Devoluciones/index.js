@@ -173,7 +173,7 @@ const DevolucionesIndex = () => {
                     <input type="checkbox" checked={selectedSet.has(d.id)} onChange={()=> toggleSeleccionId(d.id)} />
                   </td>
                   <td className="px-2 py-1">{d.id}</td>
-                  <td className="px-2 py-1">{String(d.fecha).replace('T',' ').slice(0,19)}</td>
+                  <td className="px-2 py-1">{String(d.fecha).slice(0,10)}</td>
                   <td className="px-2 py-1">{modo==='compras' ? (d.proveedorNombre||d.tercero||'') : (d.tercero||'')}</td>
                   <td className="px-2 py-1 text-right">{formatMoney(d.subtotal)}</td>
                   <td className="px-2 py-1 text-right">{formatMoney(d.descuento)}</td>

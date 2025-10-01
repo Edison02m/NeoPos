@@ -106,7 +106,7 @@ const NuevaDevolucionVenta = ({ onClose, onSaved }) => {
                 {ventasLista.map(v => (
                   <tr key={v.id} className={`border-t ${ventaSeleccionadaId===v.id? 'bg-blue-50':''}`}>
                     <td className="px-2 py-1">{v.id}</td>
-                    <td className="px-2 py-1">{String(v.fecha).replace('T',' ').slice(0,19)}</td>
+                    <td className="px-2 py-1">{String(v.fecha).slice(0,10)}</td>
                     <td className="px-2 py-1">{v.clienteNombre || v.idcliente || ''}</td>
                     <td className="px-2 py-1 text-right text-red-600">{formatMoney(v.totalDevuelto||0)}</td>
                     <td className="px-2 py-1 text-right font-medium">{formatMoney(v.totalNeto!=null? v.totalNeto : v.total)}</td>
@@ -136,7 +136,7 @@ const NuevaDevolucionVenta = ({ onClose, onSaved }) => {
           <>
             <div className="mb-3 text-sm text-gray-700">
               <div><span className="font-medium">Cliente:</span> {venta.idcliente||'—'}</div>
-              <div><span className="font-medium">Fecha:</span> {String(venta.fecha).replace('T',' ').slice(0,19)}</div>
+              <div><span className="font-medium">Fecha:</span> {String(venta.fecha).slice(0,10)}</div>
               <div><span className="font-medium">FPago:</span> {venta.formapago===1?'Efectivo':venta.formapago===2?'Cheque':venta.formapago===3?'Tarjeta':venta.formapago===4?'Transferencia':'—'}</div>
             </div>
             <div className="border rounded">

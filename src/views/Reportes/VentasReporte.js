@@ -241,7 +241,7 @@ const VentasReporte = () => {
     try{
       const rows = !modoDevoluciones ? ventas.map(v => ({
         ID: v.id,
-        Fecha: String(v.fecha).replace('T',' ').slice(0,19),
+        Fecha: String(v.fecha).slice(0,10),
         Cliente: v.clienteNombre||v.idcliente,
         Comprobante: (v.comprob==='F'? 'Factura' : 'Nota') + (v.numfactura? ` ${v.numfactura}` : ''),
         Subtotal: Number(v.subtotal)||0,
@@ -261,7 +261,7 @@ const VentasReporte = () => {
         Cobrado: v.detalleFormaPago?.cobrado || ''
       })) : ventas.map(v => ({
         ID: v.id,
-        Fecha: String(v.fecha).replace('T',' ').slice(0,19),
+        Fecha: String(v.fecha).slice(0,10),
         Cliente: v.clienteNombre||v.idcliente,
         Subtotal: Number(v.subtotal)||0,
         Descuento: Number(v.descuento)||0,
@@ -288,7 +288,7 @@ const VentasReporte = () => {
         : ['#','Fecha','Cliente','Subtotal','Desc.','Total','FPago'];
       const data = !modoDevoluciones ? ventas.map(v => [
         String(v.id),
-        String(v.fecha).replace('T',' ').slice(0,19),
+        String(v.fecha).slice(0,10),
         v.clienteNombre||v.idcliente,
         (v.comprob==='F'? 'Factura' : 'Nota') + (v.numfactura? ` ${v.numfactura}` : ''),
         formatMoney(v.subtotal),
@@ -304,7 +304,7 @@ const VentasReporte = () => {
         )
       ]) : ventas.map(v => [
         String(v.id),
-        String(v.fecha).replace('T',' ').slice(0,19),
+        String(v.fecha).slice(0,10),
         v.clienteNombre||v.idcliente,
         formatMoney(v.subtotal),
         formatMoney(v.descuento),
@@ -546,7 +546,7 @@ const VentasReporte = () => {
                   <input type="checkbox" checked={selectedVentas.has(v.id)} onChange={()=> toggleSeleccionVenta(v.id)} />
                 </td>
                 <td className="px-2 py-1">{v.id}</td>
-                <td className="px-2 py-1">{String(v.fecha).replace('T',' ').slice(0,19)}</td>
+                <td className="px-2 py-1">{String(v.fecha).slice(0,10)}</td>
                 <td className="px-2 py-1">{v.clienteNombre||v.idcliente}</td>
                 {!modoDevoluciones && <td className="px-2 py-1">{v.comprob==='F'? 'Factura' : 'Nota'}<span className="text-gray-500"> {v.numfactura||''}</span></td>}
                 {!modoDevoluciones && (
@@ -605,7 +605,7 @@ const VentasReporte = () => {
                 <tr key={a.id} className="border-t">
                   <td className="px-2 py-1">{a.id}</td>
                   <td className="px-2 py-1">{a.clienteNombre||a.idcliente}</td>
-                  <td className="px-2 py-1">{String(a.fecha).replace('T',' ').slice(0,19)}</td>
+                  <td className="px-2 py-1">{String(a.fecha).slice(0,10)}</td>
                   <td className="px-2 py-1 text-right">{formatMoney(a.monto)}</td>
                   <td className="px-2 py-1">Crédito</td>
                   <td className="px-2 py-1">{

@@ -70,7 +70,7 @@ const DetalleDevolucionModal = ({ iddev, open, onClose }) => {
           <div className="p-4 space-y-4 max-h-[70vh] overflow-auto">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-700">
               <div><span className="font-medium">Devolución #:</span> {String(dev.id)}</div>
-              <div><span className="font-medium">Fecha:</span> {String(dev.fecha||'').replace('T',' ').slice(0,19)}</div>
+              <div><span className="font-medium">Fecha:</span> {String(dev.fecha||'').slice(0,10)}</div>
               <div className="md:col-span-2"><span className="font-medium">Cliente:</span> {cliente? `${cliente.apellidos||''} ${cliente.nombres||''}`.trim() : (dev.idcliente||'—')}</div>
               <div><span className="font-medium">Forma pago:</span> {(dev.formapago===1?'Efectivo':dev.formapago===2?'Cheque':dev.formapago===3?'Tarjeta':dev.formapago===4?'Transferencia':'—')}</div>
               <div><span className="font-medium">Subtotal:</span> ${formatMoney(dev.subtotal)}</div>

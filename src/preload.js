@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Authentication with bcrypt
   authenticateUser: (usuario, contrasena) => ipcRenderer.invoke('authenticate-user', usuario, contrasena),
+  hashPassword: (plainPassword) => ipcRenderer.invoke('hash-password', plainPassword),
 
   // Menu state handlers
     updateMenuAuthenticated: () => ipcRenderer.invoke('update-menu-authenticated'),

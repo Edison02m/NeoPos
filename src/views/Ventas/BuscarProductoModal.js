@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, X, Package } from 'lucide-react';
 
 const BuscarProductoModal = ({ 
@@ -6,24 +6,26 @@ const BuscarProductoModal = ({
   onClose, 
   busquedaProducto, 
   setBusquedaProducto, 
-  resultadosBusqueda, 
-  buscarProductos, 
+  catalogoProductos = [],
   agregarProducto 
 }) => {
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
-  useEffect(() => {
-    if (busquedaProducto.trim()) {
-      setLoading(true);
-      const timeoutId = setTimeout(async () => {
-        await buscarProductos(busquedaProducto);
-        setLoading(false);
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    } else {
-      setLoading(false);
-    }
-  }, [busquedaProducto, buscarProductos]);
+  // Filtrado local en memoria sobre el catálogo completo
+  const resultadosFiltrados = useMemo(() => {
+    const term = (busquedaProducto || '').trim().toLowerCase();
+    if (!term) return catalogoProductos;
+    return (catalogoProductos || []).filter(p => {
+      const campos = [
+        p.codigo,
+        p.producto,
+        p.descripcion,
+        p.codbarra,
+        p.codaux
+      ].map(v => (v == null ? '' : String(v).toLowerCase()));
+      return campos.some(v => v.includes(term));
+    });
+  }, [catalogoProductos, busquedaProducto]);
 
   const handleAgregarProducto = (producto) => {
     agregarProducto(producto);
@@ -68,7 +70,7 @@ const BuscarProductoModal = ({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por código, nombre o descripción..."
+              placeholder="Buscar por código o descripción..."
               value={busquedaProducto}
               onChange={(e) => setBusquedaProducto(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -88,9 +90,9 @@ const BuscarProductoModal = ({
             </div>
           ) : (
             <div className="overflow-y-auto max-h-96">
-              {resultadosBusqueda && resultadosBusqueda.length > 0 ? (
+              {resultadosFiltrados && resultadosFiltrados.length > 0 ? (
                 <div className="divide-y divide-gray-200">
-                  {resultadosBusqueda.map((producto) => (
+                  {resultadosFiltrados.map((producto) => (
                     <div 
                       key={producto.codigo}
                       className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
@@ -104,14 +106,14 @@ const BuscarProductoModal = ({
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="text-sm font-medium text-gray-900 truncate">
-                                {producto.nombre}
+                                {producto.producto || producto.descripcion || producto.nombre || 'Producto'}
                               </h3>
                               <p className="text-sm text-gray-500 truncate">
                                 Código: {producto.codigo}
                               </p>
-                              {producto.descripcion && (
+                              {producto.nombre && (
                                 <p className="text-xs text-gray-400 truncate">
-                                  {producto.descripcion}
+                                  {producto.nombre}
                                 </p>
                               )}
                             </div>
@@ -119,17 +121,17 @@ const BuscarProductoModal = ({
                         </div>
                         <div className="flex-shrink-0 text-right">
                           <p className="text-sm font-medium text-gray-900">
-                            ${producto.precio?.toFixed(2) || '0.00'}
+                            ${ (typeof producto.precio === 'number' ? producto.precio : (parseFloat(producto.pvp) || 0)).toFixed(2) }
                           </p>
                           <div className="flex items-center space-x-2">
                             <span className="text-xs text-gray-500">
-                              Stock: {producto.stock || 0}
+                              Stock: {producto.stock ?? producto.almacen ?? 0}
                             </span>
                             <div 
                               className={`w-2 h-2 rounded-full ${
-                                !producto.stock || producto.stock === 0 
+                                !(producto.stock ?? producto.almacen) || (producto.stock ?? producto.almacen) === 0 
                                   ? 'bg-red-400' 
-                                  : producto.stock < 10 
+                                  : (producto.stock ?? producto.almacen) < 10 
                                   ? 'bg-yellow-400' 
                                   : 'bg-green-400'
                               }`}
@@ -150,7 +152,7 @@ const BuscarProductoModal = ({
                 <div className="flex flex-col items-center justify-center h-48 text-gray-500">
                   <Search className="w-12 h-12 text-gray-300 mb-3" />
                   <p className="text-sm">Escribe para buscar productos</p>
-                  <p className="text-xs">Puedes buscar por código, nombre o descripción</p>
+                  <p className="text-xs">Puedes buscar por código o descripción</p>
                 </div>
               )}
             </div>
@@ -161,8 +163,8 @@ const BuscarProductoModal = ({
         <div className="p-6 border-t border-gray-200 bg-gray-50">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-500">
-              {resultadosBusqueda?.length > 0 ? (
-                `${resultadosBusqueda.length} producto${resultadosBusqueda.length !== 1 ? 's' : ''} encontrado${resultadosBusqueda.length !== 1 ? 's' : ''}`
+              {resultadosFiltrados?.length > 0 ? (
+                `${resultadosFiltrados.length} producto${resultadosFiltrados.length !== 1 ? 's' : ''} encontrado${resultadosFiltrados.length !== 1 ? 's' : ''}`
               ) : (
                 'Escribe en el campo de búsqueda para encontrar productos'
               )}

@@ -231,6 +231,53 @@ const DetalleCompraModal = ({ open, onClose, idCompra, initialTab='resumen' }) =
                   </table>
                 </div>
               )}
+              {tab==='devoluciones' && (
+                <div className="space-y-3">
+                  {(!devCab || devCab.length===0) && (
+                    <div className="text-xs text-gray-500">Sin devoluciones registradas para esta compra.</div>
+                  )}
+                  {devCab && devCab.map((dc)=>{
+                    const items = devDetPorId[dc.id] || [];
+                    return (
+                      <div key={`devc-${dc.id}`} className="border rounded">
+                        <div className="px-2 py-2 bg-gray-50 border-b text-xs text-gray-700 grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div><span className="font-medium">Dev #:</span> {String(dc.id)}</div>
+                          <div><span className="font-medium">Fecha:</span> {String(dc.fecha||'').slice(0,10)}</div>
+                          <div><span className="font-medium">Subtotal:</span> ${formatMoney(dc.subtotal)}</div>
+                          <div><span className="font-medium">Total:</span> ${formatMoney(dc.total)}</div>
+                        </div>
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left px-2 py-1">#</th>
+                              <th className="text-left px-2 py-1">Código</th>
+                              <th className="text-left px-2 py-1">Descripción</th>
+                              <th className="text-right px-2 py-1">Cant.</th>
+                              <th className="text-right px-2 py-1">P. U.</th>
+                              <th className="text-right px-2 py-1">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.length===0 && (
+                              <tr><td colSpan="6" className="text-center py-3 text-gray-400">Sin detalle</td></tr>
+                            )}
+                            {items.map((it)=> (
+                              <tr key={`${dc.id}-${it.item}`} className="border-t">
+                                <td className="px-2 py-1">{it.item}</td>
+                                <td className="px-2 py-1">{it.codprod}</td>
+                                <td className="px-2 py-1">{it.descripcion}</td>
+                                <td className="px-2 py-1 text-right">{Number(it.cantidad)||0}</td>
+                                <td className="px-2 py-1 text-right">{formatMoney(it.precio)}</td>
+                                <td className="px-2 py-1 text-right">{formatMoney((Number(it.cantidad)||0) * (Number(it.precio)||0))}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {tab==='imeis' && (
                 <div className="space-y-3 text-xs">
                   {Object.keys(imeis).length===0 && <div className="text-gray-400">Sin IMEIs registrados.</div>}

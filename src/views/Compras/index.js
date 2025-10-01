@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Plus } from 'lucide-react';
 import { TrashIcon } from '../../components/Icons';
 import ActionPanel from './ActionPanel';
 import HistorialCompras from './HistorialCompras';
@@ -180,11 +181,45 @@ const ComprasView = () => {
   const resp=await compraController.saveCompra(payload); if(!resp.success){ await modalAlert('Error guardando compra: '+resp.message, 'Error'); return;} const saved=resp.data; if(window.electronAPI?.dbRun){ try { await window.electronAPI.dbRun('BEGIN'); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) + ?, pcompra = ? WHERE codigo = ?', [pr.cantidad, pr.precio, pr.codigo]); // Intentar agregar columna descuento si no existe (una sola vez)
     if(idx===0){ try { const info = await window.electronAPI.dbQuery("PRAGMA table_info('compradet')", []); const exists = info?.success && Array.isArray(info.data) && info.data.some(col => String(col.name||'').toLowerCase()==='descuento'); if(!exists){ await window.electronAPI.dbRun('ALTER TABLE compradet ADD COLUMN descuento REAL(9,3)'); } } catch(_ignored){} }
     const lineaDesc = Math.min(Math.max(pr.descuento||0,0), pr.cantidad*pr.precio);
-    await window.electronAPI.dbRun('INSERT INTO compradet (item, codprod, cantidad, precio, gravaiva, descuento, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1', lineaDesc,'', saved.id]); const imeis=imeiMap[pr.codigo]||[]; for(const imei of imeis){ await window.electronAPI.dbRun('INSERT INTO compraimei (codprod, idcompra, imei) VALUES (?, ?, ?)', [pr.codigo, saved.id, imei]); } } await window.electronAPI.dbRun('COMMIT'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} } } setCompraId(saved.id); await modalAlert('Compra guardada', 'Información'); } catch(e){ await modalAlert('Error guardando compra', 'Error'); } }, [habilitado, productos, proveedor, compraData, imeiMap, compraController]);
+    await window.electronAPI.dbRun('INSERT INTO compradet (item, codprod, cantidad, precio, gravaiva, descuento, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1', lineaDesc,'', saved.id]); const imeis=imeiMap[pr.codigo]||[]; for(const imei of imeis){ await window.electronAPI.dbRun('INSERT INTO compraimei (codprod, idcompra, imei) VALUES (?, ?, ?)', [pr.codigo, saved.id, imei]); } } await window.electronAPI.dbRun('COMMIT'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} } } setCompraId(saved.id); await modalAlert('Compra guardada', 'Información'); 
+    // Resetear formulario para requerir presionar "Nuevo"
+    try { pushHistory(); } catch(_){}
+    setProductos([]);
+    setProveedor(null);
+    setCompraData({ fecha:new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0 });
+    setTotales({subtotal:0, subtotal0:0, descuento:0, iva:0,total:0});
+    setCodigoBarras('');
+    setImeiMap({});
+    setImeiProductoSel(null);
+    setImeiModalOpen(false);
+    setDeteccionAutomaticaActiva(false);
+    setDevolucionActiva(false);
+    setCompraId(null);
+    setHabilitado(false);
+    setModoDescuento(false);
+    try{ window.electronAPI?.setComprasDescuentoMenu?.(false);}catch(_){ }
+  } catch(e){ await modalAlert('Error guardando compra', 'Error'); } }, [habilitado, productos, proveedor, compraData, imeiMap, compraController, pushHistory]);
 
   const guardarDevolucion = useCallback(async ()=>{ if(!habilitado) return; if(productos.length===0){ await modalAlert('No hay productos para devolver', 'Información'); return;} if(!proveedor){ await modalAlert('Seleccione un proveedor', 'Información'); return;} try { const ok = await modalConfirm('Confirmar devolución?', 'Confirmación'); if(!ok) return; let subtotal = productos.reduce((s,p)=> s + p.cantidad*p.precio,0); await window.electronAPI.dbRun('BEGIN'); let nextId=Date.now(); try{ const r=await window.electronAPI.dbGetSingle('SELECT MAX(id) as lastId FROM devcompra'); if(r?.data?.lastId) nextId=(parseInt(r.data.lastId)||0)+1;}catch(_){ } await window.electronAPI.dbRun('INSERT INTO devcompra (id, fecha, subtotal, total, descripcion, trial272) VALUES (?, ?, ?, ?, ?, ?)', [nextId, new Date().toISOString().split('T')[0], subtotal, subtotal, 'Devolución compra', '']); for(const [idx,pr] of productos.entries()){ await window.electronAPI.dbRun('UPDATE producto SET almacen = COALESCE(almacen,0) - ? WHERE codigo = ?', [pr.cantidad, pr.codigo]); await window.electronAPI.dbRun('INSERT INTO devcompradet (item, codprod, cantidad, precio, gravaiva, trial272, idcompra) VALUES (?, ?, ?, ?, ?, ?, ?)', [idx+1, pr.codigo, pr.cantidad, pr.precio, pr.gravaiva||'1','', nextId]); } // Marcar compra como devuelta
       if(compraId){ try { await window.electronAPI.dbRun('UPDATE compra SET trial272 = ? WHERE id = ?', ['0', compraId]); } catch(_e){} }
-      await window.electronAPI.dbRun('COMMIT'); await modalAlert('Devolución registrada', 'Información'); } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} await modalAlert('Error devolución', 'Error'); } }, [habilitado, productos, proveedor, compraId]);
+      await window.electronAPI.dbRun('COMMIT'); await modalAlert('Devolución registrada', 'Información');
+      // Resetear formulario para requerir presionar "Nuevo"
+      try { pushHistory(); } catch(_){}
+      setProductos([]);
+      setProveedor(null);
+      setCompraData({ fecha:new Date().toISOString().split('T')[0], numfactura:'', considerar_iva:true, fpago:'CONTADO', plazodias:0 });
+      setTotales({subtotal:0, subtotal0:0, descuento:0, iva:0,total:0});
+      setCodigoBarras('');
+      setImeiMap({});
+      setImeiProductoSel(null);
+      setImeiModalOpen(false);
+      setDeteccionAutomaticaActiva(false);
+      setDevolucionActiva(false);
+      setCompraId(null);
+      setHabilitado(false);
+      setModoDescuento(false);
+      try{ window.electronAPI?.setComprasDescuentoMenu?.(false);}catch(_){ }
+    } catch(e){ try{ await window.electronAPI.dbRun('ROLLBACK'); }catch(_){} await modalAlert('Error devolución', 'Error'); } }, [habilitado, productos, proveedor, compraId, pushHistory]);
 
   const cargarHistorial = useCallback(async ()=>{ setCargandoHistorial(true); try{ const resp=await compraController.getHistorialCompras(300); if(resp.success) setHistorial(resp.data); } catch(e){} finally{ setCargandoHistorial(false);} }, [compraController]);
 
@@ -333,6 +368,7 @@ const ComprasView = () => {
               undoAvailable={history.length>0}
               loading={loading}
               disabled={!habilitado}
+              canGuardar={!!proveedor && habilitado}
             />
             <div className="flex-1 flex overflow-hidden">
               <div className="flex-1 p-4 min-h-0 flex flex-col gap-4 overflow-hidden">
@@ -382,8 +418,40 @@ const ComprasView = () => {
                   </div>
                   <form onSubmit={(e)=> { e.preventDefault(); if(codigoBarras.trim()) buscarPorCodigoBarras(codigoBarras.trim()); }}>
                     <div className="flex gap-2">
-                      <input id="codigoBarrasCompras" name="codigoBarrasCompras" type="text" placeholder={habilitado? (deteccionAutomaticaActiva? 'AUTO ON: escanee':'Escanee o escriba código / nombre y Enter') : '(Nuevo primero)'} className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100" value={codigoBarras} onChange={(e)=> handleCodigoBarrasChange(e.target.value)} disabled={!habilitado || loading || deteccionAutomaticaActiva} autoComplete="off" />
-                      <button type="submit" disabled={!habilitado || loading || !codigoBarras.trim()} className="px-4 py-2 bg-gray-800 text-white rounded text-sm disabled:opacity-50">{loading? '...':'Agregar'}</button>
+                      <input
+                        id="codigoBarrasCompras"
+                        name="codigoBarrasCompras"
+                        type="text"
+                        placeholder={habilitado ? (deteccionAutomaticaActiva ? 'AUTO ON: escanee' : 'Escanear código de barras o digitar código...') : '(Nuevo primero)'}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                        value={codigoBarras}
+                        onChange={(e)=> handleCodigoBarrasChange(e.target.value)}
+                        disabled={!habilitado || loading || deteccionAutomaticaActiva}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!habilitado || loading || !codigoBarras.trim()}
+                        className="px-4 py-2 bg-gray-800 text-white rounded text-sm disabled:opacity-50"
+                      >
+                        {loading? '...':'Agregar'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={()=> setOpenProdModal(true)}
+                        disabled={!habilitado}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 text-sm"
+                      >
+                        Buscar por nombre
+                      </button>
+                      <button
+                        type="button"
+                        onClick={()=> { try { window.electronAPI?.openProductoWindow?.(); } catch(_){} }}
+                        className="px-2 py-2 bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-50 text-sm inline-flex items-center gap-1"
+                        title="Nuevo producto"
+                      >
+                        <Plus size={16} />
+                      </button>
                     </div>
                   </form>
                   <div className="text-xs text-gray-600 mt-2">{habilitado ? (deteccionAutomaticaActiva ? 'Detección automática activa: escanee directamente.':'Ingrese o escanee un código y presione Agregar / Enter.') : 'Inicie una compra para usar el escáner.'}</div>

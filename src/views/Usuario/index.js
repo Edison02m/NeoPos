@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Modal from '../../components/Modal';
 import Usuario from '../../models/Usuario';
 import ActionPanel from './ActionPanel';
 import UsuariosList from './UsuariosList';
@@ -20,6 +21,7 @@ const Usuarios = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [formActive, setFormActive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [modalState, setModalState] = useState({ isOpen:false, type:'alert', title:'', message:'', resolver:null });
 
   // Helpers de diálogo nativos (Electron) con fallback a navegador
   const restoreFocus = (el) => {
@@ -36,44 +38,19 @@ const Usuarios = () => {
 
   const nativeAlert = async (message, title = 'Información') => {
     const last = typeof document !== 'undefined' ? document.activeElement : null;
-    try {
-      if (window?.electronAPI?.showMessageBox) {
-        await window.electronAPI.showMessageBox({
-          type: 'info',
-          buttons: ['OK'],
-          defaultId: 0,
-          title,
-          message,
-        });
-        return;
-      }
-    } catch (_e) {} finally {
-      setTimeout(() => restoreFocus(last), 0);
-    }
-    alert(`${title}: ${message}`);
+    await new Promise(resolve => {
+      setModalState({ isOpen:true, type:'alert', title, message, resolver: () => resolve(true) });
+    });
+    setTimeout(() => restoreFocus(last), 0);
   };
 
   const nativeConfirm = async (message, title = 'Confirmación') => {
     const last = typeof document !== 'undefined' ? document.activeElement : null;
-    try {
-      if (window?.electronAPI?.showMessageBox) {
-        const res = await window.electronAPI.showMessageBox({
-          type: 'question',
-          buttons: ['Cancelar', 'Aceptar'],
-          defaultId: 1,
-          cancelId: 0,
-          title,
-          message,
-        });
-        const r = typeof res === 'object' ? res.response : res;
-        return r === 1;
-      }
-      return window.confirm(`${title}: ${message}`);
-    } catch (_e) {
-      return window.confirm(`${title}: ${message}`);
-    } finally {
-      setTimeout(() => restoreFocus(last), 0);
-    }
+    const ok = await new Promise(resolve => {
+      setModalState({ isOpen:true, type:'confirm', title, message, resolver: (v)=> resolve(!!v) });
+    });
+    setTimeout(() => restoreFocus(last), 0);
+    return ok;
   };
 
   // document.title eliminado: título ahora fijo desde WindowManager
@@ -279,7 +256,14 @@ const Usuarios = () => {
         onCancel={handleCancel}
       />
       
-      {/* Modal eliminado: usamos diálogos nativos */}
+      <Modal
+        isOpen={modalState.isOpen}
+        type={modalState.type === 'confirm' ? 'confirm' : 'alert'}
+        title={modalState.title}
+        message={modalState.message}
+        onConfirm={()=>{ try{ modalState.resolver && modalState.resolver(true); } finally { setModalState(m=>({ ...m, isOpen:false })); } }}
+        onClose={()=>{ try{ modalState.resolver && modalState.resolver(false); } finally { setModalState(m=>({ ...m, isOpen:false })); } }}
+      />
     </div>
   );
 };

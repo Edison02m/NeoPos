@@ -140,7 +140,7 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
               {tab==='resumen' && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-700">
                   <div><span className="font-medium">Venta #:</span> {String(venta.id)}</div>
-                  <div><span className="font-medium">Fecha:</span> {String(venta.fecha||'').replace('T',' ').slice(0,19) || '—'}</div>
+                  <div><span className="font-medium">Fecha:</span> {String(venta.fecha||'').slice(0,10) || '—'}</div>
                   <div className="md:col-span-2"><span className="font-medium">Cliente:</span> {cliente? `${cliente.apellidos||''} ${cliente.nombres||''}`.trim() : (venta.idcliente||'—')}</div>
                   <div><span className="font-medium">Tipo:</span> {tipoVentaStr}</div>
                   <div><span className="font-medium">Forma pago:</span> {formaPagoStr}</div>
@@ -230,7 +230,7 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
                         {abonos.length===0 && <tr><td colSpan="3" className="text-center py-4 text-gray-400">Sin abonos.</td></tr>}
                         {abonos.map(a=> (
                           <tr key={a.id} className="border-t">
-                            <td className="px-2 py-1">{String(a.fecha||'').replace('T',' ').slice(0,19)}</td>
+                            <td className="px-2 py-1">{String(a.fecha||'').slice(0,10)}</td>
                             <td className="px-2 py-1 text-right">{formatMoney(a.monto)}</td>
                             <td className="px-2 py-1">{fmtForma(Number(a.formapago))}</td>
                           </tr>
@@ -262,7 +262,7 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
                         return orden.map((c, idx) => (
                           <tr key={`${c.item}-${idx}`} className="border-t">
                             <td className="px-2 py-1">{c.item}</td>
-                            <td className="px-2 py-1">{String(c.fecha||'').replace('T',' ').slice(0,19)}</td>
+                            <td className="px-2 py-1">{String(c.fecha||'').slice(0,10)}</td>
                             <td className="px-2 py-1 text-right">{formatMoney(c.monto1)}</td>
                             <td className="px-2 py-1 text-right">{formatMoney(c.interes)}</td>
                             <td className="px-2 py-1 text-right">{formatMoney(c.monto2)}</td>
@@ -272,6 +272,53 @@ const DetalleVentaModal = ({ idventa, open, onClose, initialTab = 'resumen' }) =
                       })()}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {tab==='devoluciones' && (
+                <div className="space-y-3">
+                  {(!devCab || devCab.length===0) && (
+                    <div className="text-xs text-gray-500">Sin devoluciones registradas para esta venta.</div>
+                  )}
+                  {devCab && devCab.map((dv)=>{
+                    const items = devDetPorId[dv.id] || [];
+                    return (
+                      <div key={`devv-${dv.id}`} className="border rounded">
+                        <div className="px-2 py-2 bg-gray-50 border-b text-xs text-gray-700 grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div><span className="font-medium">Dev #:</span> {String(dv.id)}</div>
+                          <div><span className="font-medium">Fecha:</span> {String(dv.fecha||'').slice(0,10)}</div>
+                          <div><span className="font-medium">Subtotal:</span> ${formatMoney(dv.subtotal)}</div>
+                          <div><span className="font-medium">Total:</span> ${formatMoney(dv.total)}</div>
+                        </div>
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left px-2 py-1">#</th>
+                              <th className="text-left px-2 py-1">Código</th>
+                              <th className="text-left px-2 py-1">Descripción</th>
+                              <th className="text-right px-2 py-1">Cant.</th>
+                              <th className="text-right px-2 py-1">P. U.</th>
+                              <th className="text-right px-2 py-1">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.length===0 && (
+                              <tr><td colSpan="6" className="text-center py-3 text-gray-400">Sin detalle</td></tr>
+                            )}
+                            {items.map((it)=> (
+                              <tr key={`${dv.id}-${it.item}`} className="border-t">
+                                <td className="px-2 py-1">{it.item}</td>
+                                <td className="px-2 py-1">{it.codprod}</td>
+                                <td className="px-2 py-1">{it.descripcion}</td>
+                                <td className="px-2 py-1 text-right">{Number(it.cantidad)||0}</td>
+                                <td className="px-2 py-1 text-right">{formatMoney(it.precio)}</td>
+                                <td className="px-2 py-1 text-right">{formatMoney((Number(it.cantidad)||0) * (Number(it.precio)||0))}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

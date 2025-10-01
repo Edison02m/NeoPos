@@ -53,9 +53,15 @@ class Usuario {
   }
 
   static async create(usuarioData) {
+    // Cifrar contraseña antes de guardar
+    const hashResult = await window.electronAPI.hashPassword(usuarioData.contrasena);
+    if (!hashResult.success) {
+      throw new Error('Error al cifrar contraseña: ' + hashResult.error);
+    }
+
     const result = await window.electronAPI.dbRun(
       'INSERT INTO usuario (usuario, contrasena, tipo, codempresa, alias) VALUES (?, ?, ?, ?, ?)',
-      [usuarioData.usuario, usuarioData.contrasena, usuarioData.tipo, usuarioData.codempresa || 1, usuarioData.alias]
+      [usuarioData.usuario, hashResult.hash, usuarioData.tipo, usuarioData.codempresa || 1, usuarioData.alias]
     );
     if (!result.success) {
       throw new Error(result.error);
@@ -67,10 +73,16 @@ class Usuario {
     const hasNewPassword = typeof usuarioData.contrasena === 'string' && usuarioData.contrasena.trim() !== '';
     let sql, params;
     if (hasNewPassword) {
+      // Cifrar contraseña nueva antes de actualizar
+      const hashResult = await window.electronAPI.hashPassword(usuarioData.contrasena);
+      if (!hashResult.success) {
+        throw new Error('Error al cifrar contraseña: ' + hashResult.error);
+      }
+
       sql = 'UPDATE usuario SET usuario = ?, contrasena = ?, tipo = ?, codempresa = ?, alias = ? WHERE cod = ?';
       params = [
         usuarioData.usuario,
-        usuarioData.contrasena,
+        hashResult.hash,
         usuarioData.tipo,
         usuarioData.codempresa,
         usuarioData.alias,

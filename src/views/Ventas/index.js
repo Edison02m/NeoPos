@@ -23,7 +23,7 @@ const VentasView = () => {
   formaPago,
   creditoConfig,
     searchModalOpen,
-    resultadosBusqueda,
+    catalogoProductos,
     comprobanteModalOpen,
     comprobanteData,
     clienteSugerencias,
@@ -61,6 +61,7 @@ const VentasView = () => {
     handleCodigoBarrasChange,
     detectarCodigoBarras,
     toggleDeteccionAutomatica,
+    cargarCatalogoProductos,
     // Modal functions and state
     modalState,
     showAlert,
@@ -245,7 +246,9 @@ const VentasView = () => {
     return () => { if (remove) remove(); };
   }, [nuevaVenta, guardarVenta, setSearchModalOpen, setFormaPago, setTipoPagoModalOpen]);
 
-  const handleBuscar = () => {
+  const handleBuscar = async () => {
+    await cargarCatalogoProductos();
+    setBusquedaProducto('');
     setSearchModalOpen(true);
   };
 
@@ -489,9 +492,9 @@ const VentasView = () => {
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
-              if (codigoBarras.trim()) {
-                buscarPorCodigoBarras(codigoBarras.trim());
-              }
+              const term = (codigoBarras || '').trim();
+              if (!term) return;
+              buscarPorCodigoBarras(term);
             }}>
               <div className="flex gap-2">
                 <div className="flex-1 relative">
@@ -504,9 +507,9 @@ const VentasView = () => {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        if (codigoBarras.trim()) {
-                          buscarPorCodigoBarras(codigoBarras.trim());
-                        }
+                        const term = (codigoBarras || '').trim();
+                        if (!term) return;
+                        buscarPorCodigoBarras(term);
                       }
                     }}
                     className={`w-full px-3 py-2 border border-gray-300 rounded text-sm ${!ventaActiva ? 'bg-gray-100 text-gray-400' : (deteccionAutomaticaActiva ? 'bg-gray-50 text-gray-500' : 'focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500')}`}
@@ -531,6 +534,14 @@ const VentasView = () => {
                   className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
                 >
                   {loading ? 'Buscando...' : 'Agregar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBuscar}
+                  disabled={!ventaActiva}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                >
+                  Buscar por nombre
                 </button>
               </div>
             </form>
@@ -647,8 +658,7 @@ const VentasView = () => {
         onClose={() => setSearchModalOpen(false)}
         busquedaProducto={busquedaProducto}
         setBusquedaProducto={setBusquedaProducto}
-        resultadosBusqueda={resultadosBusqueda}
-        buscarProductos={buscarProductos}
+        catalogoProductos={catalogoProductos}
         agregarProducto={agregarProducto}
       />
   </div>

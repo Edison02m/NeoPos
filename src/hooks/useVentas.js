@@ -20,7 +20,6 @@ const __resolveBarcodeCtor = () => {
   return null;
 };
 const BarcodeDetectorCtor = __resolveBarcodeCtor();
-
 // Exportar como función nombrada (no arrow) para evitar cualquier rareza de interop
 export function useVentas() {
   // round2 ahora proviene de util financiero compartido
@@ -57,6 +56,7 @@ export function useVentas() {
   const [anticipoReserva, setAnticipoReserva] = useState(0); // Monto de anticipo proveniente de la reserva (se descuenta del total a pagar)
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
+  const [catalogoProductos, setCatalogoProductos] = useState([]);
   
   // Estado para el modal de comprobante
   const [comprobanteModalOpen, setComprobanteModalOpen] = useState(false);
@@ -577,6 +577,23 @@ export function useVentas() {
     } catch (error) {
       console.error('Error al buscar productos:', error);
       setResultadosBusqueda([]);
+    }
+  }, [productoController]);
+
+  // Cargar catálogo completo para filtrar en memoria en el modal
+  const cargarCatalogoProductos = useCallback(async () => {
+    try {
+      const resp = await productoController.getAllProductos();
+      if (resp.success) {
+        setCatalogoProductos(resp.data || []);
+        return { success: true, count: (resp.data || []).length };
+      }
+      setCatalogoProductos([]);
+      return { success: false, count: 0 };
+    } catch (e) {
+      console.error('Error al cargar catálogo de productos:', e);
+      setCatalogoProductos([]);
+      return { success: false, error: e.message };
     }
   }, [productoController]);
 
@@ -1482,6 +1499,7 @@ export function useVentas() {
   tipoVenta,
     searchModalOpen,
     resultadosBusqueda,
+    catalogoProductos,
     comprobanteModalOpen,
     comprobanteData,
     clienteSugerencias,
@@ -1507,9 +1525,9 @@ export function useVentas() {
   cerrarComprobante,
     
     // Funciones
-  nuevaVenta,
-  deshacerVenta,
-  cambiarTipoComprobante,
+    nuevaVenta,
+    deshacerVenta,
+    cambiarTipoComprobante,
     buscarPorCodigoBarras,
     buscarProductos,
     agregarProducto,
@@ -1519,16 +1537,15 @@ export function useVentas() {
     seleccionarCliente,
     limpiarVenta,
     guardarVenta,
-    cambiarTipoComprobante,
     imprimirComprobante,
     handleCodigoBarrasChange,
     detectarCodigoBarras,
     toggleDeteccionAutomatica,
+    cargarCatalogoProductos,
     // Modal states and functions
     modalState,
     showAlert,
     showConfirm
   };
 }
-
 export default useVentas;
