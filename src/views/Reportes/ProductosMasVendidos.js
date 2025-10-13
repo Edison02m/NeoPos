@@ -29,7 +29,7 @@ const ProductosMasVendidos = () => {
   const [sortKey,setSortKey]=useState('cantidad'); // 'cantidad' | 'subtotal'
   const [sortDir,setSortDir]=useState('desc'); // 'asc' | 'desc'
   const { modalState, showAlert } = useModal();
-  const modalAlert = async (message, title='Información') => { try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); } };
+  const modalAlert = async (message, title='Información') => { await showAlert(title, message); };
 
   // Refs para acceder a valores actuales dentro del listener sin re-suscribir
   const desdeRef = useRef(desde); const hastaRef = useRef(hasta); const limitRef = useRef(limit);

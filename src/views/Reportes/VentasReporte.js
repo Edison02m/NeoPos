@@ -27,7 +27,7 @@ const VentasReporte = () => {
   const [bancoFiltro, setBancoFiltro] = useState('');
   const [cobradoFiltro, setCobradoFiltro] = useState('todas'); // todas|S|N
   const { modalState, showAlert, showConfirm } = useModal();
-  const modalAlert = async (message, title='Información') => { try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); } };
+  const modalAlert = async (message, title='Información') => { await showAlert(title, message); };
   const modalConfirm = async (message, title='Confirmación') => { try { return await showConfirm(message, title); } catch { return window.confirm(`${title}: ${message}`); } };
 
   // Menú de la ventana de reportes

@@ -70,13 +70,8 @@ const ProveedoresView = () => {
   // Helpers basados en Modal (useModal)
   const modalAlert = async (message, title = 'Información') => {
     const lastEl = typeof document !== 'undefined' ? document.activeElement : null;
-    try {
-      await showAlert(message, title);
-    } catch (_e) {
-      alert(`${title}: ${message}`);
-    } finally {
-      restoreFocus(lastEl);
-    }
+    await showAlert(title, message);
+    restoreFocus(lastEl);
   };
 
   const modalConfirm = async (message, title = 'Confirmación') => {

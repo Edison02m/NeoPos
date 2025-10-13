@@ -26,18 +26,20 @@ const InventarioFilter = ({
   const getFilterIcon = (value) => {
     switch (value) {
       case 'todos': return <Package size={14} />;
-      case 'stock_bajo': return <AlertTriangle size={14} />;
-      case 'alto_valor': return <Gem size={14} />;
-      case 'bajo_valor': return <Tag size={14} />;
+      case 'con_stock': return <BarChart3 size={14} />;
+      case 'sin_stock': return <AlertTriangle size={14} />;
+      case 'stock_minimo': return <Activity size={14} />;
+      case 'stock_maximo': return <Gem size={14} />;
       default: return <Package size={14} />;
     }
   };
 
   const filterOptions = [
     { value: 'todos', label: 'Todos los productos' },
-    { value: 'stock_bajo', label: `Stock bajo (≤${stockMinimo})` },
-    { value: 'alto_valor', label: 'Alto valor (≥$100)' },
-    { value: 'bajo_valor', label: 'Bajo valor (<$20)' }
+    { value: 'con_stock', label: 'Con existencias (>0)' },
+    { value: 'sin_stock', label: 'Sin existencias (=0)' },
+    { value: 'stock_minimo', label: `Stock mínimo (≤${stockMinimo})` },
+    { value: 'stock_maximo', label: 'Stock máximo' }
   ];
 
   return (

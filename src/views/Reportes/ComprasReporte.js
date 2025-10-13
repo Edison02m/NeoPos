@@ -24,7 +24,7 @@ const ComprasReporte = () => {
   const [formaPago, setFormaPago] = useState('todas'); // todas|CONTADO|TRANSFERENCIA|CREDITO|OTRO
   const [incluirDevueltas, setIncluirDevueltas] = useState(false); // si OFF solo trial272=1
   const { modalState, showAlert, showConfirm } = useModal();
-  const modalAlert = async (message, title='Información') => { try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); } };
+  const modalAlert = async (message, title='Información') => { await showAlert(title, message); };
   const modalConfirm = async (message, title='Confirmación') => { try { return await showConfirm(message, title); } catch { return window.confirm(`${title}: ${message}`); } };
 
   useEffect(()=>{
@@ -222,7 +222,7 @@ const ComprasReporte = () => {
   const mostrarTotalesPorProveedor = () => {
     const porProv = compras.reduce((acc,c)=>{ const k = c.idprov; acc[k] = (acc[k]||0) + Number(c.total||0); return acc; }, {});
     const lines = Object.entries(porProv).slice(0,20).map(([k,v])=> `${k}: ${formatMoney(v)}`).join('\n');
-    alert('Totales por proveedor (top 20):\n' + (lines||'—'));
+    modalAlert('Totales por proveedor (top 20):\n' + (lines||'—'), 'Información');
   };
 
   const exportExcel = async () => {

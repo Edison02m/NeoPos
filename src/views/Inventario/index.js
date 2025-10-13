@@ -28,7 +28,7 @@ const Inventario = () => {
   const [searchExactMatch, setSearchExactMatch] = useState(false);
   const { modalState, showAlert } = useModal();
   const modalAlert = async (message, title = 'Información') => {
-    try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); }
+    await showAlert(title, message);
   };
 
   useEffect(() => {
@@ -50,9 +50,10 @@ const Inventario = () => {
           bodega2,
           (COALESCE(almacen,0) + COALESCE(bodega1,0) + COALESCE(bodega2,0)) as existencia_total,
           pvp as precio_unitario,
-          ROUND((COALESCE(almacen,0) + COALESCE(bodega1,0) + COALESCE(bodega2,0)) * pvp, 2) as precio_total
+          ROUND((COALESCE(almacen,0) + COALESCE(bodega1,0) + COALESCE(bodega2,0)) * pvp, 2) as precio_total,
+          minimo,
+          maximo
         FROM producto 
-        WHERE (COALESCE(almacen,0) + COALESCE(bodega1,0) + COALESCE(bodega2,0)) > 0
         ORDER BY producto ASC
       `);
 
@@ -94,8 +95,25 @@ const Inventario = () => {
   const applyFilters = (term, filter, type = 'producto', exactMatch = false) => {
     let filtered = [...inventario];
 
-    // Aplicar búsqueda por término y tipo
-  if (term && term.trim()) {
+    // Primero aplicar filtros de stock
+    switch(filter) {
+      case 'con_stock':
+        filtered = filtered.filter(item => item.existencia_total > 0);
+        break;
+      case 'sin_stock':
+        filtered = filtered.filter(item => item.existencia_total === 0);
+        break;
+      case 'stock_minimo':
+        filtered = filtered.filter(item => item.existencia_total <= (item.minimo || stockMinimo));
+        break;
+      case 'stock_maximo':
+        filtered = filtered.filter(item => item.existencia_total >= (item.maximo || 0));
+        break;
+      // El caso 'todos' no necesita filtro
+    }
+
+    // Luego aplicar búsqueda por término y tipo
+    if (term && term.trim()) {
       const searchPattern = exactMatch ? term : term.toLowerCase();
       
       filtered = filtered.filter(item => {

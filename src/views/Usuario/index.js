@@ -67,7 +67,7 @@ const Usuarios = () => {
       setUsuarios(usuariosData || []);
     } catch (error) {
       console.error('Error al cargar usuarios:', error);
-      await nativeAlert('Error al cargar usuarios', 'Error');
+      showAlert('Error', 'Error al cargar usuarios');
       setUsuarios([]);
     } finally {
       setLoading(false);
@@ -131,12 +131,12 @@ const Usuarios = () => {
       if (confirmed) {
         try {
           await Usuario.delete(selectedUser.cod);
-          await nativeAlert('Usuario eliminado exitosamente', 'Éxito');
+          showAlert('Éxito', 'Usuario eliminado exitosamente');
           resetForm();
           loadUsuarios();
         } catch (error) {
           console.error('Error al eliminar usuario:', error);
-          await nativeAlert('Error al eliminar usuario', 'Error');
+          showAlert('Error', 'Error al eliminar usuario');
         }
       }
     }
@@ -160,14 +160,14 @@ const Usuarios = () => {
 
       if (isEditing && selectedUser) {
         await Usuario.update(selectedUser.cod, userData);
-        await nativeAlert('Usuario actualizado exitosamente', 'Éxito');
+        showAlert('Éxito', 'Usuario actualizado exitosamente');
       } else {
         if (!userData.contrasena) {
-          await nativeAlert('La contraseña es requerida para usuarios nuevos', 'Atención');
+          showAlert('Atención', 'La contraseña es requerida para usuarios nuevos');
           return;
         }
         await Usuario.create(userData);
-        await nativeAlert('Usuario creado exitosamente', 'Éxito');
+        showAlert('Éxito', 'Usuario creado exitosamente');
       }
 
       resetForm();
@@ -177,7 +177,7 @@ const Usuarios = () => {
       window.dispatchEvent(new CustomEvent('user-updated', { detail: userData }));
     } catch (error) {
       console.error('Error al guardar usuario:', error);
-      await nativeAlert('Error al guardar usuario', 'Error');
+      showAlert('Error', 'Error al guardar usuario');
     }
   };
 

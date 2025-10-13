@@ -23,7 +23,7 @@ const ReservacionesView = () => {
   const [openPrint, setOpenPrint] = useState(false);
   useEffect(()=> { selectedRef.current = selected; }, [selected]);
   const { modalState, showAlert, showConfirm } = useModal();
-  const modalAlert = async (message, title='Información') => { try { await showAlert(message, title); } catch { alert(`${title}: ${message}`); } };
+  const modalAlert = async (message, title='Información') => { await showAlert(title, message); };
   const modalConfirm = async (message, title='Confirmación') => { try { return await showConfirm(message, title); } catch { return window.confirm(`${title}: ${message}`); } };
 
   const cargar = async () => {
